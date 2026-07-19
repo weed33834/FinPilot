@@ -1,0 +1,39 @@
+{
+  "groups": {
+    "workspace": "Workspace",
+    "review": "Review",
+    "management": "Management"
+  },
+  "items": {
+    "dashboard": "Dashboard",
+    "reports": "Reports",
+    "documents": "Documents",
+    "agent": "AI Assistant",
+    "conversations": "Conversations",
+    "queries": "Query History",
+    "kpi": "KPI Metrics",
+    "approvals": "Approvals",
+    "hitl": "Human Approval",
+    "reflections": "Reflections",
+    "audit": "Audit Log",
+    "runtimeLogs": "Runtime Logs",
+    "users": "Users",
+    "apiKeys": "API Keys",
+    "llmProviders": "LLM Providers",
+    "imUserMappings": "IM Mappings",
+    "accessPolicies": "Access Policies",
+    "reportSubscriptions": "Subscriptions",
+    "reportTemplates": "Templates",
+    "settings": "Settings",
+    "security": "Security",
+    "admin": "Admin Panel"
+  },
+  "actions": {
+    "toggleMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "mainNav": "Main navigation",
+    "logout": "Logout",
+    "notLoggedIn": "Not logged in",
+    "language": "Language"
+  }
+}

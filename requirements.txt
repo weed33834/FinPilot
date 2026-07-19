@@ -1,0 +1,71 @@
+# FinPilot AI — consolidated runtime dependencies
+# Covers both the `finpilot/` agent platform and the `finpilot_equity/` research module.
+# Python 3.10+ required.
+
+# ── Web framework & ASGI server ──
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+jinja2>=3.1.0
+starlette>=0.37.0
+
+# ── Data validation & ORM ──
+pydantic>=2.0.0,<3.0.0
+sqlalchemy>=2.0.0
+
+# ── LLM & agent runtime ──
+openai>=1.0.0,<2.0.0
+openai-agents>=0.0.3
+langgraph>=0.2.0
+httpx>=0.24.0
+tenacity>=8.3.0
+tqdm>=4.66.1
+
+# ── RAG & search ──
+rank-bm25>=0.2.2
+numpy>=1.24.0,<2.0.0
+
+# ── Document parsing ──
+pandas>=2.0.0,<3.0.0
+openpyxl>=3.1.0
+xlrd>=2.0.1
+pdfplumber>=0.10.0
+pdfminer.six>=20221105
+python-docx>=1.0.0
+
+# ── NL2SQL ──
+sqlglot>=23.0.0
+
+# ── Security ──
+pyotp>=2.9.0
+qrcode>=7.4.0
+bcrypt>=4.0.0
+
+# ── Financial data ──
+yfinance>=0.2.0,<1.0.0
+requests>=2.28.0,<3.0.0
+
+# ── Reporting & visualization ──
+matplotlib>=3.6.0,<4.0.0
+reportlab>=3.6.0
+weasyprint>=52.0
+seaborn>=0.12.0
+tabulate>=0.9.0
+beautifulsoup4>=4.11.0
+
+# ── Config & misc ──
+pyyaml>=6.0
+nest-asyncio>=1.5.0,<2.0.0
+typing_extensions>=4.9.0
+
+# ── MCP (Model Context Protocol) client ──
+mcp>=1.0.0
+
+# ── GraphRAG (optional, for knowledge-graph-enhanced retrieval) ──
+graphrag-lite>=0.1.0
+
+# ── WebSocket support ──
+websockets>=12.0
+
+# ── PostgreSQL driver (for Cloud SQL deployment) ──
+pg8000>=1.30.0

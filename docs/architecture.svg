@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="960" height="620" role="img" aria-label="FinPilot AI 架构">
+  <defs>
+    <linearGradient id="layerA" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E8F0FF"/>
+      <stop offset="100%" stop-color="#DCE9FF"/>
+    </linearGradient>
+    <linearGradient id="layerB" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#E6FBF5"/>
+      <stop offset="100%" stop-color="#D2F3E6"/>
+    </linearGradient>
+    <linearGradient id="layerC" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFF3E0"/>
+      <stop offset="100%" stop-color="#FFE4C4"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5A6B85"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="620" fill="#FFFFFF"/>
+
+  <text x="480" y="32" text-anchor="middle"
+        font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="20" font-weight="700" fill="#0F2A4A">FinPilot AI — 系统架构</text>
+
+  <!-- ============ 接入层 ============ -->
+  <rect x="40" y="60" width="880" height="140" rx="14" fill="url(#layerA)" stroke="#B8CDFA" stroke-width="1.5"/>
+  <text x="60" y="86" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="14" font-weight="700" fill="#1E5BFF">接入层 · Frontend</text>
+  <text x="60" y="104" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" fill="#5A6B85">React 19 + Vite + TypeScript + Tailwind 4</text>
+
+  <g font-family="'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#0F2A4A">
+    <rect x="60"  y="120" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="1.4"/>
+    <text x="120" y="148" text-anchor="middle" font-weight="600">智能问答</text>
+    <text x="120" y="166" text-anchor="middle" font-size="10" fill="#5A6B85">文件上传 · SSE 流式</text>
+
+    <rect x="200" y="120" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="1.4"/>
+    <text x="260" y="148" text-anchor="middle" font-weight="600">报告中心</text>
+    <text x="260" y="166" text-anchor="middle" font-size="10" fill="#5A6B85">模板 · 订阅 · 审批</text>
+
+    <rect x="340" y="120" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="1.4"/>
+    <text x="400" y="148" text-anchor="middle" font-weight="600">文档解析</text>
+    <text x="400" y="166" text-anchor="middle" font-size="10" fill="#5A6B85">PDF / DOCX / Excel</text>
+
+    <rect x="480" y="120" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="1.4"/>
+    <text x="540" y="148" text-anchor="middle" font-weight="600">运行记录</text>
+    <text x="540" y="166" text-anchor="middle" font-size="10" fill="#5A6B85">日志 · 问答 · 模块</text>
+
+    <rect x="620" y="120" width="120" height="60" rx="8" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="1.4"/>
+    <text x="680" y="148" text-anchor="middle" font-weight="600">审计与安全</text>
+    <text x="680" y="166" text-anchor="middle" font-size="10" fill="#5A6B85">ABAC · TOTP · PII</text>
+
+    <rect x="760" y="120" width="140" height="60" rx="8" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="1.4"/>
+    <text x="830" y="148" text-anchor="middle" font-weight="600">管理后台</text>
+    <text x="830" y="166" text-anchor="middle" font-size="10" fill="#5A6B85">用户 · 工具 · 沙箱 · MCP</text>
+  </g>
+
+  <!-- 箭头 1 -->
+  <line x1="480" y1="205" x2="480" y2="235" stroke="#5A6B85" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="490" y="222" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" fill="#5A6B85">HTTP / SSE</text>
+
+  <!-- ============ 服务层 ============ -->
+  <rect x="40" y="240" width="880" height="220" rx="14" fill="url(#layerB)" stroke="#7CD9B7" stroke-width="1.5"/>
+  <text x="60" y="266" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="14" font-weight="700" fill="#00875F">服务层 · Backend (FastAPI + PydanticAI)</text>
+  <text x="60" y="284" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" fill="#5A6B85">路由 · 鉴权 · 编排 · 解析 · 检索 · 计算 · 留痕</text>
+
+  <g font-family="'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#0F2A4A">
+    <!-- Row 1 -->
+    <rect x="60"  y="300" width="155" height="68" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="137" y="324" text-anchor="middle" font-weight="600">多智能体运行时</text>
+    <text x="137" y="342" text-anchor="middle" font-size="10" fill="#5A6B85">LangGraph 编排</text>
+    <text x="137" y="356" text-anchor="middle" font-size="10" fill="#5A6B85">Checkpoint · Supervisor</text>
+
+    <rect x="230" y="300" width="155" height="68" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="307" y="324" text-anchor="middle" font-weight="600">文档解析器</text>
+    <text x="307" y="342" text-anchor="middle" font-size="10" fill="#5A6B85">PDF · DOCX · Excel</text>
+    <text x="307" y="356" text-anchor="middle" font-size="10" fill="#5A6B85">多编码 CSV 自动嗅探</text>
+
+    <rect x="400" y="300" width="155" height="68" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="477" y="324" text-anchor="middle" font-weight="600">RAG 检索</text>
+    <text x="477" y="342" text-anchor="middle" font-size="10" fill="#5A6B85">BM25 + 向量</text>
+    <text x="477" y="356" text-anchor="middle" font-size="10" fill="#5A6B85">RRF 融合排序</text>
+
+    <rect x="570" y="300" width="155" height="68" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="647" y="324" text-anchor="middle" font-weight="600">确定性计算</text>
+    <text x="647" y="342" text-anchor="middle" font-size="10" fill="#5A6B85">DCF · WACC · Comps</text>
+    <text x="647" y="356" text-anchor="middle" font-size="10" fill="#5A6B85">回测 · 蒙特卡洛</text>
+
+    <rect x="740" y="300" width="160" height="68" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="820" y="324" text-anchor="middle" font-weight="600">LLM 客户端</text>
+    <text x="820" y="342" text-anchor="middle" font-size="10" fill="#5A6B85">多供应商 · 意图路由</text>
+    <text x="820" y="356" text-anchor="middle" font-size="10" fill="#5A6B85">DB 配置 + 环境变量</text>
+
+    <!-- Row 2 -->
+    <rect x="60"  y="380" width="245" height="60" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="182" y="404" text-anchor="middle" font-weight="600">安全合规</text>
+    <text x="182" y="422" text-anchor="middle" font-size="10" fill="#5A6B85">ABAC · TOTP · PII · 注入防护 · 审计</text>
+
+    <rect x="320" y="380" width="245" height="60" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="442" y="404" text-anchor="middle" font-weight="600">运行记录服务</text>
+    <text x="442" y="422" text-anchor="middle" font-size="10" fill="#5A6B85">API 调用 · 问答交互 · 模块状态 · 实时监测</text>
+
+    <rect x="580" y="380" width="320" height="60" rx="8" fill="#FFFFFF" stroke="#00875F" stroke-width="1.4"/>
+    <text x="740" y="404" text-anchor="middle" font-weight="600">扩展体系</text>
+    <text x="740" y="422" text-anchor="middle" font-size="10" fill="#5A6B85">工具 · 技能 · MCP · 代码沙箱 · 提示词 · 订阅</text>
+  </g>
+
+  <!-- 箭头 2 -->
+  <line x1="480" y1="465" x2="480" y2="495" stroke="#5A6B85" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="490" y="482" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" fill="#5A6B85">ORM / 检索</text>
+
+  <!-- ============ 数据层 ============ -->
+  <rect x="40" y="500" width="880" height="100" rx="14" fill="url(#layerC)" stroke="#F0B26C" stroke-width="1.5"/>
+  <text x="60" y="526" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="14" font-weight="700" fill="#B25A00">数据层 · Storage</text>
+
+  <g font-family="'Helvetica Neue', Arial, sans-serif" font-size="12" fill="#0F2A4A">
+    <rect x="60"  y="540" width="220" height="48" rx="8" fill="#FFFFFF" stroke="#B25A00" stroke-width="1.4"/>
+    <text x="170" y="562" text-anchor="middle" font-weight="600">SQLite (ORM)</text>
+    <text x="170" y="580" text-anchor="middle" font-size="10" fill="#5A6B85">业务实体 · 运行记录 · 审计</text>
+
+    <rect x="300" y="540" width="220" height="48" rx="8" fill="#FFFFFF" stroke="#B25A00" stroke-width="1.4"/>
+    <text x="410" y="562" text-anchor="middle" font-weight="600">向量与倒排索引</text>
+    <text x="410" y="580" text-anchor="middle" font-size="10" fill="#5A6B85">嵌入向量 · BM25 词项</text>
+
+    <rect x="540" y="540" width="220" height="48" rx="8" fill="#FFFFFF" stroke="#B25A00" stroke-width="1.4"/>
+    <text x="650" y="562" text-anchor="middle" font-weight="600">文件与配置</text>
+    <text x="650" y="580" text-anchor="middle" font-size="10" fill="#5A6B85">上传文档 · 模板 · 提示词</text>
+
+    <rect x="780" y="540" width="120" height="48" rx="8" fill="#FFFFFF" stroke="#B25A00" stroke-width="1.4"/>
+    <text x="840" y="562" text-anchor="middle" font-weight="600">缓存</text>
+    <text x="840" y="580" text-anchor="middle" font-size="10" fill="#5A6B85">LLM 配置 TTL</text>
+  </g>
+</svg>

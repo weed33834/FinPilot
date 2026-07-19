@@ -1,0 +1,39 @@
+{
+  "groups": {
+    "workspace": "工作台",
+    "review": "审核",
+    "management": "管理"
+  },
+  "items": {
+    "dashboard": "工作台",
+    "reports": "财务报告",
+    "documents": "文档解析",
+    "agent": "智能问答",
+    "conversations": "对话历史",
+    "queries": "查询历史",
+    "kpi": "KPI 指标",
+    "approvals": "审批中心",
+    "hitl": "人工审批",
+    "reflections": "反思日志",
+    "audit": "审计日志",
+    "runtimeLogs": "运行记录",
+    "users": "用户管理",
+    "apiKeys": "API 密钥",
+    "llmProviders": "模型供应商",
+    "imUserMappings": "IM 用户映射",
+    "accessPolicies": "访问策略",
+    "reportSubscriptions": "报告订阅",
+    "reportTemplates": "报告模板",
+    "settings": "系统设置",
+    "security": "安全中心",
+    "admin": "管理后台"
+  },
+  "actions": {
+    "toggleMenu": "打开菜单",
+    "closeMenu": "关闭菜单",
+    "mainNav": "主导航",
+    "logout": "退出登录",
+    "notLoggedIn": "未登录",
+    "language": "语言"
+  }
+}

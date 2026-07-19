@@ -1,0 +1,108 @@
+{
+  "title": "工作台",
+  "error": {
+    "loadFailed": "加载工作台失败"
+  },
+  "greeting": {
+    "admin": "管理员，欢迎回来",
+    "finance_manager": "财务经理，欢迎回来",
+    "auditor": "审计员，欢迎回来",
+    "viewer": "查看者，欢迎回来"
+  },
+  "stats": {
+    "reports": "财务报告",
+    "pendingApprovals": "待审批",
+    "documents": "文档",
+    "agentQueries": "智能问答",
+    "enter": "进入",
+    "approved": "已通过",
+    "total": "总计",
+    "parsed": "已解析",
+    "today": "今日"
+  },
+  "sections": {
+    "reportTrend": "7 天报告趋势",
+    "pendingTodo": "待办事项",
+    "recentReports": "最近报告",
+    "recentDocuments": "最近文档",
+    "reportStatus": "报告状态分布",
+    "documentStatus": "文档状态分布",
+    "recentActivities": "最近动态",
+    "suggestions": "智能问答建议",
+    "roleTip": "使用提示"
+  },
+  "status": {
+    "pending": "待生成",
+    "reviewing": "审核中",
+    "approved": "已通过",
+    "rejected": "已驳回",
+    "draft": "草稿",
+    "completed": "已完成",
+    "failed": "失败",
+    "processing": "处理中",
+    "parsed": "已解析",
+    "uploaded": "已上传",
+    "published": "已发布",
+    "success": "成功",
+    "needs_review": "待复核"
+  },
+  "actions": {
+    "report.create": "创建报告",
+    "report.generate": "报告生成",
+    "report.generate.failed": "报告生成失败",
+    "report.export": "导出报告",
+    "report.approve": "审批通过",
+    "report.reject": "驳回报告",
+    "document.upload": "上传文档",
+    "document.create": "文档创建",
+    "document.parse": "解析文档",
+    "agent.query": "智能问答",
+    "user.login": "用户登录",
+    "user.logout": "退出登录",
+    "login.success": "登录成功",
+    "login.failed": "登录失败",
+    "api_key.create": "创建 API 密钥",
+    "api_key.revoke": "吊销 API 密钥",
+    "api_key.delete": "删除 API 密钥",
+    "api_key.rotate": "轮换 API 密钥",
+    "report.approval.approve": "通过报告",
+    "report.approval.reject": "驳回报告",
+    "report.approval.modify": "退回修改",
+    "document.parse.success": "解析文档",
+    "document.parse.fail": "文档解析失败",
+    "query.nl2sql": "智能查询",
+    "process": "去处理",
+    "createReport": "创建报告",
+    "uploadDoc": "上传文档"
+  },
+  "tips": {
+    "admin": "管理员可以管理用户、API 密钥与系统配置",
+    "finance_manager": "财务经理可以创建报告、管理订阅与模板",
+    "auditor": "审计员可以审批报告、查看审计日志",
+    "viewer": "查看者可以浏览报告与 KPI 指标"
+  },
+  "suggestions": {
+    "s1": "本季度净利润同比变化",
+    "s2": "最近一年资产负债率趋势",
+    "s3": "对比近两年营业收入",
+    "s4": "现金流量表的经营活动现金流"
+  },
+  "empty": {
+    "pendingTodo": "暂无待办",
+    "pendingTodoHint": "无待办工作 · 一切井然有序",
+    "recentReports": "暂无报告",
+    "recentReportsDesc": "点击下方按钮生成第一份报告",
+    "recentDocuments": "暂无文档",
+    "recentDocumentsDesc": "上传 PDF / Excel 让系统自动解析关键数据",
+    "recentActivities": "暂无动态",
+    "recentActivitiesDesc": "系统操作将自动记录在此",
+    "reportTrend": "这周还没有报告产出。",
+    "reportTrendDesc": "尚无审批数据，开始创建报告后趋势会出现在这里"
+  },
+  "meta": {
+    "last7d": "近 7 天",
+    "total": "总数",
+    "recent7d": "近 7 天"
+  },
+  "pendingReview": "{{count}} 份报告等复核"
+}

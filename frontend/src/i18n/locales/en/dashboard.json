@@ -1,0 +1,108 @@
+{
+  "title": "Dashboard",
+  "error": {
+    "loadFailed": "Failed to load dashboard"
+  },
+  "greeting": {
+    "admin": "Welcome back, Administrator",
+    "finance_manager": "Welcome back, Finance Manager",
+    "auditor": "Welcome back, Auditor",
+    "viewer": "Welcome back, Viewer"
+  },
+  "stats": {
+    "reports": "Reports",
+    "pendingApprovals": "Pending Approvals",
+    "documents": "Documents",
+    "agentQueries": "AI Queries",
+    "enter": "Enter",
+    "approved": "Approved",
+    "total": "Total",
+    "parsed": "Parsed",
+    "today": "Today"
+  },
+  "sections": {
+    "reportTrend": "7-Day Report Trend",
+    "pendingTodo": "Pending Tasks",
+    "recentReports": "Recent Reports",
+    "recentDocuments": "Recent Documents",
+    "reportStatus": "Report Status Distribution",
+    "documentStatus": "Document Status Distribution",
+    "recentActivities": "Recent Activities",
+    "suggestions": "AI Suggestions",
+    "roleTip": "Usage Tips"
+  },
+  "status": {
+    "pending": "Pending",
+    "reviewing": "Reviewing",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "draft": "Draft",
+    "completed": "Completed",
+    "failed": "Failed",
+    "processing": "Processing",
+    "parsed": "Parsed",
+    "uploaded": "Uploaded",
+    "published": "Published",
+    "success": "Success",
+    "needs_review": "Needs Review"
+  },
+  "actions": {
+    "report.create": "Create Report",
+    "report.generate": "Report Generation",
+    "report.generate.failed": "Report Generation Failed",
+    "report.export": "Export Report",
+    "report.approve": "Approve Report",
+    "report.reject": "Reject Report",
+    "document.upload": "Upload Document",
+    "document.create": "Create Document",
+    "document.parse": "Parse Document",
+    "agent.query": "AI Query",
+    "user.login": "User Login",
+    "user.logout": "Logout",
+    "login.success": "Login Success",
+    "login.failed": "Login Failed",
+    "api_key.create": "Create API Key",
+    "api_key.revoke": "Revoke API Key",
+    "api_key.delete": "Delete API Key",
+    "api_key.rotate": "Rotate API Key",
+    "report.approval.approve": "Approve Report",
+    "report.approval.reject": "Reject Report",
+    "report.approval.modify": "Return for Modification",
+    "document.parse.success": "Parse Document",
+    "document.parse.fail": "Document Parsing Failed",
+    "query.nl2sql": "AI Query",
+    "process": "Process",
+    "createReport": "Create Report",
+    "uploadDoc": "Upload Document"
+  },
+  "tips": {
+    "admin": "Administrators can manage users, API keys and system settings",
+    "finance_manager": "Finance managers can create reports, manage subscriptions and templates",
+    "auditor": "Auditors can approve reports and view audit logs",
+    "viewer": "Viewers can browse reports and KPI metrics"
+  },
+  "suggestions": {
+    "s1": "Quarterly net profit year-over-year change",
+    "s2": "Debt-to-asset ratio trend over the past year",
+    "s3": "Compare revenue over the past two years",
+    "s4": "Operating cash flow from cash flow statement"
+  },
+  "empty": {
+    "pendingTodo": "No pending tasks",
+    "pendingTodoHint": "All clear · nothing to review",
+    "recentReports": "No reports",
+    "recentReportsDesc": "Click below to generate your first report",
+    "recentDocuments": "No documents",
+    "recentDocumentsDesc": "Upload a PDF or Excel to auto-extract key data",
+    "recentActivities": "No activities",
+    "recentActivitiesDesc": "System actions will be logged here automatically",
+    "reportTrend": "No reports this week.",
+    "reportTrendDesc": "Once reports are created, the trend will appear here"
+  },
+  "meta": {
+    "last7d": "Last 7 days",
+    "total": "Total",
+    "recent7d": "Recent 7d"
+  },
+  "pendingReview": "{{count}} reports pending review"
+}
