@@ -15,7 +15,7 @@ sqlalchemy>=2.0.0
 
 # ── LLM & agent runtime ──
 openai>=1.0.0,<2.0.0
-openai-agents>=0.0.3
+openai-agents>=0.18.3
 langgraph>=0.2.0
 httpx>=0.24.0
 tenacity>=8.3.0
