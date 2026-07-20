@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-label="FinPilot AI ReAct 工作流">
+  <defs>
+    <linearGradient id="wfBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAFCFF"/>
+      <stop offset="100%" stop-color="#F1F5FB"/>
+    </linearGradient>
+    <linearGradient id="agentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1E5BFF"/>
+      <stop offset="100%" stop-color="#0F2A4A"/>
+    </linearGradient>
+    <linearGradient id="toolGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3DDC97"/>
+      <stop offset="100%" stop-color="#00C2A8"/>
+    </linearGradient>
+    <linearGradient id="finalGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFB347"/>
+      <stop offset="100%" stop-color="#FF8C42"/>
+    </linearGradient>
+    <marker id="arrWf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5A6B85"/>
+    </marker>
+  </defs>
+
+  <rect width="960" height="420" fill="url(#wfBg)"/>
+  <text x="480" y="36" text-anchor="middle"
+        font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="20" font-weight="700" fill="#0F2A4A">FinPilot AI · ReAct 智能体工作流</text>
+
+  <!-- 用户 -->
+  <g>
+    <rect x="40" y="180" width="120" height="60" rx="30" fill="#FFFFFF" stroke="#5A6B85" stroke-width="1.5"/>
+    <text x="100" y="208" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="13" font-weight="600" fill="#0F2A4A">用户提问</text>
+    <text x="100" y="226" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#5A6B85">SSE Stream</text>
+  </g>
+
+  <!-- Agent 节点 -->
+  <g>
+    <rect x="240" y="160" width="180" height="100" rx="14" fill="url(#agentGrad)" stroke="#0B1F38" stroke-width="1.5"/>
+    <text x="330" y="190" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="14" font-weight="700" fill="#FFFFFF">Agent 节点</text>
+    <text x="330" y="210" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#BFD3FF">LLM 推理</text>
+    <text x="330" y="226" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#BFD3FF">输出 Thought / Action</text>
+    <text x="330" y="246" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="10" fill="#7FE7C8">兼容 3 种输出格式</text>
+  </g>
+
+  <!-- 解析器菱形 -->
+  <g>
+    <polygon points="540,210 600,170 660,210 600,250" fill="#FFFFFF" stroke="#1E5BFF" stroke-width="2"/>
+    <text x="600" y="206" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="12" font-weight="700" fill="#1E5BFF">parse_react</text>
+    <text x="600" y="224" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#5A6B85">输出格式?</text>
+  </g>
+
+  <!-- Tools 节点 -->
+  <g>
+    <rect x="720" y="80" width="200" height="90" rx="14" fill="url(#toolGrad)" stroke="#0B1F38" stroke-width="1.5"/>
+    <text x="820" y="110" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="14" font-weight="700" fill="#FFFFFF">工具调用</text>
+    <text x="820" y="130" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#E6FBF5">nl2sql · document_qa</text>
+    <text x="820" y="148" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#E6FBF5">parse_document · ...</text>
+  </g>
+
+  <!-- Final Answer -->
+  <g>
+    <rect x="720" y="260" width="200" height="90" rx="14" fill="url(#finalGrad)" stroke="#0B1F38" stroke-width="1.5"/>
+    <text x="820" y="290" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="14" font-weight="700" fill="#FFFFFF">Finalize</text>
+    <text x="820" y="310" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#FFE9D6">汇总推理链</text>
+    <text x="820" y="328" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+          font-size="11" fill="#FFE9D6">推送 done 事件</text>
+  </g>
+
+  <!-- 箭头 -->
+  <line x1="160" y1="210" x2="240" y2="210" stroke="#5A6B85" stroke-width="2" marker-end="url(#arrWf)"/>
+  <line x1="420" y1="210" x2="540" y2="210" stroke="#5A6B85" stroke-width="2" marker-end="url(#arrWf)"/>
+  <line x1="660" y1="195" x2="720" y2="135" stroke="#5A6B85" stroke-width="2" marker-end="url(#arrWf)"/>
+  <text x="700" y="155" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" font-weight="600" fill="#3DDC97">Action</text>
+  <line x1="660" y1="225" x2="720" y2="295" stroke="#5A6B85" stroke-width="2" marker-end="url(#arrWf)"/>
+  <text x="700" y="280" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" font-weight="600" fill="#FFB347">Final Answer</text>
+
+  <!-- 循环箭头：Tools → Agent -->
+  <path d="M 820 80 Q 820 50 600 50 Q 330 50 330 160"
+        stroke="#3DDC97" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arrWf)"/>
+  <text x="575" y="44" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="11" font-weight="600" fill="#3DDC97">Observation 注入下一轮 · 最多 5 步</text>
+
+  <!-- 输出 -->
+  <line x1="820" y1="350" x2="820" y2="390" stroke="#5A6B85" stroke-width="2" marker-end="url(#arrWf)"/>
+  <text x="820" y="408" text-anchor="middle" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="12" font-weight="600" fill="#0F2A4A">SSE done → 前端</text>
+</svg>

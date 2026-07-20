@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" width="720" height="160" role="img" aria-label="FinPilot AI Banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F2A4A"/>
+      <stop offset="55%" stop-color="#1E5BFF"/>
+      <stop offset="100%" stop-color="#3DDC97"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F2A4A"/>
+      <stop offset="100%" stop-color="#1E5BFF"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00C2A8"/>
+      <stop offset="100%" stop-color="#3DDC97"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="720" height="160" rx="16" fill="url(#bg)"/>
+
+  <!-- 六边形 logo -->
+  <g transform="translate(28,28)">
+    <polygon points="52,0 104,30 104,90 52,120 0,90 0,30"
+             fill="url(#mark)" stroke="#0B1F38" stroke-width="2"/>
+    <polygon points="52,12 93,36 93,84 52,108 11,84 11,36"
+             fill="none" stroke="#3DDC97" stroke-width="1.2" opacity="0.5"/>
+    <polyline points="16,82 36,68 50,74 64,46 82,30"
+              fill="none" stroke="url(#accent)" stroke-width="4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="16" cy="82" r="2.5" fill="#3DDC97"/>
+    <circle cx="36" cy="68" r="2.5" fill="#3DDC97"/>
+    <circle cx="50" cy="74" r="2.5" fill="#3DDC97"/>
+    <circle cx="64" cy="46" r="2.5" fill="#3DDC97"/>
+    <circle cx="82" cy="30" r="3.2" fill="#FFFFFF"/>
+  </g>
+
+  <!-- 文字 -->
+  <text x="180" y="78" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="40" font-weight="700" fill="#FFFFFF" letter-spacing="1">FinPilot AI</text>
+  <text x="182" y="108" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="16" font-weight="400" fill="#BFD3FF" letter-spacing="0.5">
+    企业级财务智能分析平台 · 自主推理 · 全链路可观测
+  </text>
+  <text x="182" y="132" font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="12" font-weight="400" fill="#7FE7C8" letter-spacing="0.5">
+    LangGraph ReAct · SSE Streaming · Multi-Format Document RAG · ABAC + TOTP
+  </text>
+</svg>

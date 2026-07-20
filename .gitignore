@@ -1,32 +1,102 @@
+# ============================================================
+# FinPilot AI .gitignore
+# ------------------------------------------------------------
+# 凡是密钥、运行时产物、IDE/OS 缓存、本地数据库、构建产物
+# 一律不上传仓库。
+# ============================================================
+
+# ---- 密钥 / 凭据 / 本地配置（绝不入库） ----
 PERSONAL_KEYS
-__pycache__/
-.ipynb_checkpoints/
-.cache/
-*.egg-info/
-.DS_Store
-projects/
-dist/
-tmp/
-filings/
-
-# Compiled Python
-*.pyc
-
-# Databases
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-*.log
-
-# Environment & secrets
 .env
 .env.*
 !.env.example
 config.ini
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.keystore
+secrets.json
+credentials.json
+
+# ---- 数据库本地文件 ----
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# ---- 运行时日志 / PID ----
+*.log
+*.pid
+.app.pid
+logs/
+*.out
+
+# ---- Python 编译产物 ----
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+develop-eggs/
+
+# ---- 虚拟环境 ----
 venv/
 .venv/
+env/
+ENV/
 
-# Runtime files
-.app.pid
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- 缓存 ----
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ---- 前端构建 / 依赖 ----
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/playwright-report/
+frontend/test-results/
+*.local
+
+# ---- IDE / 编辑器 ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- 操作系统 ----
+.DS_Store
+*.bak
+*.tmp
+
+# ---- 项目运行时数据目录 ----
+projects/
+output/
+tmp/
+filings/
+finpilot_equity/web_app/data/*.db
+data/raw/
+data/processed/
+
+# ---- Docker 运行卷 ----
+docker-data/

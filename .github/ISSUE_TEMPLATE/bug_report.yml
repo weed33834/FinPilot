@@ -1,0 +1,101 @@
+name: 🐛 Bug 报告
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你抽时间报告 Bug！请尽量填写完整信息，能让我们更快定位问题。
+        如果是安全漏洞，请按 [SECURITY.md](../SECURITY.md) 私下报告，**不要在此 Issue 中披露**。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug 描述
+      description: 简要说明发生了什么问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 详细到我们能照着重现
+      placeholder: |
+        1. 进入 '...'
+        2. 点击 '...'
+        3. 输入 '...'
+        4. 看到错误
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你认为应该发生什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误日志 / 截图
+      description: 后端日志、浏览器 console、错误条截图等
+      placeholder: |
+        粘贴日志（请先脱敏——不要包含真实 API key、token、用户隐私数据）
+        截图可直接拖入
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: "Ubuntu 22.04 / macOS 14 / Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python 版本
+      placeholder: "3.11.15"
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node 版本
+      placeholder: "v24.15.0"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器（前端 Bug 必填）
+      placeholder: "Chrome 128 / Safari 17 / Firefox 130"
+
+  - type: input
+    id: version
+    attributes:
+      label: FinPilot 版本
+      description: git commit hash 或 tag
+      placeholder: "9a5ff48 或 v1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 任何有助于定位问题的额外上下文

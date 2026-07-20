@@ -1,0 +1,58 @@
+name: ✨ 功能建议
+description: 提出一个新功能或改进建议
+title: "[Feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你的需求场景
+      description: 你在什么场景下遇到什么问题？这个问题为什么现有方案解决不了？
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的解决方案
+      description: 你希望 FinPilot 怎么做？
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+      description: 你考虑过的其他做法及其利弊
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影响范围
+      options:
+        - 后端 / API
+        - 前端 / UI
+        - 智能体 / ReAct
+        - 文档解析 / RAG
+        - 安全 / 权限
+        - 文档
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: willingness
+    attributes:
+      label: 是否愿意提交 PR
+      options:
+        - 是，我可以提交 PR
+        - 我可以协助测试但写不了代码
+        - 仅提建议
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 相关截图、参考链接、其他上下文

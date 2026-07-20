@@ -2,6 +2,14 @@
 
 本项目所有重要变更均记录于此。版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+- **开源项目标配**：CONTRIBUTING.md / CODE_OF_CONDUCT.md / SECURITY.md / .github/ISSUE_TEMPLATE / .github/PULL_REQUEST_TEMPLATE.md / .github/workflows/ci.yml / .github/dependabot.yml / .github/FUNDING.yml
+- **CI workflow**：GitHub Actions 矩阵测试 Python 3.10–3.13 + 前端 TypeScript 编译 + Vite 构建
+- **README 美化**：新增 banner.svg（带渐变与 LOGO 的横幅）+ workflow.svg（ReAct 工作流图）+ 完整徽章矩阵
+- **.gitignore 强化**：补充密钥文件（*.pem/*.key/id_rsa 等）、缓存（.pytest_cache/.mypy_cache）、IDE（.vscode/.idea）、构建产物（build/.eggs）等过滤规则
+
 ## [1.0.0] — 2026-07-20
 
 ### 🎉 首个正式版本

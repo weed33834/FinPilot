@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 提问 / 讨论
+    url: https://github.com/weed33834/FinPilot/discussions
+    about: 使用问题、想法交流请到 Discussions
+  - name: 🔒 安全漏洞
+    url: https://github.com/weed33834/FinPilot/blob/master/SECURITY.md
+    about: 安全漏洞请按 SECURITY.md 私下报告，勿在 Issue 中披露
