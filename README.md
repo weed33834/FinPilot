@@ -186,7 +186,7 @@ git clone https://github.com/weed33834/FinPilot.git
 cd FinPilot
 ```
 
-> GitCode 镜像：`git clone https://gitcode.com/badhope/FinPilot-AI.git`
+> GitCode 镜像：`git clone https://gitcode.com/badhope/FinPilot.git`
 
 ### 2. 准备 Python 环境
 
@@ -376,7 +376,7 @@ FinPilot AI
   <img src="https://contrib.rocks/image?repo=weed33834/FinPilot" alt="contributors" />
 </a>
 
-> GitCode 镜像：<https://gitcode.com/badhope/FinPilot-AI>
+> GitCode 镜像：<https://gitcode.com/badhope/FinPilot>
 
 ---
 

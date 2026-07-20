@@ -26,7 +26,6 @@ const LlmProvidersPage = lazy(() => import('./pages/LlmProvidersPage.tsx'))
 const AccessPoliciesPage = lazy(() => import('./pages/AccessPoliciesPage.tsx'))
 const ReportSubscriptionsPage = lazy(() => import('./pages/ReportSubscriptionsPage.tsx'))
 const ReportTemplatesPage = lazy(() => import('./pages/ReportTemplatesPage.tsx'))
-const SettingsPage = lazy(() => import('./pages/SettingsPage.tsx'))
 const SecurityPage = lazy(() => import('./pages/SecurityPage.tsx'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout.tsx'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard.tsx'))
@@ -64,10 +63,10 @@ function PrivateRoute({
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
-  // 角色守卫：roles 提供时，角色不在白名单则重定向到 dashboard。
+  // 角色守卫：roles 提供时，角色不在白名单则重定向到智能对话主页。
   // 纵深防御：侧边栏已隐藏无权限菜单，此处拦截手动输入 URL 的越权访问。
   if (roles && (!role || !roles.includes(role))) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/agent" replace />
   }
   return <Layout>{children}</Layout>
 }
@@ -95,7 +94,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/callback" element={<OAuthCallbackPage />} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/agent" replace />} />
           <Route
             path="/dashboard"
             element={
@@ -245,14 +244,6 @@ function App() {
             element={
               <PrivateRoute roles={['admin', 'finance_manager']}>
                 <ReportTemplatesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <PrivateRoute roles={['admin']}>
-                <SettingsPage />
               </PrivateRoute>
             }
           />

@@ -1,20 +1,17 @@
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext.tsx'
 import LanguageSwitcher from './LanguageSwitcher.tsx'
 import NotificationBell from './NotificationBell.tsx'
-import { ICONS, type IconName } from './ui/Icons.tsx'
-
-interface NavItem {
-  path: string
-  labelKey: string
-  icon: IconName
-}
-
-interface NavSection {
-  titleKey: string
-  items: NavItem[]
-}
+import { ICONS } from './ui/Icons.tsx'
+import {
+  NAV_SECTIONS,
+  NAV_FALLBACK_LABELS,
+  filterNavByRole,
+  type NavItem,
+} from '../utils/navigation.ts'
+import { ROLE_LABELS, type RoleKey } from '../utils/permissions.ts'
 
 interface SidebarProps {
   open: boolean
@@ -27,68 +24,51 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
   const { role, username, logout } = useAuth()
   const location = useLocation()
 
+  // 角色过滤后的导航数据
+  const sections = filterNavByRole(NAV_SECTIONS, role)
+
+  // 已展开的分组路径集合（仅对带 children 的项生效）
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  // 解析 i18n 标签，缺失时回退到 NAV_FALLBACK_LABELS
+  const labelText = (key: string): string => {
+    const translated = t(key)
+    if (translated && translated !== key) return translated
+    return NAV_FALLBACK_LABELS[key] ?? key
+  }
+
+  // 路由切换后：自动展开包含当前路径的分组 + 关闭移动端抽屉
+  useEffect(() => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      for (const section of sections) {
+        for (const item of section.items) {
+          if (item.children) {
+            const hit = item.children.some(
+              (child) => child.path === location.pathname || location.pathname.startsWith(child.path + '/')
+            )
+            if (hit) next.add(item.path)
+          }
+        }
+      }
+      return next
+    })
+  }, [location.pathname, sections])
+
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
-  const canApprove = role === 'admin' || role === 'auditor'
-  const isAdmin = role === 'admin'
-  const canManageSubscriptions = role === 'admin' || role === 'finance_manager'
 
-  const sections: NavSection[] = [
-    {
-      titleKey: 'menu:groups.workspace',
-      items: [
-        { path: '/dashboard', labelKey: 'menu:items.dashboard', icon: 'dashboard' },
-        { path: '/reports', labelKey: 'menu:items.reports', icon: 'reports' },
-        { path: '/documents', labelKey: 'menu:items.documents', icon: 'documents' },
-        { path: '/queries', labelKey: 'menu:items.queries', icon: 'queries' },
-        { path: '/kpi', labelKey: 'menu:items.kpi', icon: 'trend' },
-        { path: '/agent', labelKey: 'menu:items.agent', icon: 'agent' },
-        { path: '/conversations', labelKey: 'menu:items.conversations', icon: 'agent' },
-        ...(canManageSubscriptions
-          ? [{ path: '/report-subscriptions', labelKey: 'menu:items.reportSubscriptions', icon: 'subscriptions' as IconName }]
-          : []),
-        ...(canManageSubscriptions
-          ? [{ path: '/report-templates', labelKey: 'menu:items.reportTemplates', icon: 'templates' as IconName }]
-          : []),
-        { path: '/security', labelKey: 'menu:items.security', icon: 'security' },
-      ],
-    },
-    {
-      titleKey: 'menu:groups.review',
-      items: [
-        ...(canApprove
-          ? [{ path: '/approvals', labelKey: 'menu:items.approvals', icon: 'approvals' as IconName }]
-          : []),
-        ...(canApprove
-          ? [{ path: '/hitl', labelKey: 'menu:items.hitl', icon: 'approvals' as IconName }]
-          : []),
-        { path: '/audit', labelKey: 'menu:items.audit', icon: 'audit' },
-        ...(canApprove
-          ? [{ path: '/reflections', labelKey: 'menu:items.reflections', icon: 'reflections' as IconName }]
-          : []),
-      ],
-    },
-    ...(isAdmin
-      ? [
-          {
-            titleKey: 'menu:groups.management',
-            items: [
-              { path: '/users', labelKey: 'menu:items.users', icon: 'users' as IconName },
-              { path: '/api-keys', labelKey: 'menu:items.apiKeys', icon: 'apiKeys' as IconName },
-              { path: '/llm-providers', labelKey: 'menu:items.llmProviders', icon: 'llm' as IconName },
-              { path: '/admin', labelKey: 'menu:items.admin', icon: 'settings' as IconName },
-              { path: '/admin/runtime-logs', labelKey: 'menu:items.runtimeLogs', icon: 'audit' as IconName },
-              { path: '/access-policies', labelKey: 'menu:items.accessPolicies', icon: 'policies' as IconName },
-              { path: '/settings', labelKey: 'menu:items.settings', icon: 'settings' as IconName },
-            ],
-          },
-        ]
-      : []),
-  ]
+  const toggleGroup = (path: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }
 
+  const roleLabel = role ? ROLE_LABELS[role as RoleKey] ?? t(`common:role.${role}`) : ''
   const initial = (username || '?').slice(0, 1).toUpperCase()
-  const roleKey = role ? `common:role.${role}` : ''
-  const roleLabel = roleKey ? t(roleKey) : ''
 
   return (
     <>
@@ -102,32 +82,29 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
       </button>
 
       <aside className={`sidebar${open ? ' open' : ''}`}>
-        <div className="sidebar-brand">
+        <Link to="/agent" className="sidebar-brand" onClick={onClose} aria-label="FinPilot home">
           <div className="sidebar-brand-icon">FP</div>
           <div className="sidebar-brand-text">
             <h2>{t('common:common.appName')}</h2>
             <p>FINANCIAL ANALYSIS</p>
           </div>
-        </div>
+        </Link>
 
         <nav className="sidebar-nav" aria-label={t('menu:actions.mainNav')}>
           {sections.map((section) => (
             <div key={section.titleKey} className="sidebar-section">
-              <div className="sidebar-section-title">{t(section.titleKey)}</div>
-              {section.items.map((item) => {
-                const Icon = ICONS[item.icon]
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`sidebar-link${isActive(item.path) ? ' active' : ''}`}
-                    onClick={onClose}
-                  >
-                    <Icon />
-                    <span>{t(item.labelKey)}</span>
-                  </Link>
-                )
-              })}
+              <div className="sidebar-section-title">{labelText(section.titleKey)}</div>
+              {section.items.map((item) => (
+                <SidebarNode
+                  key={item.path}
+                  item={item}
+                  isActive={isActive}
+                  isExpanded={expanded.has(item.path)}
+                  onToggle={toggleGroup}
+                  labelText={labelText}
+                  onClose={onClose}
+                />
+              ))}
             </div>
           ))}
         </nav>
@@ -157,5 +134,80 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
 
       {open && <div className="sidebar-overlay open" onClick={onClose} aria-hidden="true" />}
     </>
+  )
+}
+
+interface SidebarNodeProps {
+  item: NavItem
+  isActive: (path: string) => boolean
+  isExpanded: boolean
+  onToggle: (path: string) => void
+  labelText: (key: string) => string
+  onClose: () => void
+}
+
+function SidebarNode({ item, isActive, isExpanded, onToggle, labelText, onClose }: SidebarNodeProps) {
+  const Icon = ICONS[item.icon]
+  const hasChildren = !!item.children && item.children.length > 0
+  const active = isActive(item.path)
+
+  if (hasChildren) {
+    return (
+      <div className={`sidebar-nav-group${isExpanded ? ' expanded' : ''}${active ? ' contains-active' : ''}`}>
+        <button
+          type="button"
+          className={`sidebar-nav-group-header${active ? ' active' : ''}`}
+          onClick={() => onToggle(item.path)}
+          aria-expanded={isExpanded}
+        >
+          <span className="sidebar-nav-icon">
+            <Icon />
+          </span>
+          <span className="sidebar-nav-label">{labelText(item.labelKey)}</span>
+          <span className={`sidebar-nav-chevron${isExpanded ? ' rotated' : ''}`} aria-hidden="true">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </span>
+        </button>
+        <div className="sidebar-nav-children">
+          {item.children!.map((child) => {
+            const ChildIcon = ICONS[child.icon]
+            const childActive = isActive(child.path)
+            return (
+              <Link
+                key={child.path}
+                to={child.path}
+                className={`sidebar-link sidebar-link-child${childActive ? ' active' : ''}`}
+                onClick={onClose}
+              >
+                <span className="sidebar-nav-icon">
+                  <ChildIcon />
+                </span>
+                <span>{labelText(child.labelKey)}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      to={item.path}
+      className={`sidebar-link${active ? ' active' : ''}`}
+      onClick={onClose}
+    >
+      <span className="sidebar-nav-icon">
+        <Icon />
+      </span>
+      <span>{labelText(item.labelKey)}</span>
+      {item.badge && (
+        <span className={`sidebar-tag sidebar-tag-${item.badge}`}>
+          {item.badge === 'new' ? 'NEW' : 'BETA'}
+        </span>
+      )}
+    </Link>
   )
 }
