@@ -28,6 +28,13 @@ from finpilot.llm.config import get_default_config, get_tier_config
 from finpilot.llm.router import ModelRouter
 from finpilot.parser import ParserError
 
+from .guardrails import (
+    annotate_answer_with_confidence,
+    check_hallucination,
+    compress_context,
+    detect_tool_loop,
+    make_tool_error_observation,
+)
 from .state import AgentState
 from .tool_registry import ToolContext, tool_registry
 
@@ -461,6 +468,13 @@ def react_agent_node(
     intent = state.get("intent")
     steps = state.get("react_steps") or []
 
+    # 上下文压缩：草稿本累计 token 超阈值时折叠旧步骤，避免上下文溢出
+    compression = compress_context(steps)
+    if compression.compressed:
+        logger.info("guardrails_compress: %s", compression.reason)
+        steps = compression.new_steps
+        state = {**state, "react_steps": steps}
+
     system_prompt = _REACT_SYSTEM_PROMPT.format(
         tools=tool_registry.build_description(),
         max_steps=MAX_REACT_STEPS,
@@ -549,9 +563,39 @@ def react_tool_executor_node(
     if action == "__retry__":
         return {"react_action": ""}
 
+    # 死循环检测：基于上一轮草稿本判定（当前 action 尚未执行）
+    # 注意：steps 中最后一项是上一轮的，本次 action 与上一轮相同则可触发
+    if steps:
+        last_step = steps[-1]
+        if last_step.get("action") == action:
+            # 临时把当前 action 拼到末尾用于检测
+            probe_steps = steps + [{
+                "action": action,
+                "action_input": action_input,
+                "observation": last_step.get("observation", ""),
+            }]
+            loop = detect_tool_loop(probe_steps)
+            if loop.is_looping:
+                logger.warning("guardrails_loop: %s", loop.reason)
+                # 强制终止：让 should_continue 走 end 分支
+                return {
+                    "react_action": "FinalAnswer",
+                    "react_action_input": (
+                        f"检测到工具 {action} 进入死循环（连续 {loop.consecutive_count} 次"
+                        f"无进展），已强制终止。建议：1) 更换查询参数 2) 换用其他工具 "
+                        f"3) 联系运维检查工具上游服务。"
+                    ),
+                    "react_thought": f"[guardrails] {loop.reason}",
+                    "react_steps": steps,
+                }
+
     spec = tool_registry.get(action)
     if spec is None:
-        observation = f"错误：工具 '{action}' 不存在。可用工具：{tool_registry.names()}"
+        observation = make_tool_error_observation(
+            action,
+            ValueError(f"工具 '{action}' 不存在"),
+            available_tools=tool_registry.names(),
+        )
         new_steps = steps + [
             {
                 "thought": state.get("react_thought", ""),
@@ -572,7 +616,15 @@ def react_tool_executor_node(
     )
 
     result = _safe_call_tool(spec, ctx, params)
-    observation = json.dumps(result, ensure_ascii=False, default=str)
+    # 工具失败时用结构化错误 Observation 引导 LLM 自愈
+    if isinstance(result, dict) and result.get("error"):
+        observation = make_tool_error_observation(
+            action,
+            result["error"],
+            available_tools=tool_registry.names(),
+        )
+    else:
+        observation = json.dumps(result, ensure_ascii=False, default=str)
     new_steps = steps + [
         {
             "thought": state.get("react_thought", ""),
@@ -620,7 +672,7 @@ def _calculate_confidence(
 
 
 def react_finalize_node(state: AgentState) -> dict[str, Any]:
-    """终止节点：提取 FinalAnswer，计算置信度，或给出兜底回复。"""
+    """终止节点：提取 FinalAnswer，计算置信度，幻觉校验，或给出兜底回复。"""
     action = state.get("react_action", "")
     action_input = state.get("react_action_input", "")
     error = state.get("error")
@@ -629,7 +681,22 @@ def react_finalize_node(state: AgentState) -> dict[str, Any]:
     confidence = _calculate_confidence(steps, error, thought)
 
     if _is_final_answer(action) and action_input:
-        return {"answer": action_input, "confidence": confidence}
+        # 幻觉校验：抽取答案中的事实（日期/金额/凭证号），回查 Observation
+        answer = action_input
+        try:
+            hallucination = check_hallucination(answer, steps)
+            if hallucination.is_enabled:
+                # 命中率低时降低置信度，并给答案加低可信前缀
+                if hallucination.should_flag:
+                    confidence = round(confidence * 0.5, 2)
+                    answer = annotate_answer_with_confidence(answer, hallucination)
+                logger.info(
+                    "guardrails_hallucination: hit_rate=%.2f flag=%s",
+                    hallucination.hit_rate, hallucination.should_flag,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("hallucination_check_failed: %s", exc)
+        return {"answer": answer, "confidence": confidence}
     if error:
         return {"answer": f"处理失败：{error}", "confidence": confidence}
     return {"answer": _FALLBACK_ANSWER, "confidence": confidence}

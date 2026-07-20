@@ -55,6 +55,11 @@ _EXTENSION_ROUTERS: list[tuple[str, str]] = [
     (".dashboard", "router"),
     (".dashboard", "user_router"),
     (".runtime_logs", "router"),
+    # 阶段 C 新增：财务智能体增强能力路由（校验/辩论/可解释/风险）
+    (".validation", "router"),
+    (".debate", "router"),
+    (".explainability", "router"),
+    (".risk", "router"),
 ]
 
 
