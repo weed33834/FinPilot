@@ -4,13 +4,19 @@ import {
   useRef,
   useEffect,
   useCallback,
+  memo,
   type ChangeEvent,
+  type KeyboardEvent,
 } from 'react'
 import { useLocation } from 'react-router-dom'
 import { generateId } from '../utils/id'
 import { ICONS } from '../components/ui/Icons'
 import ReasoningChain from '../components/ReasoningChain'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import { FetchError, getErrorLevel, getErrorLevelLabel, getErrorMessage, type ErrorLevel } from '../utils/errors'
+import { parseSlashCommand, renderHelpForRole, type SlashCommand } from '../utils/slashCommands'
+import { useAuthStore } from '../stores/authStore'
+import SlashCommandPalette from '../components/SlashCommandPalette'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -110,6 +116,167 @@ const readFileAsBase64 = (file: File): Promise<string> =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * 单条消息行 —— 用 memo 包裹，避免流式 token 增量更新时其他消息无谓重渲染。
+ * 仅当 message 引用变化时才重渲染（流式消息每次 setMessages 会产生新引用，
+ * 其他消息保持原引用，自动跳过渲染）。
+ */
+interface ChatMessageRowProps {
+  message: Message
+  isStreaming: boolean
+  isStreamingTarget: boolean
+  hovered: boolean
+  onHoverEnter: (id: string) => void
+  onHoverLeave: () => void
+  onToggleThinking: (id: string) => void
+  onToggleReasoning: (id: string) => void
+  onCopy: (content: string) => void
+  onRefine: (action: string, content: string) => void
+  onDelete: (id: string) => void
+}
+
+const ChatMessageRow = memo(function ChatMessageRow({
+  message,
+  isStreaming,
+  isStreamingTarget,
+  hovered,
+  onHoverEnter,
+  onHoverLeave,
+  onToggleThinking,
+  onToggleReasoning,
+  onCopy,
+  onRefine,
+  onDelete,
+}: ChatMessageRowProps) {
+  const formatThinkingTimeMs = (ms: number) => {
+    if (ms < 1000) return `${ms}毫秒`
+    return `${(ms / 1000).toFixed(1)}秒`
+  }
+
+  return (
+    <div
+      className={`chat-message ${message.role}`}
+      onMouseEnter={() => message.role === 'agent' && onHoverEnter(message.id)}
+      onMouseLeave={onHoverLeave}
+    >
+      <div className="chat-avatar" aria-hidden="true">
+        {message.role === 'user' ? (
+          '我'
+        ) : (
+          <span className="chat-avatar-glyph">F</span>
+        )}
+      </div>
+
+      <div className="chat-content">
+        {/* ---- Thinking panel (agent messages only) ---- */}
+        {message.role === 'agent' && (message.thinking || message.thinkingTimeMs) && (
+          <div className="thinking-panel">
+            <button
+              type="button"
+              className="thinking-toggle"
+              onClick={() => onToggleThinking(message.id)}
+            >
+              <span
+                className={`thinking-chevron ${message.thinkingExpanded ? 'open' : ''}`}
+                aria-hidden="true"
+              />
+              {message.thinkingExpanded || isStreaming ? (
+                <span>
+                  {isStreamingTarget
+                    ? '思考中...'
+                    : `已深度思考（${formatThinkingTimeMs(message.thinkingTimeMs || 0)}）`}
+                </span>
+              ) : (
+                <span>
+                  已深度思考（{formatThinkingTimeMs(message.thinkingTimeMs || 0)}）
+                </span>
+              )}
+            </button>
+            {(message.thinkingExpanded || isStreamingTarget) && message.thinking && (
+              <MarkdownRenderer content={message.thinking} className="thinking-content" />
+            )}
+          </div>
+        )}
+
+        {/* ---- Chat bubble ---- */}
+        <MarkdownRenderer content={message.content} className="chat-bubble" />
+        {isStreamingTarget && <span className="cursor-blink" />}
+
+        {/* ---- Confidence badge ---- */}
+        {message.role === 'agent' && message.confidence != null && (
+          <div className="chat-confidence">
+            <span className={`badge ${message.confidence >= 0.7 ? 'success' : message.confidence >= 0.4 ? 'processing' : 'failed'}`}>
+              置信度 {Math.round(message.confidence * 100)}%
+            </span>
+          </div>
+        )}
+
+        {/* ---- Reasoning chain (collapsible) ---- */}
+        {message.role === 'agent' && message.reactSteps && message.reactSteps.length > 0 && (
+          <div className="chat-reasoning">
+            <button
+              type="button"
+              className="reasoning-toggle"
+              onClick={() => onToggleReasoning(message.id)}
+            >
+              <ICONS.search size={14} />
+              <span>推理链 ({message.reactSteps.length} 步)</span>
+              <span className="reasoning-arrow">{message.reasoningExpanded ? '▼' : '▶'}</span>
+            </button>
+            {message.reasoningExpanded && (
+              <ReasoningChain
+                steps={message.reactSteps as Array<Record<string, unknown>> as unknown as Parameters<typeof ReasoningChain>[0]['steps']}
+                confidence={message.confidence}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ---- Timestamp ---- */}
+        <div className="chat-time">{formatTime(message.createdAt)}</div>
+
+        {/* ---- Refinement menu (agent messages, on hover) ---- */}
+        {message.role === 'agent' &&
+          hovered &&
+          message.content &&
+          !isStreaming && (
+            <div className="chat-refine-menu">
+              <button
+                type="button"
+                className="refine-btn"
+                title="复制"
+                onClick={() => onCopy(message.content)}
+              >
+                <ICONS.copy size={14} />
+                <span>复制</span>
+              </button>
+              {REFINE_ACTIONS.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="refine-btn"
+                  title={action.label}
+                  onClick={() => onRefine(action.id, message.content)}
+                >
+                  <span>{action.label}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="refine-btn refine-btn-danger"
+                title="删除"
+                onClick={() => onDelete(message.id)}
+              >
+                <ICONS.close size={14} />
+                <span>删除</span>
+              </button>
+            </div>
+          )}
+      </div>
+    </div>
+  )
+})
+
 export default function AgentChatPage() {
   const location = useLocation()
   const params = new URLSearchParams(location.search)
@@ -120,6 +287,7 @@ export default function AgentChatPage() {
   const [question, setQuestion] = useState(initialQuestion)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [errorLevel, setErrorLevel] = useState<ErrorLevel>('unknown')
 
   /* --- function bar state --- */
   const [deepThink, setDeepThink] = useState(false)
@@ -133,6 +301,10 @@ export default function AgentChatPage() {
 
   /* --- hover state for refinement menu --- */
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null)
+
+  /* --- slash command palette state --- */
+  const [showSlashPalette, setShowSlashPalette] = useState(false)
+  const role = useAuthStore((s) => s.role)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -195,6 +367,7 @@ export default function AgentChatPage() {
       setQuestion('')
       setLoading(true)
       setError('')
+      setErrorLevel('unknown')
       setStreamingMessageId(null)
 
       const history = messages
@@ -245,11 +418,23 @@ export default function AgentChatPage() {
 
         if (!response.ok) {
           const text = await response.text()
-          throw new Error(text || `HTTP ${response.status}`)
+          throw new FetchError({
+            status: response.status,
+            url: response.url || `${baseUrl}/agent/chat/stream`,
+            method: 'POST',
+            bodyText: text,
+            message: text || `HTTP ${response.status}`,
+          })
         }
 
         const reader = response.body?.getReader()
-        if (!reader) throw new Error('Response body is not readable')
+        if (!reader) {
+          throw new FetchError({
+            url: `${baseUrl}/agent/chat/stream`,
+            method: 'POST',
+            message: 'Response body is not readable — 后端未返回流式响应体',
+          })
+        }
 
         const decoder = new TextDecoder()
         let buffer = ''
@@ -299,6 +484,8 @@ export default function AgentChatPage() {
 
                     case 'error':
                       setError(event.message || '未知错误')
+                      // 后端主动通过 SSE 上报的错误通常属于服务端错误
+                      setErrorLevel('server')
                       return m
 
                     default:
@@ -342,10 +529,13 @@ export default function AgentChatPage() {
         }
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          // user aborted — keep partial content
+          // user aborted — keep partial content，不上报错误
         } else {
-          const msg = err instanceof Error ? err.message : '连接中断'
-          if (msg) setError(msg)
+          const msg = getErrorMessage(err, '连接中断，请稍后重试')
+          if (msg) {
+            setError(msg)
+            setErrorLevel(getErrorLevel(err))
+          }
         }
         setStreamingMessageId(null)
       } finally {
@@ -372,7 +562,118 @@ export default function AgentChatPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    // 斜杠命令优先处理 —— 不走 LLM 对话流
+    if (question.trim().startsWith('/')) {
+      void executeSlashCommand(question)
+      return
+    }
     void handleSubmitInternal(question)
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Slash command execution                                            */
+  /* ------------------------------------------------------------------ */
+
+  const executeSlashCommand = useCallback(
+    async (raw: string) => {
+      const userMessageId = generateId()
+      const userMessage: Message = {
+        id: userMessageId,
+        role: 'user',
+        content: raw.trim(),
+        createdAt: new Date(),
+      }
+      setMessages((prev) => [...prev, userMessage])
+      setQuestion('')
+      setShowSlashPalette(false)
+      setError('')
+      setErrorLevel('unknown')
+      setLoading(true)
+
+      const answerId = `${generateId()}-answer`
+      const answerMessage: Message = {
+        id: answerId,
+        role: 'agent',
+        content: '',
+        createdAt: new Date(),
+      }
+      setMessages((prev) => [...prev, answerMessage])
+      setStreamingMessageId(answerId)
+
+      try {
+        // help 命令特殊处理（避免循环依赖）
+        if (raw.trim() === '/help' || raw.trim() === '/?') {
+          const helpMarkdown = renderHelpForRole(role)
+          setMessages((prev) =>
+            prev.map((m) => (m.id === answerId ? { ...m, content: helpMarkdown } : m)),
+          )
+          return
+        }
+
+        const parsed = parseSlashCommand(raw, role)
+        if (!parsed) {
+          // 不是斜杠命令（理论不会走到这里，因为外层已过滤）
+          throw new Error('无法解析的命令')
+        }
+        const result = await parsed.command.handler(parsed.args)
+        setMessages((prev) =>
+          prev.map((m) => (m.id === answerId ? { ...m, content: result } : m)),
+        )
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '命令执行失败'
+        setError(msg)
+        setErrorLevel(getErrorLevel(err) === 'unknown' ? 'client' : getErrorLevel(err))
+        // 把空 answer 消息删掉，避免出现一个空气泡
+        setMessages((prev) => prev.filter((m) => m.id !== answerId))
+      } finally {
+        setLoading(false)
+        setStreamingMessageId(null)
+      }
+    },
+    [role],
+  )
+
+  /** 从面板选中命令时，填充到输入框（让用户继续输入参数） */
+  const handleSlashPaletteSelect = (cmd: SlashCommand) => {
+    // 如果命令没有参数，直接执行
+    if (cmd.args.length === 0) {
+      void executeSlashCommand(`/${cmd.name}`)
+      return
+    }
+    // 否则填入命令名 + 一个空格，让用户继续输入参数
+    setQuestion(`/${cmd.name} `)
+    setShowSlashPalette(false)
+    // 焦点回到输入框
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  /** 输入框键盘事件：在面板可见时，让面板接管方向键 */
+  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (showSlashPalette) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape') {
+        e.preventDefault()
+        // SlashCommandPalette 的全局 keydown 监听会处理这些键
+        return
+      }
+      if (e.key === 'Enter') {
+        // 面板接管 Enter，由 palette 触发选择
+        e.preventDefault()
+        return
+      }
+    }
+  }
+
+  /** 输入框内容变化时，决定是否显示 slash 面板 */
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setQuestion(value)
+    // 仅当输入以 / 开头且尚未按空格定参时显示面板
+    const trimmed = value.trim()
+    if (trimmed.startsWith('/') && !trimmed.includes(' ')) {
+      setShowSlashPalette(true)
+    } else {
+      setShowSlashPalette(false)
+    }
   }
 
   const onSuggestionClick = (text: string) => {
@@ -438,11 +739,6 @@ export default function AgentChatPage() {
     setMessages((prev) => prev.filter((m) => m.id !== msgId))
   }
 
-  const formatThinkingTime = (ms: number) => {
-    if (ms < 1000) return `${ms}毫秒`
-    return `${(ms / 1000).toFixed(1)}秒`
-  }
-
   /* ------------------------------------------------------------------ */
   /*  Render                                                             */
   /* ------------------------------------------------------------------ */
@@ -488,134 +784,26 @@ export default function AgentChatPage() {
           ) : (
             /* ----- Messages ----- */
             messages.map((message) => (
-              <div
+              <ChatMessageRow
                 key={message.id}
-                className={`chat-message ${message.role}`}
-                onMouseEnter={() =>
-                  message.role === 'agent' && setHoveredMessageId(message.id)
+                message={message}
+                isStreaming={isStreaming}
+                isStreamingTarget={isStreaming && message.id === streamingMessageId}
+                hovered={hoveredMessageId === message.id}
+                onHoverEnter={setHoveredMessageId}
+                onHoverLeave={() => setHoveredMessageId(null)}
+                onToggleThinking={toggleThinking}
+                onToggleReasoning={(id) =>
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === id ? { ...m, reasoningExpanded: !m.reasoningExpanded } : m,
+                    ),
+                  )
                 }
-                onMouseLeave={() => setHoveredMessageId(null)}
-              >
-                <div className="chat-avatar" aria-hidden="true">
-                  {message.role === 'user' ? (
-                    '我'
-                  ) : (
-                    <span className="chat-avatar-glyph">F</span>
-                  )}
-                </div>
-
-                <div className="chat-content">
-                  {/* ---- Thinking panel (agent messages only) ---- */}
-                  {message.role === 'agent' && (message.thinking || message.thinkingTimeMs) && (
-                    <div className="thinking-panel">
-                      <button
-                        type="button"
-                        className="thinking-toggle"
-                        onClick={() => toggleThinking(message.id)}
-                      >
-                        <span
-                          className={`thinking-chevron ${message.thinkingExpanded ? 'open' : ''}`}
-                          aria-hidden="true"
-                        />
-                        {message.thinkingExpanded || isStreaming ? (
-                          <span>
-                            {isStreaming && message.id === streamingMessageId
-                              ? '思考中...'
-                              : `已深度思考（${formatThinkingTime(message.thinkingTimeMs || 0)}）`}
-                          </span>
-                        ) : (
-                          <span>
-                            已深度思考（{formatThinkingTime(message.thinkingTimeMs || 0)}）
-                          </span>
-                        )}
-                      </button>
-                      {(message.thinkingExpanded || (isStreaming && message.id === streamingMessageId)) &&
-                        message.thinking && (
-                          <MarkdownRenderer content={message.thinking} className="thinking-content" />
-                        )}
-                    </div>
-                  )}
-
-                  {/* ---- Chat bubble ---- */}
-                  <MarkdownRenderer content={message.content} className="chat-bubble" />
-                  {isStreaming && message.id === streamingMessageId && (
-                    <span className="cursor-blink" />
-                  )}
-
-                  {/* ---- Confidence badge ---- */}
-                  {message.role === 'agent' && message.confidence != null && (
-                    <div className="chat-confidence">
-                      <span className={`badge ${message.confidence >= 0.7 ? 'success' : message.confidence >= 0.4 ? 'processing' : 'failed'}`}>
-                        置信度 {Math.round(message.confidence * 100)}%
-                      </span>
-                    </div>
-                  )}
-
-                  {/* ---- Reasoning chain (collapsible) ---- */}
-                  {message.role === 'agent' && message.reactSteps && message.reactSteps.length > 0 && (
-                    <div className="chat-reasoning">
-                      <button
-                        type="button"
-                        className="reasoning-toggle"
-                        onClick={() => setMessages(prev => prev.map(m =>
-                          m.id === message.id ? { ...m, reasoningExpanded: !m.reasoningExpanded } : m
-                        ))}
-                      >
-                        <ICONS.search size={14} />
-                        <span>推理链 ({message.reactSteps.length} 步)</span>
-                        <span className="reasoning-arrow">{message.reasoningExpanded ? '▼' : '▶'}</span>
-                      </button>
-                      {message.reasoningExpanded && (
-                        <ReasoningChain
-                          steps={message.reactSteps as Array<Record<string, unknown>> as unknown as Parameters<typeof ReasoningChain>[0]['steps']}
-                          confidence={message.confidence}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {/* ---- Timestamp ---- */}
-                  <div className="chat-time">{formatTime(message.createdAt)}</div>
-
-                  {/* ---- Refinement menu (agent messages, on hover) ---- */}
-                  {message.role === 'agent' &&
-                    hoveredMessageId === message.id &&
-                    message.content &&
-                    !isStreaming && (
-                      <div className="chat-refine-menu">
-                        <button
-                          type="button"
-                          className="refine-btn"
-                          title="复制"
-                          onClick={() => handleCopy(message.content)}
-                        >
-                          <ICONS.copy size={14} />
-                          <span>复制</span>
-                        </button>
-                        {REFINE_ACTIONS.map((action) => (
-                          <button
-                            key={action.id}
-                            type="button"
-                            className="refine-btn"
-                            title={action.label}
-                            onClick={() => handleRefine(action.id, message.content)}
-                          >
-                            <span>{action.label}</span>
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          className="refine-btn refine-btn-danger"
-                          title="删除"
-                          onClick={() => handleDeleteMessage(message.id)}
-                        >
-                          <ICONS.close size={14} />
-                          <span>删除</span>
-                        </button>
-                      </div>
-                    )}
-                </div>
-              </div>
+                onCopy={handleCopy}
+                onRefine={handleRefine}
+                onDelete={handleDeleteMessage}
+              />
             ))
           )}
 
@@ -638,14 +826,19 @@ export default function AgentChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* ----- Error bar ----- */}
+        {/* ----- Error bar（按级别打灯高亮） ----- */}
         {error && (
-          <div className="chat-error-bar" role="alert">
-            <span>{error}</span>
+          <div className={`chat-error-bar level-${errorLevel}`} role="alert">
+            <span className="chat-error-icon" aria-hidden="true">!</span>
+            <span className="chat-error-level">{getErrorLevelLabel(errorLevel)}</span>
+            <span className="chat-error-text">{error}</span>
             <button
               type="button"
               className="chat-error-close"
-              onClick={() => setError('')}
+              onClick={() => {
+                setError('')
+                setErrorLevel('unknown')
+              }}
               aria-label="关闭"
             >
               <ICONS.close size={14} />
@@ -754,24 +947,51 @@ export default function AgentChatPage() {
 
         {/* ----- Input ----- */}
         <form onSubmit={handleSubmit} className="chat-input">
-          <input
-            ref={inputRef}
-            className="chat-input-field"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="fa&gt; 输入财务查询指令..."
-            disabled={loading}
-            aria-label="输入问题"
-          />
-          <button
-            type="submit"
-            className="chat-send"
-            disabled={loading || !question.trim()}
-            aria-label="发送"
-          >
-            <ICONS.send size={16} />
-            <span>{loading ? '发送中' : '发送'}</span>
-          </button>
+          <div className="chat-input-wrapper">
+            {showSlashPalette && (
+              <SlashCommandPalette
+                role={role}
+                query={question}
+                onSelect={handleSlashPaletteSelect}
+                onClose={() => setShowSlashPalette(false)}
+              />
+            )}
+            <button
+              type="button"
+              className="chat-slash-trigger"
+              onClick={() => {
+                if (!question.trim().startsWith('/')) {
+                  setQuestion('/')
+                  setShowSlashPalette(true)
+                  setTimeout(() => inputRef.current?.focus(), 0)
+                }
+              }}
+              title="斜杠命令面板"
+              aria-label="打开斜杠命令面板"
+              disabled={loading}
+            >
+              /
+            </button>
+            <input
+              ref={inputRef}
+              className="chat-input-field"
+              value={question}
+              onChange={handleInputChange}
+              onKeyDown={handleInputKeyDown}
+              placeholder="输入问题，或输入 / 调用命令面板控制整个程序"
+              disabled={loading}
+              aria-label="输入问题"
+            />
+            <button
+              type="submit"
+              className="chat-send"
+              disabled={loading || !question.trim()}
+              aria-label="发送"
+            >
+              <ICONS.send size={16} />
+              <span>{loading ? '发送中' : '发送'}</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>

@@ -368,7 +368,7 @@ export default function WorkflowEditorPage() {
 
       {/* Editor body */}
       <div
-        className="admin-card"
+        className="admin-card workflow-editor-layout"
         style={{
           padding: 0,
           display: 'grid',

@@ -10,7 +10,7 @@ except:
 
 setup(
     name="finpilot-ai",
-    version="0.1.5",
+    version="1.0.0",
     include_package_data=True,
     author="badhope",
     author_email="badhope@noreply.gitcode.com",
@@ -26,16 +26,14 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
     keywords="Financial Large Language Models, AI Agents",
     platforms=["any"],
-    python_requires=">=3.10, <3.12",
+    python_requires=">=3.10, <3.14",
 )

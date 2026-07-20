@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { ICONS } from '../../components/ui/Icons.tsx'
 import RealtimeIndicator from '../../components/RealtimeIndicator.tsx'
@@ -73,14 +73,36 @@ export default function AdminLayout() {
   const crumbs = breadcrumbPath(location.pathname)
   const { notifications, unreadCount, markRead, clear, status } = useRealtimeNotifications()
   const [bellOpen, setBellOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // 路由切换后自动关闭移动端抽屉
+  React.useEffect(() => {
+    setMobileNavOpen(false)
+    setBellOpen(false)
+  }, [location.pathname])
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
+      {/* 移动端遮罩 */}
+      <div
+        className={`admin-mobile-overlay${mobileNavOpen ? ' open' : ''}`}
+        onClick={() => setMobileNavOpen(false)}
+        aria-hidden={!mobileNavOpen}
+      />
+
       {/* 左侧二级侧边栏 */}
-      <aside className="admin-sidebar">
+      <aside className={`admin-sidebar${mobileNavOpen ? ' open' : ''}`}>
         <div className="admin-sidebar-header">
           <ICONS.settings size={18} />
           <span>管理后台</span>
+          <button
+            type="button"
+            className="admin-sidebar-close"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="关闭菜单"
+          >
+            ✕
+          </button>
         </div>
         <nav className="admin-sidebar-nav">
           {adminMenuItems.map((item) => {
@@ -93,12 +115,12 @@ export default function AdminLayout() {
               return (
                 <div
                   key={item.path}
-                  className="admin-sidebar-link disabled"
+                  className="admin-nav-item disabled"
                   title={`${item.label} — 即将上线`}
                 >
-                  <span className="admin-sidebar-icon">{item.icon}</span>
-                  <span className="admin-sidebar-label">{item.label}</span>
-                  <span className="admin-sidebar-badge">即将上线</span>
+                  <span className="admin-nav-icon">{item.icon}</span>
+                  <span className="admin-nav-label">{item.label}</span>
+                  <span className="nav-badge">即将上线</span>
                 </div>
               )
             }
@@ -107,10 +129,10 @@ export default function AdminLayout() {
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={`admin-sidebar-link${isActive ? ' active' : ''}`}
+                className={`admin-nav-item${isActive ? ' active' : ''}`}
               >
-                <span className="admin-sidebar-icon">{item.icon}</span>
-                <span className="admin-sidebar-label">{item.label}</span>
+                <span className="admin-nav-icon">{item.icon}</span>
+                <span className="admin-nav-label">{item.label}</span>
               </NavLink>
             )
           })}
@@ -119,6 +141,18 @@ export default function AdminLayout() {
 
       {/* 右侧内容区 */}
       <div className="admin-content">
+        {/* 移动端菜单触发器 */}
+        <button
+          type="button"
+          className="admin-mobile-toggle"
+          onClick={() => setMobileNavOpen((v) => !v)}
+          aria-label="打开管理菜单"
+          aria-expanded={mobileNavOpen}
+        >
+          <span className="admin-mobile-toggle-bar" />
+          <span className="admin-mobile-toggle-bar" />
+          <span className="admin-mobile-toggle-bar" />
+        </button>
         {/* 顶栏：面包屑 + 实时状态 + 通知 */}
         <div
           className="admin-topbar"

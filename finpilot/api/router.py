@@ -77,6 +77,12 @@ def _load_extension_routers(api: APIRouter) -> None:
 def create_router() -> APIRouter:
     """创建聚合路由器，所有子路由挂载在 /api/v1 下"""
     api = APIRouter(prefix="/api/v1")
+    # 兼容路由必须先于 reports_router 注册，避免 /reports/templates 被 /reports/{report_id} 抢先匹配
+    try:
+        from .compat import register_compat_routes
+        register_compat_routes(api)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("兼容路由加载失败（部分 admin 页可能 404）: %s", exc)
     api.include_router(auth_router)
     api.include_router(documents_router)
     api.include_router(queries_router)

@@ -55,7 +55,7 @@ export default function LoginPage() {
       {/* 左侧品牌展示区 - 桌面端显示 */}
       <aside className="login-brand-panel" aria-hidden="true">
         <div className="login-brand-content">
-          <div class="login-brand-mark">
+          <div className="login-brand-mark">
             <div className="login-brand-logo">FP</div>
             <div>
               <div className="login-brand-name">FinPilot</div>

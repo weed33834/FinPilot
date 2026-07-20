@@ -94,7 +94,12 @@ def _is_final_answer(action: str) -> bool:
 def parse_react_output(text: str) -> dict[str, Any]:
     """解析 LLM 的 ReAct 三段式输出。
 
-    支持 Thought:/Action:/Action Input:/Final Answer: 四种段落，兼容中英文冒号。
+    支持的格式（按优先级）：
+    1. 标准 ReAct：Thought:/Action:/Action Input:/Final Answer:（兼容中英文冒号）
+    2. ``<tool_call>`` XML 风格：``<function=NAME><parameter=KEY>VAL</parameter></function>``
+       （部分 LLM 如 Qwen / Mistral 会输出这种格式而非 ReAct 三段式）
+    3. ``<answer>...</answer>`` 或 ``<final_answer>...</final_answer>`` 作为最终答案
+
     成功返回 ``{"thought","action","action_input","final_answer","parse_ok": True}``；
     解析失败返回 ``{"parse_ok": False, "error": "..."}`` 作为 retry 信号。
     """
@@ -148,6 +153,94 @@ def parse_react_output(text: str) -> dict[str, Any]:
             "final_answer": "",
             "parse_ok": True,
         }
+
+    # ---- 兼容 <tool_call> / <function=NAME> XML 风格（Qwen / Mistral 系） ----
+    # 形如：
+    #   <tool_call>
+    #   <function=nl2sql>
+    #   <parameter=question>查询本月营业收入</parameter>
+    #   </function>
+    #   </tool_call>
+    tool_call_match = re.search(
+        r"<tool_call>\s*<function=(\w+)(.*?)</tool_call>",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if tool_call_match:
+        tc_action = tool_call_match.group(1).strip()
+        params_block = tool_call_match.group(2)
+        # 抽取所有 <parameter=KEY>VAL</parameter>
+        params: dict[str, str] = {}
+        for pm in re.finditer(
+            r"<parameter=(\w+)>\s*(.*?)\s*</parameter>",
+            params_block,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            params[pm.group(1).strip()] = pm.group(2).strip()
+        # 思考取 <tool_call> 之前的文本（若有）
+        if not thought:
+            thought = text[: tool_call_match.start()].strip()
+        # action_input 统一序列化为 JSON（与 _parse_action_input_json 配合）
+        try:
+            tc_action_input = json.dumps(params, ensure_ascii=False)
+        except Exception:  # noqa: BLE001
+            tc_action_input = params.get("question", "")
+        return {
+            "thought": thought,
+            "action": tc_action,
+            "action_input": tc_action_input,
+            "final_answer": "",
+            "parse_ok": True,
+        }
+
+    # ---- 兼容裸 <function=NAME>...</function>（无 <tool_call> 包裹） ----
+    bare_fn_match = re.search(
+        r"<function=(\w+)(.*?)</function>",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if bare_fn_match:
+        bf_action = bare_fn_match.group(1).strip()
+        params_block = bare_fn_match.group(2)
+        params: dict[str, str] = {}
+        for pm in re.finditer(
+            r"<parameter=(\w+)>\s*(.*?)\s*</parameter>",
+            params_block,
+            re.DOTALL | re.IGNORECASE,
+        ):
+            params[pm.group(1).strip()] = pm.group(2).strip()
+        if not thought:
+            thought = text[: bare_fn_match.start()].strip()
+        try:
+            bf_action_input = json.dumps(params, ensure_ascii=False)
+        except Exception:  # noqa: BLE001
+            bf_action_input = params.get("question", "")
+        return {
+            "thought": thought,
+            "action": bf_action,
+            "action_input": bf_action_input,
+            "final_answer": "",
+            "parse_ok": True,
+        }
+
+    # ---- 兼容 <answer> / <final_answer> 标签作为最终答案 ----
+    tag_final_match = re.search(
+        r"<(?:answer|final_answer)>(.*?)</(?:answer|final_answer)>",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if tag_final_match:
+        tag_answer = tag_final_match.group(1).strip()
+        if not thought:
+            thought = text[: tag_final_match.start()].strip()
+        return {
+            "thought": thought,
+            "action": "FinalAnswer",
+            "action_input": tag_answer,
+            "final_answer": tag_answer,
+            "parse_ok": True,
+        }
+
     # 既无工具动作也无最终答案 → 解析失败，返回 retry 信号
     return {
         "thought": thought,
@@ -155,7 +248,7 @@ def parse_react_output(text: str) -> dict[str, Any]:
         "action_input": "",
         "final_answer": "",
         "parse_ok": False,
-        "error": f"无法解析 Action / Final Answer，原始输出: {text[:200]}",
+        "error": f"无法解析 Action / Final Answer / tool_call，原始输出: {text[:200]}",
     }
 
 

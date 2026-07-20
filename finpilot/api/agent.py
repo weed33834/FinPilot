@@ -21,6 +21,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from finpilot.agent import run_agent
+from finpilot.agent.graph import build_agent, make_thread_id
+from finpilot.llm.intent import classify_intent, extract_parameters
 from finpilot.database import crud
 from finpilot.database.models import Conversation, Message
 
@@ -265,44 +267,118 @@ def chat_stream(
         run_error = ""
         run_result: dict = {}
         try:
-            # 2. 运行 agent（注入文件上下文后的 effective_question）
-            result = run_agent(
-                question=effective_question,
-                tenant_id=tenant_id,
-                user_id=user_id,
-                db=db,
-                conversation_id=conversation_id,
-            )
-            run_result = result or {}
-            answer = result.get("answer", "")
-            intent = result.get("intent", "unknown")
-            confidence = result.get("confidence", 0.0)
-            steps = result.get("steps", [])
+            # 2. 运行 agent —— 用 agent.stream() 实时推送每个节点的思考步骤
+            #    （此前用 run_agent 一次性同步执行，前端会卡 1-3 分钟看不到任何事件，
+            #     误以为「网络错误 / 响应错误」；改成流式后，每个 ReAct 步骤都会即时推送）
+            intent_result = classify_intent(effective_question, history=req.history or [], db=db)
+            intent = intent_result.get("intent", "unknown")
+            parameters = extract_parameters(effective_question, intent, history=req.history or [], db=db)
 
-            # 3. 流式推送思考步骤（如果有）— 用 thinking_token 累积
-            for step in steps:
-                thought = step.get("thought") if isinstance(step, dict) else None
-                if thought:
-                    yield _sse("thinking_token", {"content": thought + "\n"})
+            initial_state: dict[str, Any] = {
+                "question": effective_question,
+                "intent": intent,
+                "parameters": parameters,
+                "tool_result": {},
+                "answer": "",
+                "error": "",
+                "conversation_id": conversation_id or "",
+                "messages": req.history or [],
+                "retry_count": 0,
+                "react_steps": [],
+                "react_thought": "",
+                "react_action": "",
+                "react_action_input": "",
+                "confidence": 0.0,
+                "tenant_id": tenant_id,
+            }
 
-            # 4. 分块推送答案 — answer_token 累积到 content
-            chunk_size = 8  # 中文字符，每 8 字一帧
+            agent = build_agent(tenant_id=tenant_id, user_id=user_id, db=db)
+            thread_id = make_thread_id(tenant_id, conversation_id)
+            config = {"configurable": {"thread_id": thread_id}}
+
+            final_state: dict[str, Any] = initial_state
+            steps: list[dict[str, Any]] = []
+            last_heartbeat = time.time()
+
+            # 用 stream() 而非 invoke() —— 每个节点完成后立即推送 thinking_token
+            for chunk in agent.stream(initial_state, config=config, stream_mode="updates"):
+                # chunk 形如 {"agent": {...partial_state...}} 或 {"tools": {...}} 或 {"finalize": {...}}
+                for node_name, state_update in chunk.items():
+                    if not isinstance(state_update, dict):
+                        continue
+
+                    # agent 节点：推送最新的 thought
+                    if node_name == "agent":
+                        thought = state_update.get("react_thought") or ""
+                        action = state_update.get("react_action") or ""
+                        if thought:
+                            yield _sse("thinking_token", {"content": f"💭 {thought}\n"})
+                        if action and action != "__retry__" and action != "FinalAnswer":
+                            yield _sse("thinking_token", {"content": f"🔧 调用工具：{action}\n"})
+
+                    # tools 节点：把新增步骤的 observation 推送出去
+                    elif node_name == "tools":
+                        new_steps = state_update.get("react_steps") or []
+                        if new_steps and len(new_steps) > len(steps):
+                            # 只推送本次新增的步骤
+                            for step in new_steps[len(steps):]:
+                                steps = new_steps
+                                if isinstance(step, dict):
+                                    observation = step.get("observation") or ""
+                                    if observation:
+                                        yield _sse("thinking_token", {"content": f"📋 结果：{observation[:200]}{'...' if len(observation) > 200 else ''}\n"})
+
+                    # finalize 节点：拿到最终答案
+                    elif node_name == "finalize":
+                        if "answer" in state_update:
+                            final_state = {**initial_state, **state_update}
+                        else:
+                            final_state = {**final_state, **state_update}
+
+                    # 心跳保护：长时间无事件时推送 ping，防止前端误判超时
+                    now = time.time()
+                    if now - last_heartbeat > 15:
+                        yield _sse("thinking_token", {"content": "…\n"})
+                        last_heartbeat = now
+
+            # 合并最终状态（防 finalize 节点没在 stream 中暴露 answer）
+            if not final_state.get("answer"):
+                # 兜底：再查一次最终状态
+                try:
+                    final_state = agent.get_state(config).values or final_state
+                except Exception:
+                    pass
+
+            answer = final_state.get("answer", "") or ""
+            confidence = float(final_state.get("confidence", 0.0) or 0.0)
+            all_steps = final_state.get("react_steps", steps) or steps
+
+            run_result = {
+                "answer": answer,
+                "intent": intent,
+                "confidence": confidence,
+                "steps": all_steps,
+                "tool_result": final_state.get("tool_result", {}),
+            }
+
+            # 3. 分块推送最终答案 —— answer_token 累积到 content
+            chunk_size = 12  # 中文字符，每 12 字一帧
             for i in range(0, len(answer), chunk_size):
                 yield _sse("answer_token", {"content": answer[i:i + chunk_size]})
-                time.sleep(0.02)  # 轻微延迟，前端能看到流式效果
+                time.sleep(0.015)  # 轻微延迟，前端能看到流式效果
 
-            # 5. 持久化助手回复
+            # 4. 持久化助手回复
             try:
                 crud.add_message(db, int(conversation_id), "assistant", answer)
             except Exception:
                 pass
 
-            # 6. 完成事件 — 携带 thinking_time_ms 与 payload（react_steps/confidence）
+            # 5. 完成事件 — 携带 thinking_time_ms 与 payload（react_steps/confidence）
             thinking_time_ms = int((time.time() - started_at) * 1000)
             yield _sse("done", {
                 "thinking_time_ms": thinking_time_ms,
                 "payload": {
-                    "react_steps": steps,
+                    "react_steps": all_steps,
                     "confidence": confidence,
                     "intent": intent,
                 },

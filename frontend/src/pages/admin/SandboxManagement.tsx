@@ -17,7 +17,6 @@ import {
   toggleSandboxConfig,
   getActiveConfig,
   getSandboxHealth,
-  listSandboxInstances,
   startSandboxInstance,
   stopSandboxInstance,
   restartSandboxInstance,
