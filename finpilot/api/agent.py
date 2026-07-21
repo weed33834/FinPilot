@@ -170,6 +170,7 @@ def chat(
             user_id=user_id,
             db=db,
             conversation_id=conversation_id,
+            intent_question=req.question,  # 意图识别用原始问题，避免被注入上下文污染
         )
     except Exception as exc:  # noqa: BLE001
         success = False
@@ -270,9 +271,11 @@ def chat_stream(
             # 2. 运行 agent —— 用 agent.stream() 实时推送每个节点的思考步骤
             #    （此前用 run_agent 一次性同步执行，前端会卡 1-3 分钟看不到任何事件，
             #     误以为「网络错误 / 响应错误」；改成流式后，每个 ReAct 步骤都会即时推送）
-            intent_result = classify_intent(effective_question, history=req.history or [], db=db)
+            # 意图分类必须基于用户原始问题，否则注入的「# 上传文档上下文」会被
+            # 关键词规则误判为 parse_document，进而触发从磁盘读不存在的文件。
+            intent_result = classify_intent(req.question, history=req.history or [], db=db)
             intent = intent_result.get("intent", "unknown")
-            parameters = extract_parameters(effective_question, intent, history=req.history or [], db=db)
+            parameters = extract_parameters(req.question, intent, history=req.history or [], db=db)
 
             initial_state: dict[str, Any] = {
                 "question": effective_question,

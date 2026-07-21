@@ -153,22 +153,24 @@ export default function KpiDashboardPage() {
   }
 
   const comparisonItem = useMemo(
-    () => comparison?.metrics.find((m) => m.metric === comparisonMetric) ?? null,
+    () => comparison?.metrics?.find((m) => m.metric === comparisonMetric) ?? null,
     [comparison, comparisonMetric],
   )
   const comparisonChartData = useMemo(() => {
     if (!comparison || !comparisonItem) return []
-    return comparison.periods.map((p) => ({ period: p, value: comparisonItem.values[p] ?? null }))
+    return (comparison.periods ?? []).map((p) => ({ period: p, value: comparisonItem.values[p] ?? null }))
   }, [comparison, comparisonItem])
 
   // 提取 sparkline 数据（每个指标最近 8 个季度）
   const sparkMap = useMemo(() => {
     const map: Record<string, { period: string; value: number }[]> = {}
-    if (comparison?.metrics) {
-      comparison.metrics.forEach((m) => {
-        map[m.metric] = comparison.periods
+    const metrics = comparison?.metrics
+    const periods = comparison?.periods ?? []
+    if (metrics && periods.length > 0) {
+      metrics.forEach((m) => {
+        map[m.metric] = periods
           .map((p) => ({ period: p, value: m.values[p] ?? 0 }))
-          .filter((p) => p.value !== 0 || comparison.periods.length < 4)
+          .filter((p) => p.value !== 0 || periods.length < 4)
       })
     }
     return map
@@ -221,7 +223,7 @@ export default function KpiDashboardPage() {
       <section className="kpi-section">
         <div className="dashboard-card-head">
           <h3 className="card-title">核心指标（{PERIOD_LABELS[period] || period}）</h3>
-          <span className="card-meta">{overview?.cards.length ?? 0} 项</span>
+          <span className="card-meta">{overview?.cards?.length ?? 0} 项</span>
         </div>
         {overviewLoading && !overview ? (
           <div className="skeleton-stat-grid">
@@ -229,7 +231,7 @@ export default function KpiDashboardPage() {
               <div key={i} className="skeleton skeleton-stat" style={{ height: '90px' }} />
             ))}
           </div>
-        ) : overview && overview.cards.length > 0 ? (
+        ) : overview && (overview.cards?.length ?? 0) > 0 ? (
           <div className="kpi-grid">
             {overview.cards.map((card) => (
               <KpiCard
@@ -278,7 +280,7 @@ export default function KpiDashboardPage() {
           ) : trendLoading && !trend ? (
             <div className="skeleton skeleton-block" style={{ height: '300px' }} />
           ) : trend ? (
-            <KpiTrendChart data={trend.series} label={trend.label} unit={trend.unit} />
+            <KpiTrendChart data={trend.series ?? []} label={trend.label ?? ''} unit={trend.unit ?? '元'} />
           ) : (
             <EmptyState title="暂无数据" icon="trend" size="sm" />
           )}
@@ -337,7 +339,7 @@ export default function KpiDashboardPage() {
           />
         ) : drillLoading && !drill ? (
           <div className="skeleton skeleton-block" style={{ height: '240px' }} />
-        ) : drill && drill.items.length > 0 ? (
+        ) : drill && (drill.items?.length ?? 0) > 0 ? (
           <table className="kpi-drill-table" data-testid="kpi-drill-table">
             <thead>
               <tr>
@@ -347,7 +349,7 @@ export default function KpiDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {drill.items.map((item) => (
+              {(drill.items ?? []).map((item) => (
                 <tr key={item.period}>
                   <td>{item.period}</td>
                   <td>{formatMetricValue(item.value, metricOptions.find((m) => m.metric === drillMetric)?.unit ?? '元')}</td>

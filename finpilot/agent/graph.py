@@ -82,17 +82,26 @@ def run_agent(
     db: Any = None,
     conversation_id: str | None = None,
     history: list[Any] | None = None,
+    intent_question: str | None = None,
 ) -> dict[str, Any]:
     """一次性运行智能体并返回结果。
+
+    Args:
+        question: 实际送入 ReAct 的提问文本（可能已注入文件上下文）。
+        intent_question: 用于意图识别的原始问题；若为 None 则回退到 ``question``。
+            分开传是因为注入的「# 上传文档上下文」会污染关键词规则，把
+            document_qa 误判为 parse_document（参见 api/agent.py 的 _inject_file_context）。
 
     Returns:
         {"answer": str, "intent": str, "confidence": float,
          "steps": list, "tool_result": dict}
     """
     # 1. 意图识别 + 参数抽取（规则优先，LLM 不可用时各自内部降级）
-    intent_result = classify_intent(question, history=history, db=db)
+    #    用 intent_question（原始问题）做分类，避免被注入的文件上下文关键词污染
+    classify_target = intent_question or question
+    intent_result = classify_intent(classify_target, history=history, db=db)
     intent = intent_result.get("intent", "unknown")
-    parameters = extract_parameters(question, intent, history=history, db=db)
+    parameters = extract_parameters(classify_target, intent, history=history, db=db)
 
     # 2. 初始化状态：工作字段全部置空，messages 携带历史供 ReAct 上下文
     initial_state: dict[str, Any] = {

@@ -394,6 +394,20 @@ def _degrade_to_rule(
     intent = state.get("intent") or "unknown"
     params = state.get("parameters") or {}
 
+    # 优先处理「已注入文件上下文」场景：用户在 chat 里上传了文件，前端把
+    # base64 注入到 question 头部（参见 api/agent.py 的 _inject_file_context）。
+    # 此时文件内容已经在 question 文本里，无需再调 parse_document / document_qa
+    # 工具（这俩工具都依赖磁盘文件或 document_id，chat 上传的文件两者都没有）。
+    if "# 上传文档上下文" in question:
+        answer_text = _format_injected_file_answer(question, reason)
+        return {
+            "react_action": "FinalAnswer",
+            "react_action_input": answer_text,
+            "react_thought": f"[降级] {reason}；已注入文件上下文，直接回灌解析摘要",
+            "tool_result": {"injected_files": True},
+            "error": "",
+        }
+
     ctx = ToolContext(
         tenant_id=tenant_id,
         user_id=user_id,
@@ -422,6 +436,41 @@ def _degrade_to_rule(
         "tool_result": tool_result,
         "error": "",
     }
+
+
+def _format_injected_file_answer(question: str, reason: str) -> str:
+    """从注入了文件上下文的 question 中提取文件摘要，组装成给用户的答案。
+
+    注入格式（见 api/agent.py:_extract_uploaded_context）::
+
+        # 上传文档上下文
+
+        ## 文件：xxx.xlsx（类型=xlsx, 页数=N, 表格数=M）
+        ### 文本摘要
+        ...
+        ### 首表预览
+        ...
+
+        ---
+
+        ## 用户问题
+        ...
+
+    本函数把上下文部分（首个 ``---`` 之前）原样回灌，并附上提示：LLM 不可用，
+    无法基于内容回答具体问题，但用户能看到解析出的结构化数据。
+    """
+    # 切掉用户问题部分，只保留文件上下文
+    parts = question.split("\n---\n", 1)
+    ctx_block = parts[0] if parts else question
+    # 去掉 markdown 标题前缀，让答案更紧凑
+    lines = ctx_block.split("\n")
+    cleaned = "\n".join(ln for ln in lines if not ln.startswith("# "))
+    return (
+        f"已解析您上传的文件，结构化内容如下：\n\n{cleaned.strip()}\n\n"
+        f"—— 由于 LLM 暂时不可用（{reason}），无法基于以上内容"
+        "生成自然语言回答。请参考上方解析出的表格/文本数据，"
+        "或稍后重试。"
+    )
 
 
 # ---------------------------------------------------------------------------
