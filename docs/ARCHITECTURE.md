@@ -220,7 +220,7 @@ for chunk in agent.stream(initial_state, config=config, stream_mode="updates"):
 后端 event_generator()
   ├─ yield start (conversation_id)
   ├─ classify_intent + extract_parameters
-  ├─ build_agent(tenant_id, user_id, db)
+  ├─ build_agent(user_id, db)
   ├─ for chunk in agent.stream(initial_state, stream_mode="updates"):
   │    ├─ agent 节点 → yield thinking_token (💭 thought + 🔧 action)
   │    ├─ tools 节点 → yield thinking_token (📋 observation)

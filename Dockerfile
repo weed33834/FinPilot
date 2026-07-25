@@ -5,10 +5,9 @@ WORKDIR /app
 # 安装系统依赖
 # - build-essential: 编译 numpy<2 等需要
 # - libfreetype6, libfontconfig1: matplotlib 字体渲染
-# - libpq-dev: pg8000 编译需要
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential libfreetype6 libfontconfig1 libpq-dev && \
+        build-essential libfreetype6 libfontconfig1 && \
     rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖（使用完整 requirements.txt，确保 langgraph / mcp / RAG 等模块可用）
