@@ -30,6 +30,8 @@ from .queries import router as queries_router
 from .reports import router as reports_router
 from .users import router as users_router
 
+import os
+
 logger = logging.getLogger(__name__)
 
 # 允许的前端来源（Vite 默认端口 5173）
@@ -124,9 +126,10 @@ def configure_cors(app: FastAPI) -> None:
 def _ensure_default_admin() -> None:
     """确保存在默认管理员账号（admin@finpilot.ai / admin123），幂等。
 
-    先建表再建用户，失败不阻断路由创建。
+    先建表再建用户，失败不阻断路由创建。同时导入默认 LLM 供应商与模型。
     """
     from finpilot.database import SessionLocal, crud, init_db
+    from finpilot.database.models import LlmProvider, LlmModel
     from .deps import hash_password
 
     try:
@@ -144,7 +147,38 @@ def _ensure_default_admin() -> None:
                 name="管理员",
                 role="admin",
             )
+
+        # 导入默认 LLM 供应商与模型（基于 .env 配置）
+        if not db.query(LlmProvider).first():
+            default_api_key = os.getenv("OPENAI_API_KEY", "")
+            default_base_url = os.getenv("OPENAI_BASE_URL", "")
+            default_model = os.getenv("OPENAI_MODEL", "DeepSeek-V4-Pro")
+            encoded_key = crud.encode_api_key(default_api_key) if default_api_key else None
+            provider = LlmProvider(
+                name="默认供应商",
+                provider_type="openai",
+                base_url=default_base_url,
+                api_key=encoded_key,
+                is_default=True,
+                is_active=True,
+            )
+            db.add(provider)
+            db.flush()
+            db.add(LlmModel(
+                provider_id=provider.id,
+                model_name=default_model,
+                display_name=default_model,
+                tier="high",
+                is_active=True,
+            ))
+            db.commit()
     except SQLAlchemyError:
-        pass
+        db.rollback()
     finally:
         db.close()
+
+
+# 模块级 FastAPI 应用实例（供 uvicorn 直接加载）
+app = FastAPI(title="FinPilot AI", version="1.0.0")
+configure_cors(app)
+app.include_router(create_router())

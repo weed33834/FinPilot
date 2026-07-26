@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="FinPilot AI">
+  <defs>
+    <linearGradient id="fpGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0F2A4A"/>
+      <stop offset="100%" stop-color="#1E5BFF"/>
+    </linearGradient>
+    <linearGradient id="fpAccent" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00C2A8"/>
+      <stop offset="100%" stop-color="#3DDC97"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 外六边形 -->
+  <polygon points="120,12 213,66 213,174 120,228 27,174 27,66"
+           fill="url(#fpGrad)" stroke="#0B1F38" stroke-width="3"/>
+
+  <!-- 内层装饰六边形 -->
+  <polygon points="120,30 196,74 196,166 120,210 44,166 44,74"
+           fill="none" stroke="#3DDC97" stroke-width="1.5" opacity="0.45"/>
+
+  <!-- 上升趋势线 -->
+  <polyline points="58,150 90,128 118,138 148,98 184,76"
+            fill="none" stroke="url(#fpAccent)" stroke-width="6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 趋势节点 -->
+  <circle cx="58" cy="150" r="4.5" fill="#3DDC97"/>
+  <circle cx="90" cy="128" r="4.5" fill="#3DDC97"/>
+  <circle cx="118" cy="138" r="4.5" fill="#3DDC97"/>
+  <circle cx="148" cy="98" r="4.5" fill="#3DDC97"/>
+  <circle cx="184" cy="76" r="6" fill="#FFFFFF"/>
+
+  <!-- FP 字符 -->
+  <text x="120" y="200" text-anchor="middle"
+        font-family="'Helvetica Neue', Arial, sans-serif"
+        font-size="34" font-weight="700" fill="#FFFFFF" letter-spacing="2">FP</text>
+</svg>

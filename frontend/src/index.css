@@ -35,7 +35,7 @@
   --color-surface-hover: #1d2440;
   --color-text: #e8e6e0;
   --color-text-secondary: #9da4b8;
-  --color-text-muted: #5f677d;
+  --color-text-muted: #8189a3;
   --color-border: #1e2640;
   --color-border-light: #232d4a;
   --color-grid: #1a2240;
@@ -76,9 +76,9 @@
   --color-purple-subtle: #18172f;
 
   --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 8px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
   --radius-full: 9999px;
 
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
@@ -188,6 +188,14 @@ h4 { font-size: var(--text-base); }
   flex-shrink: 0;
 }
 
+.sidebar-brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
 .sidebar-brand-text h2 {
   margin: 0;
   font-family: var(--font-display);
@@ -210,6 +218,7 @@ h4 { font-size: var(--text-base); }
   flex: 1;
   padding: var(--space-3);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .sidebar-section {
@@ -255,11 +264,12 @@ h4 { font-size: var(--text-base); }
 .sidebar-link.active::before {
   content: "";
   position: absolute;
-  left: 0;
+  z-index: 2;
+  left: 2px;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 16px;
+  height: 24px;
   border-radius: 1px;
   background: var(--color-primary);
 }
@@ -560,6 +570,7 @@ h4 { font-size: var(--text-base); }
 .container {
   max-width: 1280px;
   margin: 0 auto;
+  padding-bottom: var(--space-8);
 }
 
 .page-header {
@@ -2706,8 +2717,9 @@ tbody tr:last-child td {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-3);
-  padding-bottom: var(--space-2);
+  gap: var(--space-3);
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-2);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -3036,16 +3048,9 @@ tbody tr:last-child td {
   min-width: 2px;
 }
 
-.dashboard-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
 .dashboard-card-head .card-title {
   margin: 0;
+  line-height: 1.2;
 }
 
 .dashboard-card-icon {
@@ -3190,7 +3195,7 @@ tbody tr:last-child td {
 .approval-desc {
   font-size: 0.75rem;
   color: var(--color-text-muted);
-  margin-top: var(--space-1);
+  margin-top: var(--space-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -5188,13 +5193,12 @@ table.financial tbody tr:hover,
   100% { background-position: -200% 0; }
 }
 
-.skeleton-line {
-  height: 12px;
-  margin-bottom: var(--space-2);
-}
-
+.skeleton-line { height: 12px; margin-bottom: var(--space-2); }
 .skeleton-line.short { width: 40%; }
 .skeleton-line.medium { width: 65%; }
+
+.skeleton-th { height: 10px; }
+.skeleton-td { height: 14px; width: 80%; }
 
 .skeleton-card {
   padding: var(--space-4);
@@ -5213,6 +5217,8 @@ table.financial tbody tr:hover,
 .skeleton-stat {
   height: 80px;
   border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  box-sizing: border-box;
 }
 
 .skeleton-block {
@@ -6514,4 +6520,157 @@ code, pre, .code-block, .query-sql {
   .container {
     animation-duration: 120ms;
   }
+}
+
+/* ==================== Keyboard Shortcuts Dialog ==================== */
+
+.shortcuts-dialog {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  max-width: 520px;
+  width: 90vw;
+  padding: 0;
+  color: var(--color-text);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
+.shortcuts-dialog::backdrop {
+  background: rgba(0 0 0 / 0.65);
+  backdrop-filter: blur(4px);
+}
+
+.shortcuts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.shortcuts-header h2 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.shortcuts-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.shortcuts-close:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.shortcuts-body {
+  padding: var(--space-4) var(--space-5);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.shortcuts-group {
+  margin-bottom: var(--space-4);
+}
+
+.shortcuts-group:last-child {
+  margin-bottom: 0;
+}
+
+.shortcuts-group-title {
+  margin: 0 0 var(--space-3);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  min-width: 110px;
+}
+
+.shortcut-key {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: 0 1px 0 rgba(0 0 0 / 0.2);
+}
+
+.shortcut-plus {
+  color: var(--color-text-muted);
+  margin: 0 1px;
+  font-size: 0.625rem;
+}
+
+.shortcut-desc {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  text-align: right;
+}
+
+.shortcuts-footer {
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.shortcuts-footer small {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+.shortcuts-footer kbd {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: 2px;
+  padding: 1px 4px;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }

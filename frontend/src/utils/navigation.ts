@@ -140,6 +140,11 @@ export const NAV_SECTIONS: NavSection[] = [
     titleKey: 'menu:groups.audit',
     items: [
       {
+        path: '/security',
+        labelKey: 'menu:items.security',
+        icon: 'security',
+      },
+      {
         path: '/audit',
         labelKey: 'menu:items.audit',
         icon: 'audit',

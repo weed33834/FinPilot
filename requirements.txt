@@ -66,6 +66,5 @@ graphrag-lite>=0.1.3
 
 # ── WebSocket support ──
 websockets>=12.0
-
 # ── PostgreSQL driver (for Cloud SQL deployment) ──
 pg8000>=1.30.0

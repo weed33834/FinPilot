@@ -182,11 +182,9 @@ FinPilot 的错误系统追求**精准定位 + 醒目可见**——不再出现�
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/weed33834/FinPilot.git
+git clone https://gitcode.com/badhope/FinPilot.git
 cd FinPilot
 ```
-
-> GitCode 镜像：`git clone https://gitcode.com/badhope/FinPilot.git`
 
 ### 2. 准备 Python 环境
 
@@ -372,11 +370,9 @@ FinPilot AI
 
 ### 贡献者
 
-<a href="https://github.com/weed33834/FinPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=weed33834/FinPilot" alt="contributors" />
+<a href="https://gitcode.com/badhope/FinPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=badhope/FinPilot" alt="contributors" />
 </a>
-
-> GitCode 镜像：<https://gitcode.com/badhope/FinPilot>
 
 ---
 

@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api/': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8010',
         changeOrigin: true,
       },
     },
@@ -23,6 +23,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     target: 'es2020',
+    cssMinify: 'lightningcss',
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -34,12 +35,36 @@ export default defineConfig({
             ) {
               return 'react'
             }
-            if (id.includes('/recharts/')) {
+            if (
+              id.includes('/recharts/') ||
+              id.includes('/d3/')
+            ) {
               return 'charts'
+            }
+            if (
+              id.includes('/dompurify/') ||
+              id.includes('/marked/') ||
+              id.includes('/react-markdown/') ||
+              id.includes('/highlight.js/')
+            ) {
+              return 'renderer'
+            }
+            if (
+              id.includes('/axios/') ||
+              id.includes('/sockjs/') ||
+              id.includes('/@stomp/')
+            ) {
+              return 'network'
+            }
+            if (id.includes('/@sentry/')) {
+              return 'observability'
             }
           }
           return undefined
         },
+        assetFileNames: 'assets/[name]-[hash][extname]',
+        chunkFileNames: 'js/[name]-[hash].js',
+        entryFileNames: 'js/[name]-[hash].js',
       },
     },
   },

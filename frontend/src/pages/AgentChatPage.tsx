@@ -70,13 +70,11 @@ const SUGGESTIONS = [
   '最近待审批报告',
 ]
 
-const AVAILABLE_MODELS = [
-  { id: 'qwen3.5:9b', label: 'Qwen3.5 9B' },
-  { id: 'qwen3:14b', label: 'Qwen3 14B' },
-  { id: 'deepseek-r1:8b', label: 'DeepSeek-R1 8B' },
-  { id: 'deepseek-r1:14b', label: 'DeepSeek-R1 14B' },
-  { id: 'glm4:9b', label: 'GLM-4 9B' },
-]
+interface ModelOption {
+  id: string
+  label: string
+  tier: string
+}
 
 const REFINE_ACTIONS = [
   { id: 'regenerate', label: '重新生成', icon: 'refresh' },
@@ -292,7 +290,8 @@ export default function AgentChatPage() {
   /* --- function bar state --- */
   const [deepThink, setDeepThink] = useState(false)
   const [useWeb, setUseWeb] = useState(false)
-  const [activeModel, setActiveModel] = useState(AVAILABLE_MODELS[0])
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([])
+  const [activeModel, setActiveModel] = useState<ModelOption>({ id: '', label: '加载中...', tier: '' })
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
 
@@ -323,6 +322,26 @@ export default function AgentChatPage() {
 
   useEffect(() => {
     inputRef.current?.focus()
+  }, [])
+
+  /* Fetch available models from backend */
+  useEffect(() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+    fetch(`${baseUrl}/agent/models`, { credentials: 'include' })
+      .then((r) => r.json())
+      .then((data) => {
+        const models: ModelOption[] = data?.data || []
+        setAvailableModels(models)
+        if (models.length > 0) {
+          setActiveModel(models[0])
+        }
+      })
+      .catch(() => {
+        // 降级到硬编码兜底
+        const fallback = { id: 'DeepSeek-V4-Pro', label: 'DeepSeek-V4-Pro', tier: 'high' }
+        setAvailableModels([fallback])
+        setActiveModel(fallback)
+      })
   }, [])
 
   /* Close model dropdown on outside click */
@@ -503,9 +522,10 @@ export default function AgentChatPage() {
                   const reactSteps = payload.react_steps as Array<Record<string, unknown>> | undefined
                   const confidence = typeof payload.confidence === 'number' ? payload.confidence : undefined
                   if (reactSteps || confidence != null) {
+                    const targetId = answerMessageId
                     setMessages((prev) =>
                       prev.map((m) => {
-                        if (m.id === streamingMessageId) {
+                        if (m.id === targetId) {
                           return {
                             ...m,
                             reactSteps: reactSteps || m.reactSteps,
@@ -924,7 +944,7 @@ export default function AgentChatPage() {
             </button>
             {showModelDropdown && (
               <div className="model-dropdown">
-                {AVAILABLE_MODELS.map((m) => (
+                {availableModels.map((m) => (
                   <button
                     key={m.id}
                     type="button"

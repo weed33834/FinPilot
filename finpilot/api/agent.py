@@ -15,7 +15,7 @@ import json
 import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -24,12 +24,183 @@ from finpilot.agent import run_agent
 from finpilot.agent.graph import build_agent, make_thread_id
 from finpilot.llm.intent import classify_intent, extract_parameters
 from finpilot.database import crud
-from finpilot.database.models import Conversation, Message
+from finpilot.database.models import Conversation, Message, LlmProvider, LlmModel
 
 from .deps import get_current_user, get_db_session
 from .schemas import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/agent", tags=["agent"])
+
+# ---------------------------------------------------------------------------
+# 公开模型列表（无需管理员权限，所有已认证用户可查看可用的聊天模型）
+# ---------------------------------------------------------------------------
+@router.get("/models")
+def list_chat_models(
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(get_current_user),
+):
+    """返回所有激活供应商下激活模型的列表，供前端模型选择器使用"""
+    models = (
+        db.query(LlmModel)
+        .join(LlmProvider, LlmModel.provider_id == LlmProvider.id)
+        .filter(LlmProvider.is_active.is_(True), LlmModel.is_active.is_(True))
+        .order_by(LlmModel.display_name.asc())
+        .all()
+    )
+    return {
+        "code": 0,
+        "data": [
+            {
+                "id": m.model_name,
+                "label": m.display_name or m.model_name,
+                "tier": m.tier,
+            }
+            for m in models
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 系统健康检查
+# ---------------------------------------------------------------------------
+@router.get("/health")
+def health_check():
+    """轻量健康探针，用于负载均衡和监控"""
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# 智能体能力清单（MCP / Skill / Tool / Sandbox 等）
+# ---------------------------------------------------------------------------
+@router.get("/capabilities")
+def list_capabilities():
+    """返回当前启用的智能体能力列表，供前端动态展示能力面板。
+
+    能力来源：
+    - 内置工具（File / Web / SQL / Python 等）
+    - 扩展路由模块（MCP Servers / Skills / Tools / Sandbox / Backtesting / Factor Mining）
+    - 增强模块（Validation / Debate / Explainability / Risk）
+    """
+    capabilities = [
+        {"id": "file", "name": "文件操作", "type": "builtin", "status": "active",
+         "description": "上传、解析、查询 PDF/Excel/CSV/DOCX 文件"},
+        {"id": "web", "name": "联网搜索", "type": "builtin", "status": "active",
+         "description": "搜索引擎查询与网页内容抓取"},
+        {"id": "sql", "name": "SQL 查询", "type": "builtin", "status": "active",
+         "description": "对上传的结构化数据执行 SQL 查询"},
+        {"id": "python", "name": "Python 沙盒", "type": "builtin", "status": "active",
+         "description": "在隔离沙盒中执行 Python 代码进行数据分析"},
+        {"id": "charts", "name": "图表生成", "type": "builtin", "status": "active",
+         "description": "从查询结果自动生成可视化图表"},
+    ]
+
+    # 扩展能力（来自扩展路由模块的状态）
+    ext_modules = [
+        ("mcp_servers", "MCP 服务", "接入外部 MCP 协议工具与服务"),
+        ("skills", "技能库", "可注册的技能模板与工作流"),
+        ("tools", "工具管理", "自定义工具注册与生命周期管理"),
+        ("sandbox_configs", "沙盒配置", "Python 沙盒执行环境配置"),
+        ("backtesting", "策略回测", "多因子策略历史回测"),
+        ("factor_mining", "因子挖掘", "财务因子自动挖掘与筛选"),
+        ("valuation", "估值模型", "DCF / PE / PB 等多模型估值"),
+        ("validation", "校验引擎", "智能体输出交叉校验"),
+        ("debate", "多智能体辩论", "多模型协同辩论与观点汇总"),
+        ("explainability", "可解释性", "模型推理过程可视化"),
+        ("risk", "风险分析", "多维风险指标监控"),
+    ]
+
+    import importlib
+    for mod_name, cap_name, cap_desc in ext_modules:
+        try:
+            importlib.import_module(f"finpilot.api.{mod_name}")
+            status = "available"
+        except ImportError:
+            status = "unavailable"
+        capabilities.append({
+            "id": mod_name,
+            "name": cap_name,
+            "type": "extension",
+            "status": status,
+            "description": cap_desc,
+        })
+
+    return {"code": 0, "data": capabilities}
+
+
+# ---------------------------------------------------------------------------
+# 上下文感知追问建议 — 差异化亮点
+# ---------------------------------------------------------------------------
+
+# 追问模板：基于已激活的能力自动生成自然语言追问
+_SUGGESTION_TEMPLATES: list[str] = [
+    "帮我分析这份财报中的关键财务指标",
+    "对比最近两个季度的营收和利润变化",
+    "这些数据中有哪些异常值需要关注？",
+    "将分析结果导出为 PDF 报告",
+    "用图表展示毛利率和净利率的趋势",
+    "基于当前数据给我一个投资建议",
+    "这份报告的风险点有哪些？",
+    "有什么行业对标数据可以参考？",
+]
+
+
+@router.get("/suggestions")
+def get_suggestions(
+    conversation_id: int = Query(..., ge=1),
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """返回基于当前会话上下文的追问建议。
+
+    逻辑：
+    1. 获取会话中最近的消息角色分布
+    2. 若有已上传文档，优先推荐文档分析类追问
+    3. 若最近一轮是回答，推荐追问/深挖类建议
+    4. 默认返回通用建议模板
+    """
+    conv = db.get(Conversation, conversation_id)
+    if not conv or conv.user_id != current_user["user_id"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
+
+    msgs = (
+        db.query(Message)
+        .filter(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    suggestions: list[str] = []
+
+    if not msgs:
+        suggestions = [
+            "上传一份财报 PDF 或 Excel，我来帮你分析",
+            "搜索某家上市公司的财务数据",
+            "帮我做一个行业对比分析",
+        ]
+    else:
+        has_file_upload = any("上传" in (m.content or "") or "文件" in (m.content or "") for m in msgs)
+        last_role = msgs[0].role if msgs else None
+        last_content = (msgs[0].content or "")[:200] if msgs else ""
+
+        if has_file_upload:
+            suggestions = [
+                "从这份文件中提取所有财务报表数据",
+                "对比文件中的营收数据和去年同期",
+                "将关键指标整理成表格",
+                "这些数据中有哪些风险信号？",
+            ]
+        elif last_role == "assistant":
+            suggestions = [
+                "能展开说说吗？",
+                "用更通俗的语言解释一下",
+                "给我具体的数字和比例",
+                "和行业平均水平对比如何？",
+            ]
+        else:
+            suggestions = _SUGGESTION_TEMPLATES[:4]
+
+    return {"code": 0, "data": suggestions}
 
 
 class ChatStreamRequest(BaseModel):

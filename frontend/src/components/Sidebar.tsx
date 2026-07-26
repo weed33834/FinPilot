@@ -83,7 +83,7 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
 
       <aside className={`sidebar${open ? ' open' : ''}`}>
         <Link to="/agent" className="sidebar-brand" onClick={onClose} aria-label="FinPilot home">
-          <div className="sidebar-brand-icon">FP</div>
+          <img src="/logo.svg" alt="FinPilot" className="sidebar-brand-logo" />
           <div className="sidebar-brand-text">
             <h2>{t('common:common.appName')}</h2>
             <p>FINANCIAL ANALYSIS</p>
