@@ -26,6 +26,8 @@ import statistics
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from finpilot.shared.financial_utils import safe_float as _safe_float
+
 
 # ---------------------------------------------------------------------------
 # 数据结构
@@ -190,19 +192,6 @@ def _spearman_from_lists(fvals: list[float], rvals: list[float]) -> float:
 # ---------------------------------------------------------------------------
 # 因子计算
 # ---------------------------------------------------------------------------
-
-
-def _safe_float(value: Any, default: float = 0.0) -> float:
-    """安全转换为 float，None / 空值 / 异常返回 default."""
-    if value is None:
-        return default
-    try:
-        f = float(value)
-    except (TypeError, ValueError):
-        return default
-    if math.isnan(f) or math.isinf(f):
-        return default
-    return f
 
 
 def calculate_factors(financial_data: list[dict[str, Any]]) -> list[FactorResult]:

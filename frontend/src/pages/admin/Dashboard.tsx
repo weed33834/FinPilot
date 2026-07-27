@@ -4,7 +4,7 @@ import Loading from '../../components/ui/Loading.tsx'
 import { ICONS } from '../../components/ui/Icons.tsx'
 import { getErrorMessage } from '../../utils/errors.ts'
 import { formatDateTime } from '../../utils/format.ts'
-import { getHealthCheck } from '../../api/settings.ts'
+import { getHealthCheck, type HealthStatus } from '../../api/settings.ts'
 
 interface DashboardStats {
   models: { total: number; active: number; default: string }
@@ -16,16 +16,6 @@ interface DashboardStats {
   conversations: { total: number; today: number }
   system_health: { status: string; uptime_hours: number }
   recent_conversations: Array<{ id: string; title: string; created_at: string | null }>
-}
-
-interface HealthStatus {
-  status: string
-  database: { status: string; latency_ms: number }
-  vector_store: { status: string; message?: string }
-  default_llm: { status: string; model_name: string }
-  sandbox: { status: string }
-  search_engines: { total: number; active: number; default_name: string }
-  timestamp: string
 }
 
 function StatusIndicator({ status }: { status: string | undefined }) {

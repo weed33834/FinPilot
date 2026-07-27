@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse } from './types'
 
 export interface SandboxConfigItem {
   id: string
@@ -33,12 +34,6 @@ export interface ConfigTypeItem {
   label: string
   description: string
   default_config: Record<string, unknown>
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function listSandboxConfigs(params?: { config_type?: string }) {

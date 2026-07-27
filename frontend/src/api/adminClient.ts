@@ -1,15 +1,16 @@
 import axios from 'axios'
+import { useAuthStore } from '../stores/authStore'
 
-/** 管理后台专用 API 客户端 — 与主 API 客户端统一使用 /api/v1 前缀 */
+/** 管理后台专用 API 客户端 — 与主 API 客户端统一使用环境变量配置 baseURL */
 export const adminApi = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
   withCredentials: true,
 })
 
 adminApi.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       const url = error.config?.url || ''
       const safe401Urls = ['/auth/login', '/auth/verify-2fa', '/auth/change-password', '/auth/oauth/', '/auth/me']
@@ -18,13 +19,7 @@ adminApi.interceptors.response.use(
         return url.endsWith(u)
       })
       if (!isSafe) {
-        // Trigger global logout via auth store
-        try {
-          const { useAuthStore } = await import('../stores/authStore.ts')
-          useAuthStore.getState().unauthorize()
-        } catch {
-          // auth store may not be available
-        }
+        useAuthStore.getState().unauthorize()
       }
     }
     return Promise.reject(error)

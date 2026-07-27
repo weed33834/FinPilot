@@ -12,6 +12,8 @@ from typing import Optional
 
 import pandas as pd
 
+from finpilot.shared.financial_utils import safe_div as _safe_div, safe_pct as _safe_pct
+
 
 @dataclass
 class RatioResult:
@@ -25,19 +27,6 @@ class RatioResult:
 
 
 # ── 辅助函数 ──────────────────────────────────────────────
-
-
-def _safe_div(a: Optional[float], b: Optional[float]) -> Optional[float]:
-    if a is None or b is None or b == 0:
-        return None
-    return round(a / b, 4)
-
-
-def _safe_pct(a: Optional[float], b: Optional[float]) -> Optional[float]:
-    val = _safe_div(a, b)
-    if val is not None:
-        return round(val * 100, 2)
-    return None
 
 
 def _avg(cur: Optional[float], prior: Optional[float]) -> Optional[float]:

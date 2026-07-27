@@ -4,6 +4,6 @@
 单体架构下预留的共享契约入口，为将来微服务化做准备。
 """
 
-from . import constants, events, schemas
+from . import constants, events, financial_utils, schemas
 
-__all__ = ["constants", "events", "schemas"]
+__all__ = ["constants", "events", "financial_utils", "schemas"]

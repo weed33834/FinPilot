@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse, PaginatedData } from './types'
 
 export interface ToolItem {
   id: string
@@ -46,19 +47,6 @@ export interface ToolTestResult {
   message: string
   result: string | null
   execution_time_ms: number
-}
-
-export interface PaginatedData<T> {
-  total: number
-  page: number
-  page_size: number
-  items: T[]
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function listTools(params: {

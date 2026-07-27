@@ -1,4 +1,6 @@
-"""Multi-agent orchestration -- Supervisor pattern (migrated from legacy,
+"""[DEPRECATED] MultiAgentSupervisor — 未接入 API,RAG 调用因未索引而失效。保留作为参考实现,请勿直接调用。
+
+Multi-agent orchestration -- Supervisor pattern (migrated from legacy,
 dropping the langgraph giant graph for a native lightweight edition).
 
 Keeps the legacy supervisor's core skills:

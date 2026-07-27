@@ -3,16 +3,19 @@
 渲染流程:
 1. 解析提示词 key → 获取 PromptTemplate（考虑 A/B 测试分流）
 2. 加载激活版本内容
-3. 渲染条件模板（Jinja2 语法子集）
+3. 渲染条件模板（Jinja2）
 4. 注入 few-shot 示例
 5. 替换变量
 6. 返回最终提示词
 
-条件模板语法（基于正则的轻量实现，不依赖 Jinja2）::
+条件模板语法（Jinja2）::
 
     {% if verbose %}详细模式{% endif %}
     {% if mode == "detailed" %}A{% else %}B{% endif %}
-    {% for ex in examples %}输入: {ex.input} 输出: {ex.output}{% endfor %}
+    {% for ex in examples %}输入: {{ ex.input }} 输出: {{ ex.output }}{% endfor %}
+
+模板中使用 ``{name}`` 单花括号语法，渲染前自动转为 Jinja2 的 ``{{ name }}``。
+未定义变量（如 ``{few_shot_examples}``）原样保留以供后续步骤处理。
 """
 
 from __future__ import annotations
@@ -25,6 +28,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
+
+from jinja2 import BaseLoader, ChainableUndefined, Environment
 
 from finpilot.database.models import (
     FewShotExample,
@@ -40,49 +45,53 @@ logger = logging.getLogger(__name__)
 DEFAULT_FEW_SHOT_LIMIT = 3
 # 变量占位符：{name} 或 {name.field}
 _VAR_RE = re.compile(r"\{([a-zA-Z_][\w]*(?:\.[\w]+)*)\}")
-# 控制流标签
-_BLOCK_RE = re.compile(
-    r"\{%\s*"
-    r"(?:"
-    r"(?P<if>if\b(?P<if_cond>[^%]*))"
-    r"|(?P<for>for\b(?P<for_expr>[^%]*))"
-    r"|(?P<else>else)"
-    r"|(?P<endif>endif)"
-    r"|(?P<endfor>endfor)"
-    r")"
-    r"\s*%\}"
+# for-loop 迭代对象添加 default([], true) 以兼容 None / undefined
+_FOR_IN_RE = re.compile(r"(\{%\s*for\s+\w+\s+in\s+)(\w+(?:\.\w+)*)\s*%\}")
+
+
+# ---------------------------------------------------------------------------
+# 条件模板渲染（Jinja2）
+# ---------------------------------------------------------------------------
+
+
+class _KeepUndefined(ChainableUndefined):
+    """未定义变量渲染回 ``{name}`` 形式，保留给后续步骤处理。
+
+    继承 ChainableUndefined 以支持 ``{ex.input}`` 等属性访问；
+    迭代为空、布尔值为 False，与原手写实现行为一致。
+    """
+
+    def __str__(self) -> str:
+        name = self._undefined_name
+        return "{" + str(name) + "}" if name else ""
+
+
+def _finalize(value: Any) -> Any:
+    """None 渲染为空字符串，与原实现一致。"""
+    if value is None:
+        return ""
+    return value
+
+
+_jinja_env = Environment(
+    loader=BaseLoader(),
+    undefined=_KeepUndefined,
+    autoescape=False,
+    finalize=_finalize,
 )
 
 
-# ---------------------------------------------------------------------------
-# 条件模板渲染（Jinja2 子集）
-# ---------------------------------------------------------------------------
+def _convert_to_jinja_syntax(template: str) -> str:
+    """将 ``{name}`` 占位符转为 Jinja2 的 ``{{ name }}``。
 
-
-def _tokenize(template: str) -> list[tuple[str, str]]:
-    """将模板切分为 (kind, value) token 列表.
-
-    kind ∈ text / if / else / endif / for / endfor
+    同时为 ``{% for x in var %}`` 的迭代对象添加 ``|default([], true)``，
+    使 None / undefined 变量安全退化为空迭代。
     """
-    tokens: list[tuple[str, str]] = []
-    pos = 0
-    for m in _BLOCK_RE.finditer(template):
-        if m.start() > pos:
-            tokens.append(("text", template[pos:m.start()]))
-        if m.group("if") is not None:
-            tokens.append(("if", m.group("if_cond").strip()))
-        elif m.group("for") is not None:
-            tokens.append(("for", m.group("for_expr").strip()))
-        elif m.group("else") is not None:
-            tokens.append(("else", ""))
-        elif m.group("endif") is not None:
-            tokens.append(("endif", ""))
-        elif m.group("endfor") is not None:
-            tokens.append(("endfor", ""))
-        pos = m.end()
-    if pos < len(template):
-        tokens.append(("text", template[pos:]))
-    return tokens
+    # {name} → {{ name }}
+    template = _VAR_RE.sub(lambda m: "{{ " + m.group(1) + " }}", template)
+    # {% for x in var %} → {% for x in var|default([], true) %}
+    template = _FOR_IN_RE.sub(r"\1\2|default([], true) %}", template)
+    return template
 
 
 def _coerce_literal(token: str) -> Any:
@@ -128,180 +137,6 @@ def _resolve_value(name: str, variables: dict, ctx: dict) -> Any:
     return val
 
 
-def _eval_condition(cond: str, variables: dict, ctx: dict) -> bool:
-    """评估条件表达式.
-
-    支持:
-      - 真值判断: ``{% if verbose %}``
-      - 比较: ``==`` ``!=`` ``>`` ``<`` ``>=`` ``<=``
-      - 逻辑非: ``{% if not verbose %}``
-    """
-    cond = cond.strip()
-    if not cond:
-        return False
-    # not
-    if cond.startswith("not "):
-        return not _eval_condition(cond[4:].strip(), variables, ctx)
-    # and / or（简单支持）
-    if " and " in cond:
-        parts = re.split(r"\s+and\s+", cond)
-        return all(_eval_condition(p, variables, ctx) for p in parts)
-    if " or " in cond:
-        parts = re.split(r"\s+or\s+", cond)
-        return any(_eval_condition(p, variables, ctx) for p in parts)
-    # 比较
-    for op in ("==", "!=", ">=", "<=", ">", "<"):
-        idx = cond.find(op)
-        if idx > 0:
-            left = cond[:idx].strip()
-            right = cond[idx + len(op):].strip()
-            lval = _resolve_value(left, variables, ctx)
-            rval = _resolve_value(right, variables, ctx)
-            try:
-                if op == "==":
-                    return lval == rval
-                if op == "!=":
-                    return lval != rval
-                if op == ">=":
-                    return lval is not None and rval is not None and lval >= rval
-                if op == "<=":
-                    return lval is not None and rval is not None and lval <= rval
-                if op == ">":
-                    return lval is not None and rval is not None and lval > rval
-                if op == "<":
-                    return lval is not None and rval is not None and lval < rval
-            except TypeError:
-                return False
-    # 真值判断
-    return bool(_resolve_value(cond, variables, ctx))
-
-
-def _parse_for_expr(expr: str) -> tuple[str, str]:
-    """解析 ``item in items`` 为 (loop_var, list_var)."""
-    if " in " not in expr:
-        return "", ""
-    left, right = expr.split(" in ", 1)
-    return left.strip(), right.strip()
-
-
-def _substitute_text(text: str, variables: dict, ctx: dict) -> str:
-    """替换文本中的 {name} 占位符.
-
-    仅替换能解析到的占位符（顶层变量或 loop 变量），未解析到的原样保留，
-    因此像 ``{few_shot_examples}`` 这类占位符会幸存到后续步骤。
-    """
-
-    def repl(m: re.Match[str]) -> str:
-        name = m.group(1)
-        first = name.split(".")[0]
-        if first in ctx or first in variables:
-            val = _resolve_value(name, variables, ctx)
-            return "" if val is None else str(val)
-        return m.group(0)
-
-    return _VAR_RE.sub(repl, text)
-
-
-def _render_tokens(
-    tokens: list[tuple[str, str]],
-    pos: int,
-    variables: dict,
-    ctx: dict,
-) -> tuple[str, int]:
-    """递归渲染 token 列表，返回 (渲染结果, 下一个 token 位置)."""
-    out: list[str] = []
-    while pos < len(tokens):
-        kind, val = tokens[pos]
-        if kind == "text":
-            out.append(_substitute_text(val, variables, ctx))
-            pos += 1
-        elif kind == "if":
-            rendered, pos = _render_if(tokens, pos, variables, ctx)
-            out.append(rendered)
-        elif kind == "for":
-            rendered, pos = _render_for(tokens, pos, variables, ctx)
-            out.append(rendered)
-        else:
-            # 顶层裸露的 else/endif/endfor，忽略
-            pos += 1
-    return "".join(out), pos
-
-
-def _render_if(
-    tokens: list[tuple[str, str]],
-    pos: int,
-    variables: dict,
-    ctx: dict,
-) -> tuple[str, int]:
-    """渲染 if 块。tokens[pos] 为 if 标签."""
-    cond = tokens[pos][1]
-    pos += 1
-    then_tokens: list[tuple[str, str]] = []
-    else_tokens: list[tuple[str, str]] = []
-    current = then_tokens
-    depth = 0
-    while pos < len(tokens):
-        kind, val = tokens[pos]
-        if kind in ("if", "for"):
-            depth += 1
-            current.append((kind, val))
-        elif kind in ("endif", "endfor"):
-            if depth == 0:
-                break
-            depth -= 1
-            current.append((kind, val))
-        elif kind == "else" and depth == 0:
-            current = else_tokens
-        else:
-            current.append((kind, val))
-        pos += 1
-    # 消耗闭合标签
-    pos += 1
-    branch = then_tokens if _eval_condition(cond, variables, ctx) else else_tokens
-    rendered, _ = _render_tokens(branch, 0, variables, ctx)
-    return rendered, pos
-
-
-def _render_for(
-    tokens: list[tuple[str, str]],
-    pos: int,
-    variables: dict,
-    ctx: dict,
-) -> tuple[str, int]:
-    """渲染 for 块。tokens[pos] 为 for 标签."""
-    expr = tokens[pos][1]
-    pos += 1
-    body_tokens: list[tuple[str, str]] = []
-    depth = 0
-    while pos < len(tokens):
-        kind, val = tokens[pos]
-        if kind in ("if", "for"):
-            depth += 1
-            body_tokens.append((kind, val))
-        elif kind in ("endif", "endfor"):
-            if depth == 0:
-                break
-            depth -= 1
-            body_tokens.append((kind, val))
-        else:
-            body_tokens.append((kind, val))
-        pos += 1
-    pos += 1  # 消耗 endfor
-
-    loop_var, list_var = _parse_for_expr(expr)
-    iterable = _resolve_value(list_var, variables, ctx)
-    if not isinstance(iterable, (list, tuple)):
-        return "", pos
-
-    out: list[str] = []
-    for element in iterable:
-        new_ctx = dict(ctx)
-        new_ctx[loop_var] = element
-        rendered, _ = _render_tokens(body_tokens, 0, variables, new_ctx)
-        out.append(rendered)
-    return "".join(out), pos
-
-
 def render_conditionals(template: str, variables: dict[str, Any] | None = None) -> str:
     """渲染条件模板（{% if %} / {% for %}）.
 
@@ -310,9 +145,12 @@ def render_conditionals(template: str, variables: dict[str, Any] | None = None) 
     未知的（如 ``{few_shot_examples}``）原样保留以供后续步骤处理。
     """
     variables = variables or {}
-    tokens = _tokenize(template)
-    rendered, _ = _render_tokens(tokens, 0, variables, {})
-    return rendered
+    jinja_source = _convert_to_jinja_syntax(template)
+    try:
+        return _jinja_env.from_string(jinja_source).render(**variables)
+    except Exception:
+        # Jinja2 渲染失败时退回到仅替换已知变量
+        return substitute_variables(template, variables)
 
 
 def substitute_variables(template: str, variables: dict[str, Any]) -> str:

@@ -13,6 +13,13 @@ import random
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from finpilot.shared.financial_utils import (
+    median as _median,
+    mean as _mean,
+    std_dev as _std_dev,
+    percentile as _percentile,
+)
+
 
 @dataclass
 class DcfResult:
@@ -301,55 +308,6 @@ def _dcf_value_from_params(params: dict[str, Any]) -> float:
         cash_and_equivalents=cash,
     )
     return result.equity_value
-
-
-def _median(values: list[float]) -> float | None:
-    """计算中位数（纯 Python）."""
-    if not values:
-        return None
-    s = sorted(values)
-    n = len(s)
-    mid = n // 2
-    if n % 2 == 1:
-        return s[mid]
-    return (s[mid - 1] + s[mid]) / 2
-
-
-def _mean(values: list[float]) -> float | None:
-    """计算平均值（纯 Python）."""
-    if not values:
-        return None
-    return sum(values) / len(values)
-
-
-def _std_dev(values: list[float]) -> float | None:
-    """计算总体标准差（纯 Python）."""
-    if not values:
-        return None
-    m = sum(values) / len(values)
-    var = sum((v - m) ** 2 for v in values) / len(values)
-    return math.sqrt(var)
-
-
-def _percentile(sorted_values: list[float], pct: float) -> float | None:
-    """计算百分位数（线性插值，纯 Python）.
-
-    Args:
-        sorted_values: 已排序的数值列表
-        pct: 百分位（0-100）
-    """
-    if not sorted_values:
-        return None
-    n = len(sorted_values)
-    if n == 1:
-        return sorted_values[0]
-    rank = (pct / 100) * (n - 1)
-    lower = int(math.floor(rank))
-    upper = int(math.ceil(rank))
-    if lower == upper:
-        return sorted_values[lower]
-    frac = rank - lower
-    return sorted_values[lower] + (sorted_values[upper] - sorted_values[lower]) * frac
 
 
 def sensitivity_analysis(base_params: dict[str, Any], param_ranges: dict[str, list]) -> dict[str, Any]:

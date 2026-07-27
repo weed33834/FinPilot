@@ -6,20 +6,56 @@
 
 from __future__ import annotations
 
-import functools
-from typing import Any, cast
+import time
+from typing import Any, Callable, cast
 
 from sqlalchemy.orm import Session
 
 from finpilot.database.models import FinancialReport
+from finpilot.shared.financial_utils import safe_div as _safe_div
 
 
-# 缓存装饰器：基于 functools.lru_cache 实现内存缓存
-def cached(maxsize: int = 128):
-    """请求级函数调用缓存."""
+def cached(ttl: int = 600, key_prefix: str = "", maxsize: int = 128):
+    """带 TTL 的内存缓存装饰器.
 
-    def decorator(func):
-        return functools.lru_cache(maxsize=maxsize)(func)
+    基于 functools.lru_cache 扩展,增加过期时间支持。
+    Session 等不可哈希参数通过 id() 转为可哈希键。
+
+    Args:
+        ttl: 缓存生存时间(秒),默认 600
+        key_prefix: 缓存键前缀(用于调试/区分)
+        maxsize: 最大缓存条目数
+    """
+
+    def decorator(func: Callable) -> Callable:
+        _store: dict[tuple, tuple[float, Any]] = {}
+
+        def wrapper(*args, **kwargs):
+            # 将不可哈希的 Session 对象转为 id
+            hashable_args = tuple(
+                id(a) if hasattr(a, "__class__") and "Session" in a.__class__.__name__ else a
+                for a in args
+            )
+            hashable_kwargs = tuple(
+                (k, id(v) if hasattr(v, "__class__") and "Session" in v.__class__.__name__ else v)
+                for k, v in sorted(kwargs.items())
+            )
+            cache_key = (key_prefix, hashable_args, hashable_kwargs)
+            now = time.time()
+            if cache_key in _store:
+                ts, val = _store[cache_key]
+                if now - ts < ttl:
+                    return val
+            result = func(*args, **kwargs)
+            _store[cache_key] = (now, result)
+            # 超容量清理最旧条目
+            if len(_store) > maxsize:
+                oldest = min(_store, key=lambda k: _store[k][0])
+                del _store[oldest]
+            return result
+
+        wrapper.__wrapped__ = func  # type: ignore[attr-defined]
+        return wrapper
 
     return decorator
 
@@ -74,13 +110,6 @@ def _metric_meta(metric: str) -> dict[str, Any]:
         if item["key"] == metric:
             return item
     raise KeyError(f"未知指标: {metric}")
-
-
-def _safe_div(numerator: float | None, denominator: float | None) -> float | None:
-    """安全除法：任一参数为 None 或分母为 0 时返回 None."""
-    if numerator is None or denominator is None or denominator == 0:
-        return None
-    return numerator / denominator
 
 
 def _compute_metric_value(report: FinancialReport | None, metric: str) -> float | None:

@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse } from './types'
 
 export interface SystemSettingsData {
   system_name: string
@@ -36,12 +37,6 @@ export interface HealthStatus {
   sandbox: { status: string }
   search_engines: { total: number; active: number; default_name: string }
   timestamp: string
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function getSettings() {

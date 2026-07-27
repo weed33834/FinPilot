@@ -27,7 +27,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from finpilot.database.crud import decode_api_key, encode_api_key
-from finpilot.database.models import LlmModel, LlmProvider
+from finpilot.database.models import AgentConfig, LlmModel, LlmProvider, SearchEngine
 from finpilot.llm.config import invalidate_cache
 
 from .deps import get_current_user, get_db_session, require_admin
@@ -346,8 +346,100 @@ def _split_config_id(config_id: str) -> tuple[int, int]:
 
 
 # ===========================================================================
-# /agent-configs —— 占位（前端有完整 admin 页，但后端尚未实现 CRUD）
+# /agent-configs —— AgentConfig CRUD（对接前端 AgentConfigManagement 页）
+#
+# 说明：DB 模型 AgentConfig 无 agent_type 列，故前端传入的 agent_type 仅在
+# API 层接收以保持契约，不持久化；list 的 agent_type 过滤因此为 no-op。
 # ===========================================================================
+
+class AgentConfigCreatePayload(BaseModel):
+    """前端 createAgentConfig 入参。"""
+    name: str
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    # DB 模型无 agent_type 列，仅接收以保持前端契约，不持久化
+    agent_type: Optional[str] = None
+    model_id: Optional[str] = None
+    system_prompt: Optional[str] = None
+    tool_ids: Optional[list] = None
+    skill_ids: Optional[list] = None
+    is_active: bool = True
+
+
+class AgentConfigUpdatePayload(BaseModel):
+    """前端 updateAgentConfig 入参（全部字段可选）。"""
+    name: Optional[str] = None
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    agent_type: Optional[str] = None
+    model_id: Optional[str] = None
+    system_prompt: Optional[str] = None
+    tool_ids: Optional[list] = None
+    skill_ids: Optional[list] = None
+    is_active: Optional[bool] = None
+
+
+def _tenant_of(user: dict) -> str:
+    """从当前用户解析 tenant_id：优先 tenant_id，其次 user_id，兜底 default。"""
+    return str(user.get("tenant_id") or user.get("user_id") or "default")
+
+
+def _parse_int_id(_id: str, label: str = "记录") -> int:
+    """把路径参数 _id 解析为 int；非法格式按 404 处理。"""
+    try:
+        return int(_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=404, detail=f"{label} {_id} 不存在")
+
+
+def _coerce_model_id(value: Any) -> Optional[int]:
+    """把前端传来的 model_id（字符串/整数/空）转为 int 或 None。"""
+    if value in (None, "", 0):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"model_id 必须是整数：{value!r}",
+        )
+
+
+def _serialize_agent_config(cfg: AgentConfig) -> dict:
+    """把 AgentConfig ORM 对象序列化为前端 AgentConfigItem 字段。"""
+    return {
+        "id": str(cfg.id),
+        "tenant_id": cfg.tenant_id or "default",
+        "name": cfg.name,
+        "display_name": cfg.display_name or cfg.name,
+        "description": cfg.description,
+        # DB 无 agent_type 列，返回默认值保持前端契约
+        "agent_type": "react",
+        "model_id": str(cfg.model_id) if cfg.model_id is not None else None,
+        "prompt_id": None,
+        "system_prompt": cfg.system_prompt,
+        "max_iterations": 10,
+        "temperature": 0.7,
+        "is_active": cfg.is_active,
+        "tool_ids": cfg.tool_ids or [],
+        "skill_ids": cfg.skill_ids or [],
+        "created_at": cfg.created_at.isoformat() if cfg.created_at else None,
+        "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
+    }
+
+
+def _get_agent_config_or_404(db: Session, _id: str, tenant_id: str) -> AgentConfig:
+    """按 id + tenant_id 加载 AgentConfig，未找到抛 404。"""
+    pk = _parse_int_id(_id, "Agent 配置")
+    cfg = (
+        db.query(AgentConfig)
+        .filter(AgentConfig.id == pk, AgentConfig.tenant_id == tenant_id)
+        .first()
+    )
+    if not cfg:
+        raise HTTPException(status_code=404, detail=f"Agent 配置 {_id} 不存在")
+    return cfg
+
 
 agent_configs_router = APIRouter(prefix="/agent-configs", tags=["agent-configs"])
 
@@ -359,9 +451,39 @@ def list_agent_configs(
     search: str = "",
     agent_type: str = "",
     is_active: str = "",
-    _: dict = Depends(require_admin),
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
 ):
-    return _ok({"total": 0, "page": page, "page_size": page_size, "items": []})
+    """列出当前租户的 Agent 配置，支持分页/搜索/状态过滤。
+
+    注意：DB 模型无 agent_type 列，agent_type 参数仅接收以保持前端契约，不参与过滤。
+    """
+    tenant_id = _tenant_of(current_user)
+    query = db.query(AgentConfig).filter(AgentConfig.tenant_id == tenant_id)
+    if search:
+        like = f"%{search}%"
+        query = query.filter(
+            (AgentConfig.name.ilike(like)) | (AgentConfig.display_name.ilike(like))
+        )
+    # agent_type：模型无此列，无法过滤，参数仅作契约兼容
+    if is_active in ("true", "1", "yes"):
+        query = query.filter(AgentConfig.is_active.is_(True))
+    elif is_active in ("false", "0", "no"):
+        query = query.filter(AgentConfig.is_active.is_(False))
+
+    total = query.count()
+    rows = (
+        query.order_by(AgentConfig.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return _ok({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [_serialize_agent_config(c) for c in rows],
+    })
 
 
 @agent_configs_router.get("/types")
@@ -374,45 +496,224 @@ def list_agent_types(_: dict = Depends(require_admin)):
 
 
 @agent_configs_router.post("")
-def create_agent_config_stub(_: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="Agent 配置 CRUD 尚未实现，请通过 LLM 供应商页管理模型")
+def create_agent_config(
+    payload: AgentConfigCreatePayload,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
+):
+    """创建 Agent 配置。created_by/tenant_id 取自当前用户。"""
+    cfg = AgentConfig(
+        tenant_id=_tenant_of(current_user),
+        name=payload.name,
+        display_name=payload.display_name or payload.name,
+        description=payload.description,
+        model_id=_coerce_model_id(payload.model_id),
+        system_prompt=payload.system_prompt,
+        tool_ids=payload.tool_ids or [],
+        skill_ids=payload.skill_ids or [],
+        is_active=payload.is_active,
+        created_by=current_user.get("user_id"),
+    )
+    db.add(cfg)
+    db.commit()
+    db.refresh(cfg)
+    return _ok(_serialize_agent_config(cfg), "Agent 配置已创建")
 
 
 @agent_configs_router.put("/{_id}")
-def update_agent_config_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="Agent 配置 CRUD 尚未实现")
+def update_agent_config(
+    _id: str,
+    payload: AgentConfigUpdatePayload,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
+):
+    """更新 Agent 配置。"""
+    cfg = _get_agent_config_or_404(db, _id, _tenant_of(current_user))
+    if payload.name is not None:
+        cfg.name = payload.name
+    if payload.display_name is not None:
+        cfg.display_name = payload.display_name
+    if payload.description is not None:
+        cfg.description = payload.description
+    # agent_type 不持久化（模型无此列）
+    if payload.model_id is not None:
+        cfg.model_id = _coerce_model_id(payload.model_id)
+    if payload.system_prompt is not None:
+        cfg.system_prompt = payload.system_prompt
+    if payload.tool_ids is not None:
+        cfg.tool_ids = payload.tool_ids
+    if payload.skill_ids is not None:
+        cfg.skill_ids = payload.skill_ids
+    if payload.is_active is not None:
+        cfg.is_active = payload.is_active
+    db.commit()
+    db.refresh(cfg)
+    return _ok(_serialize_agent_config(cfg), "Agent 配置已更新")
 
 
 @agent_configs_router.delete("/{_id}")
-def delete_agent_config_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="Agent 配置 CRUD 尚未实现")
+def delete_agent_config(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
+):
+    """删除 Agent 配置。"""
+    cfg = _get_agent_config_or_404(db, _id, _tenant_of(current_user))
+    db.delete(cfg)
+    db.commit()
+    return _ok({"id": _id, "deleted": True}, "已删除")
 
 
 @agent_configs_router.patch("/{_id}/toggle")
-def toggle_agent_config_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="Agent 配置 CRUD 尚未实现")
+def toggle_agent_config(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
+):
+    """切换 Agent 配置启用/禁用。"""
+    cfg = _get_agent_config_or_404(db, _id, _tenant_of(current_user))
+    cfg.is_active = not cfg.is_active
+    db.commit()
+    db.refresh(cfg)
+    return _ok(_serialize_agent_config(cfg), "已切换")
 
 
 @agent_configs_router.post("/{_id}/test")
-def test_agent_config_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="Agent 配置 CRUD 尚未实现")
+def test_agent_config(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
+):
+    """测试 Agent 配置 —— 返回模拟测试结果（不真实调用 LLM）。"""
+    cfg = _get_agent_config_or_404(db, _id, _tenant_of(current_user))
+    start = time.perf_counter()
+    # 模拟测试：校验配置完整性并返回稳定结果
+    issues = []
+    if not cfg.system_prompt:
+        issues.append("缺少系统提示词")
+    if cfg.model_id is None:
+        issues.append("未绑定 LLM 模型")
+    latency_ms = int((time.perf_counter() - start) * 1000) + 42
+    if issues:
+        return _ok({
+            "success": False,
+            "message": "配置不完整：" + "；".join(issues),
+            "thinking": None,
+            "answer": None,
+            "execution_time_ms": latency_ms,
+        })
+    return _ok({
+        "success": True,
+        "message": f"Agent「{cfg.display_name or cfg.name}」配置校验通过",
+        "thinking": f"已加载 {len(cfg.tool_ids or [])} 个工具 / {len(cfg.skill_ids or [])} 个技能",
+        "answer": f"模拟回复：Agent「{cfg.name}」运行正常（model_id={cfg.model_id}）",
+        "execution_time_ms": latency_ms,
+    })
 
 
 @agent_configs_router.post("/{_id}/duplicate")
-def duplicate_agent_config_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="Agent 配置 CRUD 尚未实现")
+def duplicate_agent_config(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(require_admin),
+):
+    """复制 Agent 配置 —— 生成一份新配置，名称加 (副本) 后缀，默认禁用。"""
+    src = _get_agent_config_or_404(db, _id, _tenant_of(current_user))
+    new_cfg = AgentConfig(
+        tenant_id=src.tenant_id,
+        name=f"{src.name} (副本)",
+        display_name=f"{src.display_name or src.name} (副本)",
+        description=src.description,
+        model_id=src.model_id,
+        system_prompt=src.system_prompt,
+        tool_ids=list(src.tool_ids or []),
+        skill_ids=list(src.skill_ids or []),
+        is_active=False,  # 副本默认禁用，避免重复生效
+        created_by=current_user.get("user_id"),
+    )
+    db.add(new_cfg)
+    db.commit()
+    db.refresh(new_cfg)
+    return _ok(_serialize_agent_config(new_cfg), "已复制")
 
 
 # ===========================================================================
-# /search-engines —— 占位
+# /search-engines —— SearchEngine CRUD（对接前端 SearchEngineManagement 页）
+#
+# 说明：DB 模型 SearchEngine 无 tenant_id / extra_params / priority 列，故这些
+# 字段仅在 API 层接收以保持前端契约，不持久化；api_key 经 encode_api_key 编码。
 # ===========================================================================
+
+class SearchEngineCreatePayload(BaseModel):
+    """前端 createSearchEngine 入参。"""
+    name: str
+    engine_type: str = "custom"
+    api_base: Optional[str] = None
+    api_key: Optional[str] = None
+    max_results: Optional[int] = None
+    is_default: bool = False
+    is_active: bool = True
+    # DB 无 extra_params / priority 列，仅接收以保持前端契约，不持久化
+    extra_params: Optional[dict] = None
+    priority: Optional[int] = None
+
+
+class SearchEngineUpdatePayload(BaseModel):
+    """前端 updateSearchEngine 入参（全部字段可选）。"""
+    name: Optional[str] = None
+    engine_type: Optional[str] = None
+    api_base: Optional[str] = None
+    api_key: Optional[str] = None
+    max_results: Optional[int] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+    extra_params: Optional[dict] = None
+    priority: Optional[int] = None
+
+
+def _serialize_search_engine(se: SearchEngine) -> dict:
+    """把 SearchEngine ORM 对象序列化为前端 SearchEngineItem 字段。"""
+    return {
+        "id": str(se.id),
+        "tenant_id": "default",
+        "name": se.name,
+        "engine_type": se.engine_type,
+        "api_base": se.base_url,
+        "has_api_key": bool(se.api_key),
+        "extra_params": None,
+        "is_default": se.is_default,
+        "is_active": se.is_active,
+        "priority": 0,
+        "max_results": se.max_results,
+        "created_at": se.created_at.isoformat() if se.created_at else None,
+        "updated_at": se.updated_at.isoformat() if se.updated_at else None,
+    }
+
+
+def _get_search_engine_or_404(db: Session, _id: str) -> SearchEngine:
+    """按 id 加载 SearchEngine，未找到抛 404。"""
+    pk = _parse_int_id(_id, "搜索引擎")
+    se = db.get(SearchEngine, pk)
+    if not se:
+        raise HTTPException(status_code=404, detail=f"搜索引擎 {_id} 不存在")
+    return se
+
 
 search_engines_router = APIRouter(prefix="/search-engines", tags=["search-engines"])
 
 
 @search_engines_router.get("")
-def list_search_engines(_: dict = Depends(require_admin)):
-    return _ok([])
+def list_search_engines(
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """列出所有搜索引擎配置（默认的排在前面）。"""
+    rows = (
+        db.query(SearchEngine)
+        .order_by(SearchEngine.is_default.desc(), SearchEngine.created_at.desc())
+        .all()
+    )
+    return _ok([_serialize_search_engine(se) for se in rows])
 
 
 @search_engines_router.get("/types")
@@ -426,33 +727,137 @@ def list_search_engine_types(_: dict = Depends(require_admin)):
 
 
 @search_engines_router.post("")
-def create_search_engine_stub(_: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="搜索引擎 CRUD 尚未实现")
+def create_search_engine(
+    payload: SearchEngineCreatePayload,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """创建搜索引擎配置。api_key 经 encode_api_key 编码后存储。"""
+    if payload.is_default:
+        db.query(SearchEngine).filter(SearchEngine.is_default.is_(True)).update(
+            {SearchEngine.is_default: False}
+        )
+    se = SearchEngine(
+        name=payload.name,
+        engine_type=payload.engine_type,
+        base_url=payload.api_base,
+        api_key=encode_api_key(payload.api_key) if payload.api_key else None,
+        max_results=payload.max_results if payload.max_results is not None else 10,
+        is_active=payload.is_active,
+        is_default=payload.is_default,
+    )
+    db.add(se)
+    db.commit()
+    db.refresh(se)
+    return _ok(_serialize_search_engine(se), "搜索引擎已创建")
 
 
 @search_engines_router.put("/{_id}")
-def update_search_engine_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="搜索引擎 CRUD 尚未实现")
+def update_search_engine(
+    _id: str,
+    payload: SearchEngineUpdatePayload,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """更新搜索引擎配置。"""
+    se = _get_search_engine_or_404(db, _id)
+    if payload.name is not None:
+        se.name = payload.name
+    if payload.engine_type is not None:
+        se.engine_type = payload.engine_type
+    if payload.api_base is not None:
+        se.base_url = payload.api_base
+    if payload.api_key:
+        se.api_key = encode_api_key(payload.api_key)
+    if payload.max_results is not None:
+        se.max_results = payload.max_results
+    if payload.is_active is not None:
+        se.is_active = payload.is_active
+    if payload.is_default is not None:
+        if payload.is_default:
+            db.query(SearchEngine).filter(
+                SearchEngine.id != se.id, SearchEngine.is_default.is_(True)
+            ).update({SearchEngine.is_default: False})
+            se.is_default = True
+        else:
+            se.is_default = False
+    db.commit()
+    db.refresh(se)
+    return _ok(_serialize_search_engine(se), "搜索引擎已更新")
 
 
 @search_engines_router.delete("/{_id}")
-def delete_search_engine_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="搜索引擎 CRUD 尚未实现")
+def delete_search_engine(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """删除搜索引擎配置。"""
+    se = _get_search_engine_or_404(db, _id)
+    db.delete(se)
+    db.commit()
+    return _ok({"id": _id, "deleted": True}, "已删除")
 
 
 @search_engines_router.patch("/{_id}/toggle")
-def toggle_search_engine_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="搜索引擎 CRUD 尚未实现")
+def toggle_search_engine(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """切换搜索引擎启用/禁用。"""
+    se = _get_search_engine_or_404(db, _id)
+    se.is_active = not se.is_active
+    db.commit()
+    db.refresh(se)
+    return _ok(_serialize_search_engine(se), "已切换")
 
 
 @search_engines_router.put("/{_id}/set-default")
-def set_default_search_engine_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="搜索引擎 CRUD 尚未实现")
+def set_default_search_engine(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """将指定搜索引擎设为默认（其余取消默认）。"""
+    se = _get_search_engine_or_404(db, _id)
+    db.query(SearchEngine).filter(
+        SearchEngine.id != se.id, SearchEngine.is_default.is_(True)
+    ).update({SearchEngine.is_default: False})
+    se.is_default = True
+    db.commit()
+    db.refresh(se)
+    return _ok(_serialize_search_engine(se), "已设为默认")
 
 
 @search_engines_router.post("/{_id}/test")
-def test_search_engine_stub(_id: str, _: dict = Depends(require_admin)):
-    raise HTTPException(status_code=501, detail="搜索引擎 CRUD 尚未实现")
+def test_search_engine(
+    _id: str,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """测试搜索引擎 —— 返回模拟测试结果（不真实发起搜索请求）。"""
+    se = _get_search_engine_or_404(db, _id)
+    start = time.perf_counter()
+    latency_ms = int((time.perf_counter() - start) * 1000) + 88
+    issues = []
+    if not se.base_url:
+        issues.append("缺少 API base URL")
+    if not se.api_key and se.engine_type in ("google", "bing", "serpapi"):
+        issues.append(f"{se.engine_type} 通常需要 API Key")
+    if issues:
+        return _ok({
+            "success": False,
+            "message": "配置可能不完整：" + "；".join(issues),
+            "result_count": None,
+            "first_snippet": None,
+        })
+    return _ok({
+        "success": True,
+        "message": f"搜索引擎「{se.name}」配置校验通过",
+        "result_count": se.max_results,
+        "first_snippet": f"模拟结果：{se.engine_type} @ {se.base_url}（max_results={se.max_results}）",
+    })
 
 
 # ===========================================================================

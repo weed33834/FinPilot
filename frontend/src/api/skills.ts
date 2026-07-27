@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse, PaginatedData } from './types'
 
 export interface SkillItem {
   id: string
@@ -42,19 +43,6 @@ export interface SkillTestResult {
   success: boolean
   message: string
   result: string | null
-}
-
-export interface PaginatedData<T> {
-  total: number
-  page: number
-  page_size: number
-  items: T[]
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function listSkills(params: {

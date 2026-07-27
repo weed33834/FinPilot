@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse, PaginatedData } from './types'
 
 export interface AgentConfigItem {
   id: string
@@ -62,19 +63,6 @@ export interface AgentTestResult {
   thinking: string | null
   answer: string | null
   execution_time_ms: number
-}
-
-export interface PaginatedData<T> {
-  total: number
-  page: number
-  page_size: number
-  items: T[]
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function listAgentConfigs(params: {

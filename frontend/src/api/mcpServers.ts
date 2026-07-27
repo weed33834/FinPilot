@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse } from './types'
 
 export interface McpServerItem {
   id: string
@@ -42,12 +43,6 @@ export interface McpServerUpdatePayload {
   env_vars?: Record<string, string>
   is_active?: boolean
   priority?: number
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function listMcpServers(params?: { active_only?: boolean }) {

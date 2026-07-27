@@ -26,6 +26,8 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from finpilot.shared.financial_utils import mean as _mean
+
 # 年化交易日数（向后兼容的默认值）
 _TRADING_DAYS = 252
 # 无风险利率（向后兼容的默认值）
@@ -280,11 +282,6 @@ def generate_signals(config: BacktestConfig, prices: list[float]) -> list[int]:
 # ---------------------------------------------------------------------------
 # 统计辅助
 # ---------------------------------------------------------------------------
-
-
-def _mean(values: list[float]) -> float:
-    """算术均值（空序列返回 0）."""
-    return sum(values) / len(values) if values else 0.0
 
 
 def _pop_variance(values: list[float], mean_val: float | None = None) -> float:

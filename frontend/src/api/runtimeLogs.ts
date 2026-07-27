@@ -1,11 +1,5 @@
 import { adminApi } from './adminClient'
-
-/** 统一响应包装 */
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
-}
+import type { ApiResponse } from './types'
 
 /** 运行日志条目 */
 export interface RuntimeLogItem {

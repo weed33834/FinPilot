@@ -161,11 +161,6 @@ class PromptRenderRequest(BaseModel):
     variables: dict[str, Any] = Field(default_factory=dict, description="变量映射")
 
 
-class PromptRenderResponse(BaseModel):
-    """提示词渲染响应."""
-    rendered: str
-
-
 class PromptAIGenerateRequest(BaseModel):
     """AI 自动生成提示词请求."""
     description: str = Field(..., min_length=2, description="需求描述（自然语言）")
@@ -245,14 +240,6 @@ class ReportSubscriptionResponse(BaseModel):
     last_run_at: str | None = None
     last_report_id: str | None = None
     last_error: str | None = None
-
-
-class ReportSubscriptionRunResponse(BaseModel):
-    """报告订阅执行响应."""
-    subscription_id: str
-    report_id: str | None = None
-    status: str
-    error: str | None = None
 
 
 # ---------------------------------------------------------------------------

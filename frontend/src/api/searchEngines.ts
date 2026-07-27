@@ -1,4 +1,5 @@
 import { adminApi } from './adminClient'
+import type { ApiResponse } from './types'
 
 export interface SearchEngineItem {
   id: string
@@ -48,12 +49,6 @@ export interface SearchEngineTestResult {
   message: string
   result_count: number | null
   first_snippet: string | null
-}
-
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
 }
 
 export function listSearchEngines() {

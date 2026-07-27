@@ -190,6 +190,7 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: ADMIN,
         children: [
           { path: '/llm-providers', labelKey: 'menu:items.llmProviders', icon: 'llm' },
+          { path: '/admin/models', labelKey: 'menu:items.modelConfigs', icon: 'llm' },
           { path: '/admin/prompts', labelKey: 'menu:items.prompts', icon: 'documents' },
           { path: '/admin/prompt-deep', labelKey: 'menu:items.promptDeep', icon: 'copy' },
           { path: '/admin/skills', labelKey: 'menu:items.skills', icon: 'templates' },
@@ -304,6 +305,7 @@ export const NAV_FALLBACK_LABELS: Record<string, string> = {
   'menu:items.apiKeys': 'API 密钥',
   'menu:items.aiResources': 'AI 资源',
   'menu:items.llmProviders': '模型供应商',
+  'menu:items.modelConfigs': '模型配置',
   'menu:items.prompts': '提示词管理',
   'menu:items.promptDeep': '提示词进阶',
   'menu:items.skills': '技能管理',
