@@ -40,6 +40,9 @@ sqlglot>=23.0.0
 pyotp>=2.9.0
 qrcode>=7.4.0
 bcrypt>=4.0.0
+argon2-cffi>=23.1.0
+redis>=5.0.0
+slowapi>=0.1.9
 
 # ── Financial data ──
 yfinance>=0.2.0,<1.0.0

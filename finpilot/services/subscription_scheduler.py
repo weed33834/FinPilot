@@ -8,10 +8,6 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-# TODO: requires finpilot.core.tenant_context；FinPilot 使用 SQLite，无 RLS，
-#   set_tenant_session 在源项目中于非 PostgreSQL 方言上本就是 no-op。
-#   FinPilot 内核未提供该模块，本文件已将其移入函数体内 best-effort 调用。
-# from finpilot.core.tenant_context import set_tenant_session  # 移到函数内
 from finpilot.database.models import ReportSubscription
 from finpilot.services.subscription_crud import compute_next_run
 from finpilot.services.subscription_runner import run_subscription_once

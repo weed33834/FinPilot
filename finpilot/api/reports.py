@@ -21,14 +21,20 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from finpilot.api.deps import get_current_user, get_db_session
 from finpilot.database.models import Report as ReportORM
 
 from .schemas import ReportRequest as ReportRequestSchema
+
+# Phase 4 新增 module
+from finpilot.core.reconciliation import run_full_audit
+from finpilot.core.pdf_export import export_balance_sheet, export_income_statement, export_cash_flow, export_projection_pdf
+from finpilot.database.models import BalanceSheet, IncomeStatement, CashFlowStatement
+from finpilot.core.permissions import Permission, require_permission
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -72,13 +78,14 @@ def _report_to_dict(r: ReportORM) -> dict[str, Any]:
 
 
 @router.get("")
-def list_reports(
+async def list_reports(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
+    _perm: dict = Depends(require_permission(Permission.VIEW_FINANCIALS)),
 ) -> dict[str, Any]:
-    """列出当前用户的研报（分页，按创建时间倒序）."""
+    """列出当前用户的研报（分页，按创建时间倒序）。需要 VIEW_FINANCIALS 权限。"""
     tenant_id = str(current_user.get("user_id", "default"))
     query = db.query(ReportORM).filter(ReportORM.tenant_id == tenant_id)
     total = query.count()
@@ -179,7 +186,6 @@ def export_report(
         raise HTTPException(status_code=404, detail="研报不存在")
 
     # 简化导出：把 content 序列化为 markdown data URI
-    import json
     import urllib.parse
 
     content = report.content or {}
@@ -306,6 +312,103 @@ def _generate_report_content(report_id: int, tenant_id: str) -> None:
             db.commit()
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Reconciliation & PDF Export
+# ---------------------------------------------------------------------------
+
+
+@router.get("/reconciliation")
+async def run_reconciliation(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+    _perm: dict = Depends(require_permission(Permission.VIEW_FINANCIALS)),
+) -> dict[str, Any]:
+    """执行全部审计检查：净收入勾稽、现金验证、试算平衡、复式记账。"""
+    tenant_id = str(current_user.get("user_id", "default"))
+    from datetime import datetime as dt
+    period_end = dt.utcnow()
+    result = await run_full_audit(db, tenant_id, period_end)
+    return _ok(result)
+
+
+@router.get("/pdf")
+def export_pdf_report(
+    report_type: str = Query(default="balance_sheet", pattern="^(balance_sheet|income_statement|cash_flow)$"),
+    year: int | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+    _perm: dict = Depends(require_permission(Permission.VIEW_FINANCIALS)),
+) -> dict[str, Any]:
+    """导出三表 PDF（balance_sheet / income_statement / cash_flow）。"""
+    import tempfile
+    from fastapi.responses import FileResponse
+
+    tenant_id = str(current_user.get("user_id", "default"))
+    model_cls = {
+        "balance_sheet": BalanceSheet,
+        "income_statement": IncomeStatement,
+        "cash_flow": CashFlowStatement,
+    }[report_type]
+    fn_map = {
+        "balance_sheet": export_balance_sheet,
+        "income_statement": export_income_statement,
+        "cash_flow": export_cash_flow,
+    }
+
+    q = db.query(model_cls).filter(model_cls.tenant_id == tenant_id)
+    if year:
+        from sqlalchemy import extract
+        q = q.filter(extract("year", model_cls.period_end) == year)
+    stmt = q.order_by(model_cls.period_end.desc()).first()
+
+    if not stmt:
+        raise HTTPException(status_code=404, detail=f"{report_type} 无数据")
+
+    output_path = tempfile.mktemp(suffix=".pdf")
+    fn_map[report_type](stmt, output_path)
+    return FileResponse(output_path, media_type="application/pdf", filename=f"{report_type}_{year or 'latest'}.pdf")
+
+
+# ---------------------------------------------------------------------------
+# P1-8 三表联动投影 PDF 导出
+# ---------------------------------------------------------------------------
+
+class ProjectionPDFRequest(BaseModel):
+    """三表联动投影 PDF 导出请求体。"""
+    is_df: list[dict] = Field(..., description="收入表投影记录列表")
+    bs_df: list[dict] = Field(..., description="资产负债表投影记录列表")
+    cf_df: list[dict] = Field(..., description="现金流量表投影记录列表")
+    company_name: str = Field(default="FinPilot Corp", description="页眉公司名称")
+
+
+@router.post("/projection-pdf")
+def export_projection_pdf_endpoint(
+    req: ProjectionPDFRequest,
+    current_user: dict = Depends(get_current_user),
+    _perm: dict = Depends(require_permission(Permission.VIEW_FINANCIALS)),
+) -> FileResponse:
+    """接收三表联动投影 JSON 数据，生成格式化多页 PDF 并返回文件。"""
+    import tempfile
+
+    # 校验三表非空
+    if not req.is_df or not req.bs_df or not req.cf_df:
+        raise HTTPException(status_code=400, detail="is_df / bs_df / cf_df 均不能为空")
+
+    output_path = tempfile.mktemp(suffix=".pdf")
+    result_path = export_projection_pdf(
+        is_df=req.is_df,
+        bs_df=req.bs_df,
+        cf_df=req.cf_df,
+        output_path=output_path,
+        company_name=req.company_name,
+    )
+    return FileResponse(
+        result_path,
+        media_type="application/pdf",
+        filename=f"projection_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,3 @@
-# TODO: requires finpilot.agent.tool_registry —— 注意 FinPilot 的 ToolRegistry.register 为装饰器工厂
-#       （签名为 register(name, description, parameters_schema, tags=None)，不接受 ToolSpec 实例），
-#       与本模块 tool_registry.register(spec) 调用方式不兼容，后续需适配 register 逻辑或扩展 ToolRegistry API。
 """MCP 工具桥接 — 将 MCP 服务器发现的工具注册到 agent tool_registry.
 
 工作流程:

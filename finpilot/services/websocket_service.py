@@ -110,7 +110,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     token = websocket.query_params.get("token", "")
     tenant_id = websocket.query_params.get("tenant_id", "")
 
-    # TODO: 从 token 验证用户身份和租户
+    if not token:
+        await websocket.close(code=4001, reason="缺少 token 参数")
+        return
+
     if not tenant_id:
         await websocket.close(code=4001, reason="缺少 tenant_id 参数")
         return

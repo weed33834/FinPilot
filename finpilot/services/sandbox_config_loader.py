@@ -6,8 +6,6 @@
 合并策略: 租户配置覆盖系统默认, 未定义的键继承系统默认
 """
 
-# TODO: requires finpilot.database.models.SandboxConfig
-
 from __future__ import annotations
 
 import logging

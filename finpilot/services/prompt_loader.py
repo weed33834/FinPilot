@@ -4,11 +4,6 @@
 支持按 tenant_id + template_type 查找激活的模板，未找到则使用硬编码默认。
 """
 
-# TODO: requires finpilot.database.models.PromptTemplate
-# TODO: requires finpilot.database.models.AgentConfig
-# TODO: requires finpilot.llm.prompts (INTENT_CLASSIFICATION_*, PARAMETER_EXTRACTION_*)
-# TODO: requires finpilot.llm.react_prompts (REACT_SYSTEM_TEMPLATE, REACT_USER_TEMPLATE)
-
 from __future__ import annotations
 
 import json

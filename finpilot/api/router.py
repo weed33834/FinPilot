@@ -13,16 +13,27 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy.exc import SQLAlchemyError
+
+import structlog
+from finpilot.api.rate_limit import limiter
+from finpilot.core.logging import setup_logging, trace_id_var
+from finpilot.middleware.tenant import TenantMiddleware
 
 from .admin import router as admin_router
 from .agent import router as agent_router
 from .approvals import router as approvals_router
 from .audit import router as audit_router
 from .auth import router as auth_router
+from .budgets import router as budgets_router
+from .charts import router as charts_router
 from .conversations import router as conversations_router
 from .documents import router as documents_router
 from .llm_providers import router as llm_providers_router
@@ -62,6 +73,12 @@ _EXTENSION_ROUTERS: list[tuple[str, str]] = [
     (".debate", "router"),
     (".explainability", "router"),
     (".risk", "router"),
+    # Phase 1 新增
+    (".ratios", "router"),
+    (".three_statement", "router"),
+    (".data_connections", "router"),
+    # v1.1.0: 企业 SSO (OAuth 2.0 / OIDC)
+    (".sso", "router"),
 ]
 
 
@@ -84,6 +101,12 @@ def _load_extension_routers(api: APIRouter) -> None:
 def create_router() -> APIRouter:
     """创建聚合路由器，所有子路由挂载在 /api/v1 下"""
     api = APIRouter(prefix="/api/v1")
+
+    @api.get("/")
+    def health_check() -> dict[str, str]:
+        """健康检查端点"""
+        return {"status": "ok", "version": "2.0"}
+
     # 兼容路由必须先于 reports_router 注册，避免 /reports/templates 被 /reports/{report_id} 抢先匹配
     try:
         from .compat import register_compat_routes
@@ -102,6 +125,8 @@ def create_router() -> APIRouter:
     api.include_router(users_router)
     api.include_router(audit_router)
     api.include_router(approvals_router)
+    api.include_router(budgets_router)
+    api.include_router(charts_router)
     # 加载扩展路由（失败不影响核心功能）
     _load_extension_routers(api)
     # 确保默认管理员存在，使管理员路由开箱可用（幂等）
@@ -179,6 +204,28 @@ def _ensure_default_admin() -> None:
 
 
 # 模块级 FastAPI 应用实例（供 uvicorn 直接加载）
+setup_logging()
+
 app = FastAPI(title="FinPilot AI", version="1.0.0")
+
+# ── Rate Limiting 全局配置 ──
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# SlowAPIMiddleware 从 app.state.limiter 读取 Limiter 实例，全局默认 100/min
+app.add_middleware(SlowAPIMiddleware)
+
+# 链路追踪中间件 — 每个请求生成 trace_id 注入 structlog 上下文中
+@app.middleware("http")
+async def trace_middleware(request: Request, call_next):
+    trace_id = request.headers.get("X-Trace-ID", str(uuid.uuid4()))
+    trace_id_var.set(trace_id)
+    structlog.contextvars.bind_contextvars(trace_id=trace_id)
+    response = await call_next(request)
+    response.headers["X-Trace-ID"] = trace_id
+    return response
+
+# 多租户中间件 — 从 X-Tenant-ID 请求头或用户会话提取 tenant_id
+app.add_middleware(TenantMiddleware)
+
 configure_cors(app)
 app.include_router(create_router())

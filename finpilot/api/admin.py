@@ -25,7 +25,7 @@ def health():
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
-def dashboard(
+async def dashboard(
     db: Session = Depends(get_db_session),
     _: dict = Depends(require_admin),
 ):

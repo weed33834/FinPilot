@@ -15,19 +15,12 @@
     {% for ex in examples %}输入: {ex.input} 输出: {ex.output}{% endfor %}
 """
 
-# TODO: requires finpilot.database.models.PromptTemplate
-# TODO: requires finpilot.database.models.PromptABTest
-# TODO: requires finpilot.database.models.PromptABTestResult
-# TODO: requires finpilot.database.models.FewShotExample
-# TODO: requires finpilot.database.models.PromptVersion
-
 from __future__ import annotations
 
 import hashlib
 import logging
 import re
 import time
-import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -384,7 +377,7 @@ def _format_few_shot(examples: list[FewShotExample]) -> str:
 def inject_few_shot(template: str, examples: list[FewShotExample]) -> str:
     """在 ``{few_shot_examples}`` 占位处注入示例文本."""
     text = _format_few_shot(examples)
-    return template.replace(_FEWSHOT_PLACEHOLDER, text)
+    return template.replace(_FEW_SHOT_PLACEHOLDER, text)
 
 
 # ---------------------------------------------------------------------------

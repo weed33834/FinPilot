@@ -2,7 +2,6 @@
 示例财务数据初始化 - 创建3张示例财务报表及科目
 报表：资产负债表、利润表、现金流量表（科目名称支持中文）
 """
-from typing import Optional
 
 from sqlalchemy.orm import Session
 

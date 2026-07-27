@@ -1,19 +1,15 @@
-"""工具注册机制 - 工具规格、上下文与注册中心。
+r"""工具注册机制 -- 工具规格、上下文与注册中心。
 
-用法::
-
-    from finpilot.agent.tool_registry import tool_registry
-
-    @tool_registry.register(
-        name="my_tool",
-        description="做什么的工具",
-        parameters_schema={"question": "str,必填,问题"},
-        tags=["data"],
-    )
-    def my_tool(ctx: ToolContext, **kwargs) -> dict:
-        ...
+提供 ``ToolRegistry`` 类，支持通过 ``@tool_registry.register(name=..., description=...,
+parameters_schema=..., tags=...)`` 装饰器将任意可调用函数注册为工具。注册后可通过
+``tool_registry.get(name)`` 按名查询，或通过 ``tool_registry.build_description()``
+生成供 ReAct prompt 使用的工具描述文本。
 
 导入 :mod:`finpilot.agent.tools` 即可完成内置工具的注册。
+
+.. note::
+    工具函数签名为 ``tool_func(ctx: ToolContext, **kwargs) -> dict``。
+    注册中心全局单例 ``tool_registry`` 在模块底部实例化。
 """
 from __future__ import annotations
 

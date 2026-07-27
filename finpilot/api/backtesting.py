@@ -16,10 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未直接引用 User ORM 模型作为依赖返回类型，认证依赖返回 dict。
-from finpilot.api.deps import get_current_user
+from finpilot.api.deps import require_scope
 
 router = APIRouter(prefix="/backtesting", tags=["Backtesting"])
 
@@ -131,7 +128,7 @@ def _config_kwargs(body: Any) -> dict[str, Any]:
 @router.post("/run")
 def run_backtest_endpoint(
     body: BacktestRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """执行策略回测并返回绩效指标.
 
@@ -152,7 +149,7 @@ def run_backtest_endpoint(
 @router.post("/run-portfolio")
 def run_portfolio_backtest_endpoint(
     body: PortfolioBacktestRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """多资产组合回测.
 
@@ -178,7 +175,7 @@ def run_portfolio_backtest_endpoint(
 @router.post("/optimize")
 def optimize_endpoint(
     body: OptimizeRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """参数网格优化（按 Sharpe 排序）.
 
@@ -200,7 +197,7 @@ def optimize_endpoint(
 def trading_calendar_endpoint(
     start_date: str = Query(..., description="起始日期 YYYY-MM-DD"),
     n_days: int = Query(default=252, description="需要的交易日数量"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """生成真实交易日历（跳过周末与基本中国节假日）."""
     from finpilot.services.backtesting import generate_trading_calendar
@@ -212,7 +209,7 @@ def trading_calendar_endpoint(
 @router.post("/trading-calendar")
 def trading_calendar_post_endpoint(
     body: TradingCalendarRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """生成真实交易日历（POST 版本，便于请求体传参）."""
     from finpilot.services.backtesting import generate_trading_calendar
@@ -223,7 +220,7 @@ def trading_calendar_post_endpoint(
 
 @router.get("/strategies")
 def list_strategies(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """返回可用策略类型及描述."""
     from finpilot.services.backtesting import list_strategies as _list_strategies
@@ -234,7 +231,7 @@ def list_strategies(
 @router.post("/generate-mock-data")
 def generate_mock_data(
     body: MockDataRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("backtesting:execute")),
 ) -> dict[str, Any]:
     """生成模拟价格数据用于演示."""
     from finpilot.services.backtesting import generate_mock_dates, generate_mock_prices

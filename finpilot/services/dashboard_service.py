@@ -65,9 +65,7 @@ def get_dashboard_summary(db: Session, user_id: str) -> dict[str, Any]:
     # 延迟导入：部分模型可能未定义
     try:
         from finpilot.database.models import (
-            Conversation,
             Document,
-            Message,
             Report,
             AuditLog,
         )
@@ -77,7 +75,6 @@ def get_dashboard_summary(db: Session, user_id: str) -> dict[str, Any]:
 
     # Report 统计（用户研报表）
     report_total = _safe_count(db, Report)
-    report_pending = _safe_count(db, Report, Report.status == "processing")
     report_reviewing = _safe_count(db, Report, Report.status == "reviewing")
     report_approved = _safe_count(db, Report, Report.status == "approved")
     pending_approval_count = report_reviewing + report_approved

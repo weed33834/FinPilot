@@ -9,18 +9,13 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未引入多租户(tenant_id)概念，user.tenant_id 暂以 user_id 字符串替代。
-# TODO: McpServerConfig ORM 模型尚未在 FinPilot 中定义，需后续在 finpilot.database.models 补充。
-from finpilot.api.deps import get_current_user, get_db_session
-# TODO: McpServerConfig 模型尚未在 finpilot.database.models 中定义，导入会失败，
-#       需后续补充该模型（或临时改为内联占位模型）。
-from finpilot.database.models import McpServerConfig  # noqa: F401
+from finpilot.api.deps import require_scope, get_db_session
+from finpilot.database.models import McpServerConfig
 from finpilot.services.mcp_client import McpConnectionError, mcp_manager, run_async
 from finpilot.services.mcp_tool_bridge import (
     register_server_mcp_tools,
@@ -132,12 +127,12 @@ def _auto_connect(mcp: McpServerConfig, db: Session) -> None:
     try:
         run_async(mcp_manager.get_or_connect(str(mcp.id), db, force=True), timeout=30.0)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("mcp_auto_connect_failed server=%s error=%s", mcp.name, exc)
+        logger.warning("mcp_auto_connect_failed", server=mcp.name, error=str(exc))
         return
     try:
         register_server_mcp_tools(str(mcp.id), db)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("mcp_auto_register_failed server=%s error=%s", mcp.name, exc)
+        logger.warning("mcp_auto_register_failed", server=mcp.name, error=str(exc))
 
 
 def _safe_disconnect(mcp_id: str) -> None:
@@ -145,7 +140,7 @@ def _safe_disconnect(mcp_id: str) -> None:
     try:
         run_async(mcp_manager.disconnect_server(mcp_id), timeout=10.0)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("mcp_safe_disconnect_failed server_id=%s error=%s", mcp_id, exc)
+        logger.warning("mcp_safe_disconnect_failed", server_id=mcp_id, error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +150,7 @@ def _safe_disconnect(mcp_id: str) -> None:
 
 @router.get("")
 def list_mcp_servers(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
     active_only: bool = Query(default=False, description="仅返回激活的"),
 ) -> dict[str, Any]:
@@ -180,7 +175,7 @@ def list_mcp_servers(
 
 @router.get("/transports")
 def list_transports(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
 ) -> dict[str, Any]:
     """获取支持的传输方式列表."""
     return {
@@ -196,7 +191,7 @@ def list_transports(
 
 @router.get("/status")
 def mcp_connection_status(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取所有 MCP 服务器的连接状态总览."""
@@ -247,7 +242,7 @@ def mcp_connection_status(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_mcp_server(
     body: McpServerCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """创建 MCP 服务器配置（若启用则自动连接并注册工具）."""
@@ -292,7 +287,7 @@ def create_mcp_server(
 def update_mcp_server(
     mcp_id: str,
     body: McpServerUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """更新 MCP 服务器配置（配置变更后重连）."""
@@ -319,7 +314,7 @@ def update_mcp_server(
 @router.delete("/{mcp_id}")
 def delete_mcp_server(
     mcp_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """删除 MCP 服务器配置（先断开连接并卸载工具）."""
@@ -339,7 +334,7 @@ def delete_mcp_server(
 @router.patch("/{mcp_id}/toggle")
 def toggle_mcp_server(
     mcp_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """启用/禁用 MCP 服务器."""
@@ -368,7 +363,7 @@ def toggle_mcp_server(
 @router.post("/{mcp_id}/test")
 def test_mcp_server(
     mcp_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """测试 MCP 服务器连接（真实握手）."""
@@ -405,7 +400,7 @@ def test_mcp_server(
 @router.get("/{mcp_id}/tools")
 def list_mcp_tools(
     mcp_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取 MCP 服务器暴露的工具列表（真实连接后获取）."""
@@ -456,7 +451,7 @@ def list_mcp_tools(
 @router.post("/{mcp_id}/connect")
 def connect_mcp_server(
     mcp_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """显式连接 MCP 服务器并注册其工具."""
@@ -490,7 +485,7 @@ def connect_mcp_server(
 @router.post("/{mcp_id}/disconnect")
 def disconnect_mcp_server(
     mcp_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """断开 MCP 服务器连接并卸载其工具."""
@@ -505,7 +500,7 @@ def disconnect_mcp_server(
         db.commit()
         db.refresh(mcp)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("mcp_disconnect_status_update_failed error=%s", exc)
+        logger.warning("mcp_disconnect_status_update_failed", error=str(exc))
 
     return {
         "code": 0,
@@ -523,7 +518,7 @@ def invoke_mcp_tool(
     mcp_id: str,
     tool_name: str,
     body: McpToolInvokeRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("mcp_servers:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """调用指定 MCP 服务器的指定工具."""

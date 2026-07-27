@@ -11,14 +11,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-# TODO: requires finpilot.database.models.ReportSubscription
 from finpilot.database.models import ReportSubscription
 from finpilot.database.models import User
-# TODO: finpilot.services.audit_service 不存在；FinPilot 有 finpilot.security.audit.record_event，
-#   但签名不兼容（record_event 无 db/resource/user/commit 参数，且自行开 Session）。
-#   需在 FinPilot 侧补一个 log_action 适配层或改写调用点。
+
 from finpilot.services.audit_service import log_action
-# TODO: requires finpilot.utils.pagination.paginate
+
 from finpilot.utils.pagination import paginate
 
 

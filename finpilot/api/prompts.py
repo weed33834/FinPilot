@@ -9,79 +9,23 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未引入多租户(tenant_id)概念，user.tenant_id 暂以 user_id 字符串替代。
-# TODO: PromptTemplate ORM 模型尚未在 finpilot.database.models 中定义，需后续补充。
-# TODO: prompt_engine 与 prompt_loader 服务在 finpilot.services 中已存在，但函数签名需核对。
-# TODO: PromptRenderRequest / PromptTemplateCreate 等 schema 在 FinPilot 中未定义，已内联简化版。
-from finpilot.api.deps import get_current_user, get_db_session
-# TODO: PromptTemplate 模型尚未在 finpilot.database.models 中定义，导入会失败。
-from finpilot.database.models import PromptTemplate  # noqa: F401
+from finpilot.api.deps import require_scope, get_db_session
+from finpilot.api.schemas import (
+    PromptAIGenerateRequest,
+    PromptAIGenerateResponse,
+    PromptEvaluateRequest,
+    PromptImportRequest,
+    PromptRenderRequest,
+    PromptTemplateCreate,
+    PromptTemplateResponse,
+    PromptTemplateUpdate,
+    PromptTestRequest,
+)
+from finpilot.database.models import PromptTemplate
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
-
-
-# ---------------------------------------------------------------------------
-# 内联 Schemas（简化的 Pydantic 模型，待后续统一收敛到 schemas 模块）
-# TODO: 待迁移到 finpilot/api/schemas.py 或新建 schemas 模块统一管理
-# ---------------------------------------------------------------------------
-
-
-class PromptTemplateCreate(BaseModel):
-    """提示词模板创建请求."""
-
-    name: str = Field(..., description="模板名称")
-    description: str | None = Field(default=None, description="模板描述")
-    template_type: str = Field(..., description="模板类型")
-    content: str = Field(..., description="模板内容")
-    variables: list[str] | None = Field(default=None, description="变量列表")
-
-
-class PromptTemplateUpdate(BaseModel):
-    """提示词模板更新请求."""
-
-    name: str | None = None
-    description: str | None = None
-    template_type: str | None = None
-    content: str | None = None
-    variables: list[str] | None = None
-
-
-class PromptTemplateResponse(BaseModel):
-    """提示词模板响应."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    tenant_id: str | None = None
-    name: str
-    description: str | None = None
-    template_type: str
-    content: str
-    variables: list[str] | None = None
-    is_system: bool = False
-    is_active: bool = True
-    created_by: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class PromptRenderRequest(BaseModel):
-    """提示词渲染请求."""
-
-    template_id: str | None = Field(default=None, description="模板 ID")
-    content: str | None = Field(default=None, description="直接传入模板内容")
-    variables: dict[str, Any] = Field(default_factory=dict, description="变量映射")
-
-
-class PromptRenderResponse(BaseModel):
-    """提示词渲染响应."""
-
-    rendered: str
 
 
 def _model_to_response(tpl: PromptTemplate) -> PromptTemplateResponse:
@@ -127,7 +71,7 @@ def _model_to_response(tpl: PromptTemplate) -> PromptTemplateResponse:
 def list_prompts(
     page: int = Query(default=1, ge=1, description="页码，从 1 开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
     template_type: str = Query(default="", description="按类型筛选"),
     search: str = Query(default="", description="按名称搜索"),
@@ -169,7 +113,7 @@ def list_prompts(
 
 @router.get("/types")
 def list_prompt_types(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取提示词模板类型列表."""
@@ -188,26 +132,6 @@ def list_prompt_types(
 # AI 自动生成提示词 + 导入 / 导出（外部资源）
 # ⚠️ 必须声明在 /{template_id} 之前，否则 /export 会被 /{template_id="export"} 抢先匹配
 # ---------------------------------------------------------------------------
-
-
-class PromptAIGenerateRequest(BaseModel):
-    """AI 自动生成提示词请求.
-
-    用户用自然语言描述需求，后端调用默认 LLM 生成结构化提示词模板。
-    """
-
-    description: str = Field(..., min_length=2, description="需求描述（自然语言）")
-    template_type: str = Field(default="general", description="目标分类")
-    tone: str = Field(default="professional", description="风格：professional/concise/friendly")
-    language: str = Field(default="zh", description="输出语言：zh/en")
-
-
-class PromptAIGenerateResponse(BaseModel):
-    name: str
-    description: str
-    template_type: str
-    content: str
-    variables: list[str]
 
 
 _META_SYSTEM_PROMPT = """你是金融分析师智能体平台的提示词工程师。
@@ -231,7 +155,7 @@ _META_SYSTEM_PROMPT = """你是金融分析师智能体平台的提示词工程�
 @router.post("/ai-generate")
 def ai_generate_prompt(
     body: PromptAIGenerateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """AI 自动生成提示词模板（meta-prompting）.
@@ -329,27 +253,10 @@ def ai_generate_prompt(
     }
 
 
-class PromptImportItem(BaseModel):
-    """单个待导入的提示词模板."""
-
-    name: str
-    description: str | None = None
-    template_type: str = "general"
-    content: str
-    variables: list[str] | None = None
-    is_active: bool = True
-
-
-class PromptImportRequest(BaseModel):
-    """批量导入提示词请求."""
-
-    items: list[PromptImportItem] = Field(..., min_length=1, max_length=200)
-
-
 @router.post("/import", status_code=status.HTTP_201_CREATED)
 def import_prompts(
     body: PromptImportRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """批量导入提示词模板（外部资源导入）.
@@ -418,7 +325,7 @@ def import_prompts(
 @router.get("/export")
 def export_prompts(
     template_type: str = Query(default="", description="按类型筛选，空表示全部"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """导出全部提示词模板为 JSON（外部资源导出 / 备份）.
@@ -464,7 +371,7 @@ def export_prompts(
 @router.get("/{template_id}")
 def get_prompt(
     template_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取单个提示词模板."""
@@ -486,7 +393,7 @@ def get_prompt(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_prompt(
     body: PromptTemplateCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """创建提示词模板."""
@@ -521,7 +428,7 @@ def create_prompt(
 def update_prompt(
     template_id: str,
     body: PromptTemplateUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """更新提示词模板."""
@@ -567,7 +474,7 @@ def update_prompt(
 @router.delete("/{template_id}")
 def delete_prompt(
     template_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """删除提示词模板."""
@@ -599,7 +506,7 @@ def delete_prompt(
 @router.put("/{template_id}/toggle")
 def toggle_prompt(
     template_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """启用/禁用提示词模板."""
@@ -630,7 +537,7 @@ def toggle_prompt(
 @router.post("/{template_id}/duplicate", status_code=status.HTTP_201_CREATED)
 def duplicate_prompt(
     template_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """复制提示词模板."""
@@ -671,7 +578,7 @@ def duplicate_prompt(
 
 @router.get("/categories/list")
 def list_categories(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取所有提示词模板类型（分类）列表."""
@@ -690,7 +597,7 @@ def list_categories(
 def render_prompt_by_id(
     template_id: str,
     body: PromptRenderRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """按模板 ID 渲染提示词（替换变量占位符）."""
@@ -720,7 +627,7 @@ def render_prompt_by_id(
 @router.post("/render")
 def render_prompt(
     body: PromptRenderRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """渲染提示词模板（替换变量占位符）.
@@ -767,22 +674,6 @@ def render_prompt(
 # ---------------------------------------------------------------------------
 
 
-class PromptTestRequest(BaseModel):
-    """测试渲染请求."""
-
-    variables: dict[str, Any] = Field(default_factory=dict, description="样例变量")
-    include_few_shot: bool = Field(default=False, description="是否注入 few-shot 示例")
-
-
-class PromptEvaluateRequest(BaseModel):
-    """批量评估请求."""
-
-    test_cases: list[dict[str, Any]] = Field(..., description="测试用例列表")
-    use_llm: bool = Field(default=False, description="是否调用 LLM (llm_judge)")
-    pass_threshold: float = Field(default=0.6, ge=0, le=1, description="通过阈值")
-    include_few_shot: bool = Field(default=False, description="是否注入 few-shot 示例")
-
-
 def _render_template_content(
     tpl: PromptTemplate,
     variables: dict[str, Any],
@@ -811,7 +702,7 @@ def _render_template_content(
 def test_render_prompt(
     template_id: str,
     body: PromptTestRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """用样例变量测试渲染提示词（支持条件模板与 few-shot 注入）."""
@@ -839,7 +730,7 @@ def test_render_prompt(
 def evaluate_prompt(
     template_id: str,
     body: PromptEvaluateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """对模板批量运行测试用例并评分.
@@ -885,10 +776,10 @@ def evaluate_prompt(
 
                     client = LLMClient()
                     output = client.chat(system_prompt=rendered, user_prompt=user_input)
-                except Exception as exc:  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     output = rendered
             score = score_output(output, expected, match_type)
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             rendered = ""
             output = ""
             score = 0.0

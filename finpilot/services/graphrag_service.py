@@ -1,5 +1,3 @@
-# TODO: requires external package `graphrag-lite` (知识图谱 RAG 引擎，pip install graphrag-lite)
-# TODO: requires finpilot.llm.client.LLMClient —— 当前以环境变量配置 LLM；如需统一接入 FinPilot 的 LLMClient 可后续替换
 """知识图谱增强检索服务 — 基于 graphrag-lite.
 
 在传统 RAG 之上增加实体-关系网络层，支持：

@@ -1,78 +1,34 @@
 """报告订阅管理路由."""
 
 import contextlib
-import logging
 from datetime import UTC, datetime
+
+from finpilot.core.logging import get_logger
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user / require_admin；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未引入多租户(tenant_id)概念，user.tenant_id 暂以 user_id 字符串替代。
-# TODO: ReportSubscription ORM 模型尚未在 finpilot.database.models 中定义，需后续补充。
-# TODO: subscription_service 与 audit_service 服务尚未在 finpilot.services 中实现，需后续补充。
-#       当前导入语句保留以便后续接入；运行时会因 ImportError 而失败。
-from finpilot.api.deps import get_current_user, get_db_session, require_admin
-# TODO: ReportSubscription 模型尚未在 finpilot.database.models 中定义，导入会失败。
-from finpilot.database.models import ReportSubscription  # noqa: F401
+from finpilot.api.deps import require_scope, get_db_session
+from finpilot.api.schemas import (
+    ReportSubscriptionCreate,
+    ReportSubscriptionResponse,
+    ReportSubscriptionUpdate,
+)
+from finpilot.database.models import ReportSubscription, User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/report-subscriptions", tags=["Report Subscriptions"])
 
 
-# ---------------------------------------------------------------------------
-# 内联 Schemas（简化的 Pydantic 模型，待后续统一收敛到 schemas 模块）
-# TODO: 待迁移到 finpilot/api/schemas.py 或新建 schemas 模块统一管理
-# ---------------------------------------------------------------------------
-
-
-class ReportSubscriptionCreate(BaseModel):
-    """报告订阅创建请求."""
-
-    name: str = Field(..., description="订阅名称")
-    template_id: str | None = Field(default=None, description="关联模板 ID")
-    schedule_cron: str | None = Field(default=None, description="调度 cron 表达式")
-    is_active: bool = True
-    config: dict[str, Any] = Field(default_factory=dict, description="订阅配置")
-
-
-class ReportSubscriptionUpdate(BaseModel):
-    """报告订阅更新请求."""
-
-    name: str | None = None
-    template_id: str | None = None
-    schedule_cron: str | None = None
-    is_active: bool | None = None
-    config: dict[str, Any] | None = None
-
-
-class ReportSubscriptionResponse(BaseModel):
-    """报告订阅响应."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    name: str
-    template_id: str | None = None
-    schedule_cron: str | None = None
-    is_active: bool = True
-    config: dict[str, Any] = Field(default_factory=dict)
-    last_run_at: str | None = None
-    last_report_id: str | None = None
-    last_error: str | None = None
-
-
-class ReportSubscriptionRunResponse(BaseModel):
-    """报告订阅执行响应."""
-
-    subscription_id: str
-    report_id: str | None = None
-    status: str
-    error: str | None = None
+def _resolve_user(db: Session, current_user: dict) -> User:
+    """从 require_scope 返回的 dict 中解析 User ORM 对象."""
+    user_id = current_user.get("user_id")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    return user
 
 
 def _to_response(sub: ReportSubscription) -> dict[str, Any]:
@@ -84,16 +40,16 @@ def _to_response(sub: ReportSubscription) -> dict[str, Any]:
 def create_subscription_api(
     data: ReportSubscriptionCreate,
     db: Session = Depends(get_db_session),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_scope("report_subscriptions:admin")),
 ) -> dict[str, Any]:
     """创建报告订阅."""
-    # TODO: 待 finpilot.services.subscription_service 实现后接入。
     from finpilot.services.subscription_service import create_subscription
 
+    user = _resolve_user(db, current_user)
     sub = create_subscription(
         db=db,
-        tenant_id=str(current_user.get("user_id", "default")),
-        user=current_user,
+        tenant_id=current_user.get("tenant_id") or str(user.id),
+        user=user,
         data=data,
     )
     return {"code": 0, "message": "ok", "data": _to_response(sub)}
@@ -102,13 +58,12 @@ def create_subscription_api(
 @router.get("")
 def list_subscriptions_api(
     db: Session = Depends(get_db_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("report_subscriptions:read")),
     page: int = Query(default=1, ge=1, description="页码，从 1 开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
     active_only: bool = Query(default=False, description="仅返回启用的订阅"),
 ) -> dict[str, Any]:
     """查询当前租户的订阅列表."""
-    # TODO: 待 finpilot.services.subscription_service 实现后接入。
     from finpilot.services.subscription_service import list_subscriptions
 
     items, total = list_subscriptions(
@@ -134,10 +89,9 @@ def list_subscriptions_api(
 def get_subscription_api(
     subscription_id: str,
     db: Session = Depends(get_db_session),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("report_subscriptions:read")),
 ) -> dict[str, Any]:
     """获取单个订阅."""
-    # TODO: 待 finpilot.services.subscription_service 实现后接入。
     from finpilot.services.subscription_service import get_subscription
 
     sub = get_subscription(
@@ -155,10 +109,9 @@ def update_subscription_api(
     subscription_id: str,
     data: ReportSubscriptionUpdate,
     db: Session = Depends(get_db_session),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_scope("report_subscriptions:admin")),
 ) -> dict[str, Any]:
     """更新订阅."""
-    # TODO: 待 finpilot.services.subscription_service 实现后接入。
     from finpilot.services.subscription_service import (
         get_subscription,
         update_subscription,
@@ -171,7 +124,8 @@ def update_subscription_api(
     )
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="订阅不存在")
-    updated = update_subscription(db=db, sub=sub, data=data, user=current_user)
+    user = _resolve_user(db, current_user)
+    updated = update_subscription(db=db, sub=sub, data=data, user=user)
     return {"code": 0, "message": "ok", "data": _to_response(updated)}
 
 
@@ -179,10 +133,9 @@ def update_subscription_api(
 def delete_subscription_api(
     subscription_id: str,
     db: Session = Depends(get_db_session),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_scope("report_subscriptions:admin")),
 ) -> dict[str, Any]:
     """删除订阅."""
-    # TODO: 待 finpilot.services.subscription_service 实现后接入。
     from finpilot.services.subscription_service import (
         delete_subscription,
         get_subscription,
@@ -195,7 +148,8 @@ def delete_subscription_api(
     )
     if not sub:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="订阅不存在")
-    delete_subscription(db=db, sub=sub, user=current_user)
+    user = _resolve_user(db, current_user)
+    delete_subscription(db=db, sub=sub, user=user)
     return {"code": 0, "message": "ok", "data": {"id": subscription_id, "deleted": True}}
 
 
@@ -203,10 +157,9 @@ def delete_subscription_api(
 def run_subscription_api(
     subscription_id: str,
     db: Session = Depends(get_db_session),
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_scope("report_subscriptions:admin")),
 ) -> dict[str, Any]:
     """手动触发订阅执行（不改变 next_run_at，但更新 last_run_at）."""
-    # TODO: 待 finpilot.services.subscription_service 与 audit_service 实现后接入。
     from finpilot.services.subscription_service import (
         get_subscription,
         run_subscription_once,
@@ -241,7 +194,7 @@ def run_subscription_api(
                 result="success",
             )
         except ImportError:
-            logger.warning("audit_service 未实现，跳过审计日志")
+            logger.warning("audit_service_not_implemented")
         return {
             "code": 0,
             "message": "ok",
@@ -255,11 +208,7 @@ def run_subscription_api(
     except Exception as exc:  # noqa: BLE001
         # 生成失败时不留半成品报告（run_subscription_once 未持久化 Report），
         # 仅记录失败状态。next_run_at 保持不变。
-        logger.warning(
-            "report_subscription.run_failed subscription_id=%s error=%s",
-            sub.id,
-            exc,
-        )
+        logger.warning("report_subscription_run_failed", subscription_id=sub.id, error=str(exc))
         sub.last_run_at = datetime.now(UTC)
         sub.last_report_id = None
         sub.last_error = "订阅操作失败"
@@ -278,7 +227,7 @@ def run_subscription_api(
                 result="fail",
             )
         except ImportError:
-            logger.warning("audit_service 未实现，跳过审计日志")
+            logger.warning("audit_service_not_implemented")
         return {
             "code": 0,
             "message": "ok",

@@ -1,4 +1,5 @@
 """配置 hcnsec NewAPI channel 作为 LLM provider（包含 25 个模型）。"""
+import os
 import requests
 
 BASE = "http://localhost:8001/api/v1"
@@ -18,7 +19,7 @@ resp = requests.get(f"{BASE}/llm-providers", headers=headers)
 print(f"[INFO] 现有 providers: {resp.json()['data']['total']} 个")
 
 # hcnsec NewAPI channel 配置
-HCNSEC_KEY = "sk-j4TEjjV0fKgqvliSXc8jko2EHzBmXnazsVaGCUa0sxSmZAH7"
+HCNSEC_KEY = os.getenv("HCNSEC_KEY", "")
 HCNSEC_URL = "https://api.hcnsec.cn/v1"
 
 # hcnsec 通常支持的 25 个模型（OpenAI 兼容协议）

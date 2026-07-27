@@ -4,26 +4,25 @@
 趋势、多期对比、明细钻取四类聚合查询。所有函数纯查询，不修改数据。
 """
 
-# TODO: requires finpilot.cache module (caching decorator) — current fallback is no-op
-# TODO: requires finpilot.database.models.FinancialReport (already present in FinPilot)
-
 from __future__ import annotations
 
+import functools
 from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
 from finpilot.database.models import FinancialReport
 
-# 缓存装饰器：FinPilot 暂无独立 cache 模块，降级为 no-op，保证函数可用.
-try:
-    from finpilot.cache import cached  # type: ignore[import-not-found]
-except ImportError:
-    def cached(*_args, **_kwargs):  # type: ignore[misc]
-        """No-op fallback when finpilot.cache is unavailable."""
-        def decorator(func):
-            return func
-        return decorator
+
+# 缓存装饰器：基于 functools.lru_cache 实现内存缓存
+def cached(maxsize: int = 128):
+    """请求级函数调用缓存."""
+
+    def decorator(func):
+        return functools.lru_cache(maxsize=maxsize)(func)
+
+    return decorator
+
 
 # period 显示顺序，环比逻辑以此为准
 PERIOD_ORDER: list[str] = ["Q1", "Q2", "Q3", "Q4", "H1", "H2", "annual"]

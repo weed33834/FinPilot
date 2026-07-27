@@ -3,7 +3,6 @@
 - 数据库路径：~/.finpilot/finpilot.db（自动创建目录）
 - 提供 engine、SessionLocal、init_db()、get_db()
 """
-import os
 from pathlib import Path
 
 from sqlalchemy import create_engine

@@ -10,17 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未引入多租户(tenant_id)概念，user.tenant_id 暂以 user_id 字符串替代。
-# TODO: SandboxConfig ORM 模型尚未在 finpilot.database.models 中定义，需后续补充。
-# TODO: sandbox_config_loader 服务尚未在 finpilot.services 中实现，需后续补充。
-#       当前导入语句保留以便后续接入；运行时会因 ImportError 而失败。
-from finpilot.api.deps import get_current_user, get_db_session
-# TODO: SandboxConfig 模型尚未在 finpilot.database.models 中定义，导入会失败。
-from finpilot.database.models import SandboxConfig, SandboxExecution  # noqa: F401
+from finpilot.api.deps import require_scope, get_db_session
+from finpilot.database.models import SandboxConfig, SandboxExecution
 from finpilot.services.sandbox_config_loader import (
-    get_code_sandbox_config,
     get_sandbox_config,
     invalidate_config_cache,
 )
@@ -75,7 +67,7 @@ def _model_to_response(cfg: SandboxConfig) -> dict[str, Any]:
 @router.get("")
 def list_configs(
     config_type: str | None = None,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取沙箱配置列表."""
@@ -93,7 +85,7 @@ def list_configs(
 
 @router.get("/types")
 def list_config_types(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
 ) -> dict[str, Any]:
     """获取配置类型列表."""
     return {
@@ -143,7 +135,7 @@ def list_config_types(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_config(
     body: SandboxConfigCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """创建沙箱配置."""
@@ -183,7 +175,7 @@ class SandboxTestExecuteRequest(BaseModel):
 
 @router.get("/health")
 def health_check(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """沙箱健康检查 — 实际执行一段 print('ok') 代码验证可用性."""
@@ -221,7 +213,7 @@ def health_check(
 
 @router.get("/instances")
 def list_instances(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """列出当前租户所有沙箱配置的实例状态（含已停止/未启动）."""
@@ -250,7 +242,7 @@ def list_instances(
 @router.post("/{config_id}/start")
 def start_instance(
     config_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """启动沙箱实例（标记为 running + 执行一次健康检查预热）.
@@ -276,7 +268,7 @@ def start_instance(
 @router.post("/{config_id}/stop")
 def stop_instance(
     config_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """停止沙箱实例."""
@@ -294,7 +286,7 @@ def stop_instance(
 @router.post("/{config_id}/restart")
 def restart_instance(
     config_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """重启沙箱实例 = stop + start."""
@@ -315,7 +307,7 @@ def restart_instance(
 def test_execute(
     config_id: str,
     body: SandboxTestExecuteRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """针对指定沙箱配置执行一段代码，并将结果持久化到 sandbox_executions 表."""
@@ -418,7 +410,7 @@ def list_executions(
     config_id: str,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """查询指定沙箱配置的执行历史."""
@@ -451,7 +443,7 @@ def list_executions(
 def get_execution_detail(
     config_id: str,
     execution_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """查询单次执行的完整详情（含 code / stdout / stderr 全文）."""
@@ -514,7 +506,7 @@ def _execution_to_response(execution: SandboxExecution) -> dict[str, Any]:
 def update_config(
     config_id: str,
     body: SandboxConfigUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """更新沙箱配置."""
@@ -539,7 +531,7 @@ def update_config(
 @router.delete("/{config_id}")
 def delete_config(
     config_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """删除沙箱配置."""
@@ -563,7 +555,7 @@ def delete_config(
 @router.patch("/{config_id}/toggle")
 def toggle_config(
     config_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """启用/禁用沙箱配置."""
@@ -585,7 +577,7 @@ def toggle_config(
 @router.get("/active/{config_type}")
 def get_active_config(
     config_type: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("sandbox_configs:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取指定类型的当前激活配置（合并系统默认 + 租户覆盖）.

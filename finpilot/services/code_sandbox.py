@@ -32,7 +32,6 @@ from sqlalchemy.orm import Session
 from finpilot.services.sandbox_config_loader import (
     DEFAULT_ALLOWED_MODULES,
     DEFAULT_BLOCKED_MODULES,
-    DEFAULT_CPU_LIMIT,
     DEFAULT_MAX_OUTPUT_LENGTH,
     DEFAULT_MEMORY_MB,
     DEFAULT_TIMEOUT_SECONDS,

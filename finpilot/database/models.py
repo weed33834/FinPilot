@@ -16,6 +16,15 @@ class Base(DeclarativeBase):
     pass
 
 
+class TenantMixin:
+    """多租户混入类 — 为模型提供统一的 tenant_id 字段。
+
+    所有需要租户隔离的模型应同时继承 Base 和本 Mixin。
+    查询时由 tenant_filter 模块的 do_orm_execute 事件自动注入 tenant_id 条件。
+    """
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+
+
 class User(Base):
     """用户表 - 平台用户账号"""
     __tablename__ = "users"
@@ -24,8 +33,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255))
     name: Mapped[Optional[str]] = mapped_column(String(100))
-    # 角色：默认 analyst（分析师），可扩展 admin/auditor 等
+    # 角色：支持 5 种角色 — admin / finance_manager / analyst / auditor / viewer，默认 analyst
     role: Mapped[str] = mapped_column(String(50), default="analyst")
+    # 2FA TOTP 支持
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -38,7 +50,7 @@ class User(Base):
         return f"<User(id={self.id}, email='{self.email}', role='{self.role}')>"
 
 
-class Document(Base):
+class Document(Base, TenantMixin):
     """文档表 - 用户上传的财务文档"""
     __tablename__ = "documents"
 
@@ -47,7 +59,6 @@ class Document(Base):
     file_type: Mapped[Optional[str]] = mapped_column(String(50))  # pdf/docx/xlsx/csv
     file_path: Mapped[str] = mapped_column(String(1000))
     file_size: Mapped[Optional[int]] = mapped_column(Integer)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     uploaded_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     # 文档处理状态：pending(待处理)/indexed(已索引)/failed(失败)
     status: Mapped[str] = mapped_column(String(20), default="pending")
@@ -62,7 +73,7 @@ class Document(Base):
         return f"<Document(id={self.id}, filename='{self.filename}', status='{self.status}')>"
 
 
-class DocumentChunk(Base):
+class DocumentChunk(Base, TenantMixin):
     """文档分块表 - RAG 向量检索的最小单元"""
     __tablename__ = "document_chunks"
 
@@ -72,7 +83,6 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     # embedding 存储为 JSON 字符串（向量序列化），SQLite 下用 Text 承载
     embedding: Mapped[Optional[str]] = mapped_column(Text)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # 关系
@@ -144,7 +154,7 @@ class FinancialReport(Base):
         return f"<FinancialReport(id={self.id}, name='{self.report_name}', type='{self.report_type}')>"
 
 
-class Report(Base):
+class Report(Base, TenantMixin):
     """研报表 — 用户通过前端 ReportsPage 创建的财务分析报告.
 
     与 FinPilot equity 的 ReportRequest（研报生成管线）不同，本表存储的是
@@ -154,7 +164,6 @@ class Report(Base):
     __tablename__ = "reports"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     title: Mapped[str] = mapped_column(String(500))
     # profit/balance/cash/custom/comparison
@@ -196,15 +205,13 @@ class FinancialAccount(Base):
         return f"<FinancialAccount(id={self.id}, name='{self.account_name}', balance={self.balance})>"
 
 
-class Conversation(Base):
+class Conversation(Base, TenantMixin):
     """会话表 - 用户与AI的对话会话"""
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
-    title: Mapped[Optional[str]] = mapped_column(String(500))
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
-    # 是否归档：前端 ConversationsPage 按此分桶（active/archived）
+    title: Mapped[Optional[str]] = mapped_column(String(500))    # 是否归档：前端 ConversationsPage 按此分桶（active/archived）
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
@@ -234,7 +241,7 @@ class Message(Base):
         return f"<Message(id={self.id}, role='{self.role}')>"
 
 
-class AuditLog(Base):
+class AuditLog(Base, TenantMixin):
     """审计日志表 - 记录 LLM 调用与安全事件（迁移自 legacy audit_service）.
 
     落库内容经 PII 脱敏，不存明文敏感信息。用于合规追溯、注入攻击取证、
@@ -245,7 +252,6 @@ class AuditLog(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     # 事件类型：llm_call / injection_blocked / login / policy_denied 等
     action: Mapped[str] = mapped_column(String(50), index=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     user_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     # 结果：ok / blocked / error
     status: Mapped[str] = mapped_column(String(20), default="ok")
@@ -268,6 +274,7 @@ class ApiKey(Base):
     key_hash: Mapped[str] = mapped_column(String(255))  # 密钥哈希值
     name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    scopes: Mapped[Optional[str]] = mapped_column(Text, default="", comment="逗号分隔的权限范围")
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -291,7 +298,7 @@ class ApiKey(Base):
 # ============================================================
 
 
-class McpServerConfig(Base):
+class McpServerConfig(Base, TenantMixin):
     """MCP 服务器配置 — 连接外部 MCP 服务器."""
     __tablename__ = "mcp_server_configs"
     __table_args__ = (
@@ -299,7 +306,6 @@ class McpServerConfig(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(128))  # 服务器名称，唯一标识
     display_name: Mapped[str] = mapped_column(String(128))  # 展示名称
     description: Mapped[Optional[str]] = mapped_column(Text)  # 描述
@@ -328,12 +334,11 @@ class McpServerConfig(Base):
         return f"<McpServerConfig(id={self.id}, name='{self.name}', active={self.is_active})>"
 
 
-class ReportSubscription(Base):
+class ReportSubscription(Base, TenantMixin):
     """定时报告订阅 — 按 daily/weekly/monthly 频率自动生成报告并推送."""
     __tablename__ = "report_subscriptions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     name: Mapped[str] = mapped_column(String(255))  # 订阅名称
     # 报告类型: profit/balance/cash/custom
@@ -368,12 +373,11 @@ class ReportSubscription(Base):
         return f"<ReportSubscription(id={self.id}, name='{self.name}', freq='{self.frequency}')>"
 
 
-class ReportTemplate(Base):
+class ReportTemplate(Base, TenantMixin):
     """持久化的报告模板 — 覆盖内置模板渲染逻辑."""
     __tablename__ = "report_templates"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(128))  # 模板名称
     # 关联报告类型: profit/balance/cash/custom/comparison
     report_type: Mapped[str] = mapped_column(String(64))
@@ -393,16 +397,14 @@ class ReportTemplate(Base):
         return f"<ReportTemplate(id={self.id}, name='{self.name}', type='{self.report_type}')>"
 
 
-class SandboxConfig(Base):
+class SandboxConfig(Base, TenantMixin):
     """沙箱配置 — SQL 白名单 + 代码沙箱配置."""
     __tablename__ = "sandbox_configs"
     __table_args__ = (
         Index("ix_sandbox_tenant_type", "tenant_id", "config_type"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
-    # 配置类型: sql_whitelist / code_sandbox / file_upload
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)    # 配置类型: sql_whitelist / code_sandbox / file_upload
     config_type: Mapped[str] = mapped_column(String(32))
     name: Mapped[str] = mapped_column(String(128))  # 配置名称
     description: Mapped[Optional[str]] = mapped_column(Text)  # 描述
@@ -422,7 +424,7 @@ class SandboxConfig(Base):
         return f"<SandboxConfig(id={self.id}, type='{self.config_type}', name='{self.name}')>"
 
 
-class SandboxExecution(Base):
+class SandboxExecution(Base, TenantMixin):
     """沙箱执行记录 — 持久化每次代码执行的输入输出.
 
     用于审计、调试、回放，以及前端"执行历史"展示。
@@ -434,7 +436,6 @@ class SandboxExecution(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     config_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("sandbox_configs.id", ondelete="SET NULL"), index=True
     )
@@ -456,7 +457,7 @@ class SandboxExecution(Base):
         return f"<SandboxExecution(id={self.id}, config_id={self.config_id}, success={self.success})>"
 
 
-class PromptTemplate(Base):
+class PromptTemplate(Base, TenantMixin):
     """可复用的提示词模板 — 支持 {variable} 占位符."""
     __tablename__ = "prompt_templates"
     __table_args__ = (
@@ -464,7 +465,6 @@ class PromptTemplate(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     name: Mapped[str] = mapped_column(String(255))  # 模板名称
     description: Mapped[Optional[str]] = mapped_column(Text)  # 模板描述
@@ -511,15 +511,14 @@ class PromptVersion(Base):
         return f"<PromptVersion(id={self.id}, prompt_id={self.prompt_id}, v={self.version})>"
 
 
-class PromptABTest(Base):
+class PromptABTest(Base, TenantMixin):
     """提示词 A/B 测试配置 — 为同一 prompt_key 配置对照/实验变体并按流量分流."""
     __tablename__ = "prompt_ab_tests"
     __table_args__ = (
         Index("ix_prompt_ab_test_tenant_key", "tenant_id", "prompt_key"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)  # 租户 ID
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True) # 租户 ID
     name: Mapped[str] = mapped_column(String(255))  # 测试名称
     prompt_key: Mapped[str] = mapped_column(String(128))  # 被测试的提示词 key / 类型
     # 对照组变体模板 ID
@@ -568,15 +567,14 @@ class PromptABTestResult(Base):
         return f"<PromptABTestResult(id={self.id}, test_id={self.test_id}, variant='{self.variant}')>"
 
 
-class FewShotExample(Base):
+class FewShotExample(Base, TenantMixin):
     """Few-shot 示例样本 — 按 prompt_key 分组，渲染时按 quality_score 取 Top-N 注入提示词."""
     __tablename__ = "prompt_few_shot_examples"
     __table_args__ = (
         Index("ix_few_shot_tenant_key", "tenant_id", "prompt_key"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)  # 租户 ID
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True) # 租户 ID
     prompt_key: Mapped[str] = mapped_column(String(128))  # 所属提示词 key / 类型
     input_text: Mapped[str] = mapped_column(Text)  # 示例输入
     output_text: Mapped[str] = mapped_column(Text)  # 期望输出
@@ -593,7 +591,7 @@ class FewShotExample(Base):
         return f"<FewShotExample(id={self.id}, key='{self.prompt_key}', score={self.quality_score})>"
 
 
-class Skill(Base):
+class Skill(Base, TenantMixin):
     """技能 — 面向特定场景的 Agent 能力组合（一组工具 + 提示词）."""
     __tablename__ = "skills"
     __table_args__ = (
@@ -601,7 +599,6 @@ class Skill(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(128))  # 技能标识名
     display_name: Mapped[str] = mapped_column(String(128))  # 展示名称
     description: Mapped[Optional[str]] = mapped_column(Text)  # 技能描述
@@ -622,7 +619,7 @@ class Skill(Base):
         return f"<Skill(id={self.id}, name='{self.name}', category='{self.category}')>"
 
 
-class Tool(Base):
+class Tool(Base, TenantMixin):
     """工具注册表 — Agent 可调用的工具（内置 built-in / 自定义 custom）."""
     __tablename__ = "tools"
     __table_args__ = (
@@ -631,7 +628,6 @@ class Tool(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(128))  # 工具内部名称，唯一标识
     display_name: Mapped[str] = mapped_column(String(128))  # 展示名称
     description: Mapped[Optional[str]] = mapped_column(Text)  # 工具描述
@@ -655,7 +651,200 @@ class Tool(Base):
         return f"<Tool(id={self.id}, name='{self.name}', type='{self.type}')>"
 
 
-class RuntimeLog(Base):
+# ============================================================
+# Phase 1 第四批新增模型：预算管理 + 日记账 + 科目表 + 发票
+# ============================================================
+
+
+class Account(Base, TenantMixin):
+    """科目表 (Chart of Accounts) — 统一会计科目编码体系."""
+    __tablename__ = "accounts"
+    __table_args__ = (
+        Index("ix_accounts_tenant_code", "tenant_id", "code", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(32))          # 科目编码，如 1001/2202
+    name: Mapped[str] = mapped_column(String(128))         # 科目名称
+    category: Mapped[str] = mapped_column(String(32))      # 资产/负债/权益/收入/费用
+    sub_category: Mapped[Optional[str]] = mapped_column(String(64))  # 明细分类
+    parent_id: Mapped[Optional[int]] = mapped_column(Integer, default=None)  # 上级科目
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<Account(id={self.id}, code='{self.code}', name='{self.name}')>"
+
+
+class JournalEntry(Base, TenantMixin):
+    """日记账分录表 — 复式记账的每笔分录."""
+    __tablename__ = "journal_entries"
+    __table_args__ = (
+        Index("ix_journal_entries_tenant_date", "tenant_id", "entry_date"),
+        Index("ix_journal_entries_tenant_account", "tenant_id", "account_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    entry_date: Mapped[datetime] = mapped_column(DateTime, index=True)
+    account_id: Mapped[Optional[int]] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
+    description: Mapped[Optional[str]] = mapped_column(String(500))
+    debit_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    credit_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    reference: Mapped[Optional[str]] = mapped_column(String(128))  # 凭证编号
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (f"<JournalEntry(id={self.id}, date='{self.entry_date}', "
+                f"debit={self.debit_amount}, credit={self.credit_amount})>")
+
+
+class Invoice(Base, TenantMixin):
+    """发票/票据表 — 应收账款与应付账款管理."""
+    __tablename__ = "invoices"
+    __table_args__ = (
+        Index("ix_invoices_tenant_status", "tenant_id", "status"),
+        Index("ix_invoices_tenant_due", "tenant_id", "due_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    invoice_number: Mapped[str] = mapped_column(String(64))      # 发票号
+    invoice_type: Mapped[str] = mapped_column(String(16), default="receivable")  # receivable/payable
+    vendor: Mapped[Optional[str]] = mapped_column(String(200))    # 供应商/客户
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    tax_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    total_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending/paid/overdue/cancelled
+    issue_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    paid_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<Invoice(id={self.id}, number='{self.invoice_number}', status='{self.status}')>"
+
+
+class Budget(Base, TenantMixin):
+    """预算主表 — 年度/部门预算头信息."""
+    __tablename__ = "budgets"
+    __table_args__ = (
+        Index("ix_budgets_tenant_year", "tenant_id", "year"),
+        Index("ix_budgets_tenant_status", "tenant_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200))              # 预算名称
+    year: Mapped[int] = mapped_column(Integer)                  # 预算年份
+    department: Mapped[Optional[str]] = mapped_column(String(100))  # 部门
+    total_amount: Mapped[float] = mapped_column(Float, default=0.0)  # 预算总额
+    status: Mapped[str] = mapped_column(String(32), default="draft")  # draft/pending/approved/rejected
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    approved_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    reject_reason: Mapped[Optional[str]] = mapped_column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    items = relationship("BudgetItem", back_populates="budget", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<Budget(id={self.id}, name='{self.name}', year={self.year}, status='{self.status}')>"
+
+
+class BudgetItem(Base, TenantMixin):
+    """预算明细项 — 预算的具体科目行项."""
+    __tablename__ = "budget_items"
+    __table_args__ = (
+        Index("ix_budget_items_budget", "budget_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    budget_id: Mapped[int] = mapped_column(ForeignKey("budgets.id", ondelete="CASCADE"))
+    category: Mapped[str] = mapped_column(String(64))           # 科目类别
+    description: Mapped[Optional[str]] = mapped_column(String(500))  # 明细说明
+    amount: Mapped[float] = mapped_column(Float, default=0.0)   # 预算金额
+    account_code: Mapped[Optional[str]] = mapped_column(String(32))  # 关联科目编码
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    budget = relationship("Budget", back_populates="items")
+
+    def __repr__(self) -> str:
+        return f"<BudgetItem(id={self.id}, budget_id={self.budget_id}, category='{self.category}')>"
+
+
+class BalanceSheet(Base, TenantMixin):
+    """资产负债表 — 三表审计关系核心表之一."""
+    __tablename__ = "balance_sheets"
+    __table_args__ = (
+        Index("ix_balance_sheets_tenant_period", "tenant_id", "period_end"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    period_end: Mapped[datetime] = mapped_column(DateTime, index=True)  # 报表截止日期
+    total_assets: Mapped[float] = mapped_column(Float, default=0.0)
+    current_assets: Mapped[float] = mapped_column(Float, default=0.0)
+    non_current_assets: Mapped[float] = mapped_column(Float, default=0.0)
+    total_liabilities: Mapped[float] = mapped_column(Float, default=0.0)
+    current_liabilities: Mapped[float] = mapped_column(Float, default=0.0)
+    non_current_liabilities: Mapped[float] = mapped_column(Float, default=0.0)
+    total_equity: Mapped[float] = mapped_column(Float, default=0.0)
+    retained_earnings: Mapped[float] = mapped_column(Float, default=0.0)  # 留存收益（用于净利润勾稽）
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<BalanceSheet(id={self.id}, period_end='{self.period_end}')>"
+
+
+class IncomeStatement(Base, TenantMixin):
+    """利润表 — 三表审计关系核心表之二."""
+    __tablename__ = "income_statements"
+    __table_args__ = (
+        Index("ix_income_statements_tenant_period", "tenant_id", "period_end"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    period_end: Mapped[datetime] = mapped_column(DateTime, index=True)
+    revenue: Mapped[float] = mapped_column(Float, default=0.0)
+    operating_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    gross_profit: Mapped[float] = mapped_column(Float, default=0.0)
+    operating_expenses: Mapped[float] = mapped_column(Float, default=0.0)
+    operating_income: Mapped[float] = mapped_column(Float, default=0.0)
+    net_income: Mapped[float] = mapped_column(Float, default=0.0)  # 净利润（用于三表勾稽）
+    eps: Mapped[float] = mapped_column(Float, default=0.0)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<IncomeStatement(id={self.id}, period_end='{self.period_end}')>"
+
+
+class CashFlowStatement(Base, TenantMixin):
+    """现金流量表 — 三表审计关系核心表之三."""
+    __tablename__ = "cash_flow_statements"
+    __table_args__ = (
+        Index("ix_cash_flow_statements_tenant_period", "tenant_id", "period_end"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    period_end: Mapped[datetime] = mapped_column(DateTime, index=True)
+    operating_activities: Mapped[float] = mapped_column(Float, default=0.0)  # 经营活动现金流净额
+    investing_activities: Mapped[float] = mapped_column(Float, default=0.0)
+    financing_activities: Mapped[float] = mapped_column(Float, default=0.0)
+    net_cash_change: Mapped[float] = mapped_column(Float, default=0.0)  # 现金净增减
+    beginning_cash: Mapped[float] = mapped_column(Float, default=0.0)  # 期初现金
+    ending_cash: Mapped[float] = mapped_column(Float, default=0.0)  # 期末现金
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<CashFlowStatement(id={self.id}, period_end='{self.period_end}')>"
+
+
+class RuntimeLog(Base, TenantMixin):
     """运行记录表 — 统一记录 API 调用、LLM 调用、Agent 执行、文档解析等运行事件.
 
     用于"设置板块内置日志与运行轨迹模块"，完整留存每一次 API 调用记录、
@@ -668,9 +857,7 @@ class RuntimeLog(Base):
         Index("ix_runtime_logs_source", "source"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
-    # 日志分类：api_call / llm_call / agent_run / document_parse / sandbox_exec / chat_message / system
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)    # 日志分类：api_call / llm_call / agent_run / document_parse / sandbox_exec / chat_message / system
     category: Mapped[str] = mapped_column(String(32))
     # 级别：info / warn / error / debug
     level: Mapped[str] = mapped_column(String(16), default="info")
@@ -694,4 +881,143 @@ class RuntimeLog(Base):
         return (
             f"<RuntimeLog(id={self.id}, category='{self.category}', "
             f"event='{self.event}', success={self.success})>"
+        )
+
+
+class AssumptionSet(Base):
+    """三表联动的外部化假设参数集。"""
+    __tablename__ = "assumption_sets"
+    __table_args__ = (
+        Index("ix_assumption_sets_tenant", "tenant_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
+    name: Mapped[str] = mapped_column(String(128))
+    parameters: Mapped[dict] = mapped_column(JSON, default=dict)
+    periods: Mapped[int] = mapped_column(Integer, default=4)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<AssumptionSet(id={self.id}, name='{self.name}', "
+            f"periods={self.periods})>"
+        )
+
+
+class DataConnection(Base, TenantMixin):
+    """数据连接 — 外部数据源连接配置（API Key / 数据库 / SFTP / S3 / 自定义）。
+
+    config 字段为 JSON，存储连接参数。密钥字段（client_secret / api_key /
+    password / secret_key / access_key 等）在 API 返回时一律替换为
+    ``***REDACTED***`` 占位符。
+    """
+    __tablename__ = "data_connections"
+    __table_args__ = (
+        Index("ix_data_connections_tenant_type", "tenant_id", "connection_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200))                    # 连接名称
+    connection_type: Mapped[str] = mapped_column(String(32))          # api_key / database / sftp / s3 / custom
+    config: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)  # 连接参数 JSON
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<DataConnection(id={self.id}, name='{self.name}', "
+            f"type='{self.connection_type}')>"
+        )
+
+
+class AgentConfig(Base, TenantMixin):
+    """智能体配置 — 管理后台 Dashboard 中展示的 Agent 配置项。
+
+    用于定义每个租户下可用的 AI Agent 实例。Agent 可以绑定特定的 LLM 模型、
+    工具集、技能集和系统提示词，实现不同业务场景的差异化智能体行为。
+    """
+    __tablename__ = "agent_configs"
+    __table_args__ = (
+        Index("ix_agent_configs_tenant_active", "tenant_id", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128))                  # Agent 名称
+    display_name: Mapped[str] = mapped_column(String(128))          # 展示名称
+    description: Mapped[Optional[str]] = mapped_column(Text)       # 描述
+    # 绑定的 LLM 模型 ID
+    model_id: Mapped[Optional[int]] = mapped_column(ForeignKey("llm_models.id", ondelete="SET NULL"))
+    # 系统提示词
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text)
+    # 关联的工具 ID 列表（JSON 数组）
+    tool_ids: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    # 关联的技能 ID 列表（JSON 数组）
+    skill_ids: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return f"<AgentConfig(id={self.id}, name='{self.name}', active={self.is_active})>"
+
+
+class ModelConfig(Base, TenantMixin):
+    """模型配置 — 管理后台 Dashboard 中展示的 LLM 模型配置项。
+
+    独立于 LlmProvider/LlmModel 的轻量级模型配置表，用于 Dashboard 统计和
+    快速模型开关管理。与 llm_providers/llm_models 分工不同：后者是实际调用
+    链路中使用的详细配置，本表是面向管理员的简化配置入口。
+    """
+    __tablename__ = "model_configs"
+    __table_args__ = (
+        Index("ix_model_configs_tenant_active", "tenant_id", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128))                  # 配置名称
+    model_name: Mapped[str] = mapped_column(String(200))            # 模型标识（如 gpt-4o）
+    provider: Mapped[Optional[str]] = mapped_column(String(100))    # 供应商（openai/anthropic 等）
+    # 关联的 LLM Provider 模型
+    llm_model_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("llm_models.id", ondelete="SET NULL")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)   # 是否默认模型
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<ModelConfig(id={self.id}, model='{self.model_name}', "
+            f"active={self.is_active})>"
+        )
+
+
+class SearchEngine(Base):
+    """搜索引擎配置 — 管理后台 Dashboard 中展示的搜索引擎配置项。
+
+    管理 Agent 可用的外部搜索服务（自定义搜索、Web 搜索等），支持多种搜索引擎
+    后端（Google/Bing/自定义 API），统一管理 API Key 和搜索参数。
+    """
+    __tablename__ = "search_engines"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128))                  # 引擎名称
+    engine_type: Mapped[str] = mapped_column(String(32), default="custom")   # google/bing/custom
+    base_url: Mapped[Optional[str]] = mapped_column(String(500))    # API 基础 URL
+    api_key: Mapped[Optional[str]] = mapped_column(String(1000))    # API 密钥
+    max_results: Mapped[int] = mapped_column(Integer, default=10)   # 单次搜索最大结果数
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<SearchEngine(id={self.id}, name='{self.name}', "
+            f"type='{self.engine_type}', active={self.is_active})>"
         )

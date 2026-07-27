@@ -1,6 +1,3 @@
-# TODO: requires finpilot.database.models.McpServerConfig (当前 FinPilot 数据库模型中尚无此表，需后续补充)
-# TODO: requires external package `httpx` (HTTP 客户端，用于 SSE / streamable_http 传输)
-# TODO: requires external package `mcp` (Model Context Protocol 协议相关，可选；本模块为原生实现，未直接依赖 mcp SDK)
 """MCP 客户端 — 真实的 Model Context Protocol 连接实现.
 
 支持三种传输方式:

@@ -247,7 +247,6 @@ def calculate_factors(financial_data: list[dict[str, Any]]) -> list[FactorResult
         prev_net_profit = _safe_float(company.get("prev_net_profit"))
         total_assets = _safe_float(company.get("total_assets"))
         prev_total_assets = _safe_float(company.get("prev_total_assets"))
-        total_liabilities = _safe_float(company.get("total_liabilities"))
         owner_equity = _safe_float(company.get("owner_equity"))
         operating_cost = _safe_float(company.get("operating_cost"))
         current_assets = _safe_float(company.get("current_assets"))

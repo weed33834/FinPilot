@@ -8,10 +8,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未引入多租户(tenant_id)概念，user.tenant_id 暂以 user_id 字符串替代。
-from finpilot.api.deps import get_current_user, get_db_session
+from finpilot.api.deps import require_scope, get_db_session
 
 router = APIRouter(prefix="/valuation", tags=["Valuation"])
 
@@ -124,7 +121,7 @@ class MonteCarloRequest(BaseModel):
 @router.post("/dcf")
 def calculate_dcf(
     body: DcfRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """计算 DCF 估值."""
     from finpilot.services.valuation_service import calculate_dcf, valuation_to_dict
@@ -143,7 +140,7 @@ def calculate_dcf(
 @router.post("/wacc")
 def calculate_wacc(
     body: WaccRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """计算 WACC."""
     from finpilot.services.valuation_service import calculate_wacc, valuation_to_dict
@@ -161,7 +158,7 @@ def calculate_wacc(
 @router.post("/ddm")
 def calculate_ddm(
     body: DdmRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """计算 DDM 估值."""
     from finpilot.services.valuation_service import calculate_ddm, valuation_to_dict
@@ -179,7 +176,7 @@ def calculate_ddm(
 @router.post("/debate")
 def run_debate(
     body: DebateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """执行看涨/看跌辩论分析."""
@@ -187,11 +184,10 @@ def run_debate(
 
     from finpilot.services.debate_service import run_debate
 
-    # TODO: FinPilot 暂无 tenant_id，暂以 user_id 字符串作为租户标识。
     result = run_debate(
         question=body.question,
         financial_data=body.financial_data,
-        tenant_id=str(current_user.get("user_id", "default")),
+        tenant_id=current_user.get("tenant_id") or str(current_user.get("user_id", "default")),
     )
     return {"code": 0, "message": "ok", "data": asdict(result)}
 
@@ -219,7 +215,7 @@ def _argument_items_to_objects(items: list[ArgumentItem]) -> list:
 @router.post("/debate/multi-round")
 def multi_round_debate(
     body: MultiRoundDebateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """执行多轮对抗式辩论分析."""
@@ -238,7 +234,7 @@ def multi_round_debate(
 @router.post("/debate/score")
 def score_arguments(
     body: ScoreArgumentsRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """对辩论论点进行多维度评分."""
     from finpilot.services.debate_service import score_arguments as _score_arguments
@@ -255,7 +251,7 @@ def score_arguments(
 @router.post("/debate/fact-check")
 def fact_check(
     body: FactCheckRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """对辩论论点引用的数据进行事实核查."""
     from finpilot.services.debate_service import check_argument_facts
@@ -276,7 +272,7 @@ def fact_check(
 @router.post("/sensitivity")
 def sensitivity(
     body: SensitivityRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """敏感性分析（龙卷风图）."""
     from finpilot.services.valuation_service import sensitivity_analysis
@@ -291,7 +287,7 @@ def sensitivity(
 @router.post("/scenario")
 def scenario(
     body: ScenarioRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """情景分析."""
     from finpilot.services.valuation_service import scenario_analysis
@@ -306,7 +302,7 @@ def scenario(
 @router.post("/comps")
 def comps(
     body: CompsRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """可比公司分析."""
     from finpilot.services.valuation_service import comparable_company_analysis
@@ -321,7 +317,7 @@ def comps(
 @router.post("/monte-carlo")
 def monte_carlo(
     body: MonteCarloRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("valuation:execute")),
 ) -> dict[str, Any]:
     """蒙特卡洛估值模拟."""
     from finpilot.services.valuation_service import monte_carlo_valuation

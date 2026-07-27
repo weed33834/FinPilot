@@ -16,7 +16,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF.svg?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Tailwind](https://img.shields.io/badge/Tailwind-4-38BDF8.svg?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.x-1C3C3C.svg?style=flat-square)](https://github.com/langchain-ai/langgraph)
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-brightgreen.svg?style=flat-square)](CHANGELOG.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-1E5BFF.svg?style=flat-square)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/badge/all%20contributors-welcome-3DDC97.svg?style=flat-square)](#贡献)
 
@@ -355,8 +355,8 @@ FinPilot AI
 ## 路线图
 
 - ✅ **v1.0.0** — 智能问答、文档解析、运行记录、报告与审批、安全合规基线、斜杠命令系统、级别化错误系统、SSE 流式 ReAct 推送
-- 🚧 **v1.1.0** — 多智能体辩论编排、报告订阅调度、企业级 SSO
-- 📌 **v1.2.0** — 实时行情接入、量化回测增强、知识图谱融合
+- ✅ **v2.0.0** — 财务校验引擎、多智能体辩论、可解释性分析、风险分析、比率分析、三表建模（DCF/DDM/LBO 增强）、数据连接管理、回测增强、因子挖掘、MCP 服务器管理、技能/工具/提示词管理、沙箱配置、运行时日志、仪表盘（管理+用户）
+- 🚧 **v2.1.0** — 实时行情接入、知识图谱融合、企业级 SSO
 
 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 

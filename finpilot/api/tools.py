@@ -9,19 +9,16 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未引入多租户(tenant_id)概念，user.tenant_id 暂以 user_id 字符串替代。
-# TODO: Tool ORM 模型尚未在 finpilot.database.models 中定义，需后续补充。
-# TODO: ToolCreate/ToolResponse 等 schema 在 FinPilot 中未定义，已内联简化版。
-# TODO: tool_loader.reload_db_tools 服务尚未在 finpilot.services 中实现，
-#       _reload_runtime_tools 已用 try/except 包裹，运行时静默忽略。
-from finpilot.api.deps import get_current_user, get_db_session
-# TODO: Tool 模型尚未在 finpilot.database.models 中定义，导入会失败。
-from finpilot.database.models import Tool  # noqa: F401
+from finpilot.api.deps import require_scope, get_db_session
+from finpilot.api.schemas import (
+    ToolCreate,
+    ToolResponse,
+    ToolTestRequest,
+    ToolUpdate,
+)
+from finpilot.database.models import Tool
 
 router = APIRouter(prefix="/tools", tags=["Tools Admin"])
 
@@ -29,7 +26,6 @@ router = APIRouter(prefix="/tools", tags=["Tools Admin"])
 def _reload_runtime_tools(tenant_id: str, db: Session) -> None:
     """工具变更后重新加载运行时工具注册表."""
     try:
-        # TODO: finpilot.services.tool_loader 尚未实现；待后续补充。
         from finpilot.services.tool_loader import reload_db_tools
 
         reload_db_tools(tenant_id, db)
@@ -45,60 +41,6 @@ TOOL_TYPE_ENUMS: list[dict[str, str]] = [
     {"value": "search", "label": "搜索", "description": "内部文档/数据搜索"},
     {"value": "web_search", "label": "网络搜索", "description": "互联网搜索引擎查询"},
 ]
-
-
-# ---------------------------------------------------------------------------
-# 内联 Schemas（简化的 Pydantic 模型，待后续统一收敛到 schemas 模块）
-# TODO: 待迁移到 finpilot/api/schemas.py 或新建 schemas 模块统一管理
-# ---------------------------------------------------------------------------
-
-
-class ToolCreate(BaseModel):
-    """工具创建请求."""
-
-    name: str = Field(..., description="工具名称")
-    display_name: str = Field(..., description="展示名称")
-    description: str | None = None
-    type: str = Field(..., description="工具类型")
-    config: dict[str, Any] = Field(default_factory=dict, description="工具配置")
-    api_key: str | None = None
-
-
-class ToolUpdate(BaseModel):
-    """工具更新请求."""
-
-    name: str | None = None
-    display_name: str | None = None
-    description: str | None = None
-    type: str | None = None
-    config: dict[str, Any] | None = None
-    api_key: str | None = None
-    is_active: bool | None = None
-
-
-class ToolResponse(BaseModel):
-    """工具响应."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    tenant_id: str | None = None
-    name: str
-    display_name: str
-    description: str | None = None
-    type: str
-    is_builtin: bool = False
-    is_active: bool = True
-    has_api_key: bool = False
-    config: dict[str, Any] = Field(default_factory=dict)
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class ToolTestRequest(BaseModel):
-    """工具测试请求."""
-
-    parameters: dict[str, Any] = Field(default_factory=dict, description="测试参数")
 
 
 def _model_to_response(t: Tool) -> ToolResponse:
@@ -122,7 +64,7 @@ def _model_to_response(t: Tool) -> ToolResponse:
 def list_tools(
     page: int = Query(default=1, ge=1, description="页码，从 1 开始"),
     page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
     search: str = Query(default="", description="按名称/展示名搜索"),
     type: str = Query(default="", description="按类型筛选"),
@@ -171,7 +113,7 @@ def list_tools(
 
 @router.get("/types")
 def list_tool_types(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
 ) -> dict[str, Any]:
     """获取工具类型枚举及说明."""
     return {"code": 0, "message": "ok", "data": TOOL_TYPE_ENUMS}
@@ -180,7 +122,7 @@ def list_tool_types(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_tool(
     body: ToolCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """创建自定义工具."""
@@ -207,7 +149,7 @@ def create_tool(
 def update_tool(
     tool_id: str,
     body: ToolUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """更新工具（内置工具不可改 name 和 type）."""
@@ -240,7 +182,7 @@ def update_tool(
 @router.delete("/{tool_id}")
 def delete_tool(
     tool_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """删除工具（仅限 is_builtin=false 的自定义工具）."""
@@ -266,7 +208,7 @@ def delete_tool(
 @router.patch("/{tool_id}/toggle")
 def toggle_tool(
     tool_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """切换工具启用/禁用状态."""
@@ -290,7 +232,7 @@ def toggle_tool(
 def test_tool(
     tool_id: str,
     body: ToolTestRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """测试工具 — 根据 type 执行相应的测试逻辑."""
@@ -475,7 +417,7 @@ def _test_file_operation(tool: Tool, params: dict) -> dict:
 @router.post("/{tool_id}/duplicate", status_code=status.HTTP_201_CREATED)
 def duplicate_tool(
     tool_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("tools:admin")),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """复制工具（副本 name 加 _copy）."""

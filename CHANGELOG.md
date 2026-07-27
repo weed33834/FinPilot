@@ -4,11 +4,53 @@
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-07-27
+
+### 🚀 重大版本：企业财务智能体平台
+
 ### 新增
-- **开源项目标配**：CONTRIBUTING.md / CODE_OF_CONDUCT.md / SECURITY.md / .github/ISSUE_TEMPLATE / .github/PULL_REQUEST_TEMPLATE.md / .github/workflows/ci.yml / .github/dependabot.yml / .github/FUNDING.yml
-- **CI workflow**：GitHub Actions 矩阵测试 Python 3.10–3.13 + 前端 TypeScript 编译 + Vite 构建
-- **README 美化**：新增 banner.svg（带渐变与 LOGO 的横幅）+ workflow.svg（ReAct 工作流图）+ 完整徽章矩阵
-- **.gitignore 强化**：补充密钥文件（*.pem/*.key/id_rsa 等）、缓存（.pytest_cache/.mypy_cache）、IDE（.vscode/.idea）、构建产物（build/.eggs）等过滤规则
+
+#### 财务智能体增强能力（阶段 C）
+- **财务校验引擎**：`/api/v1/validation` — 数据一致性校验、试算平衡、勾稽关系验证
+- **多智能体辩论**：Bull/Bear 对抗辩论编排，可配置论轮数（`FINPILOT_DEBATE_MAX_ROUNDS`），支持结构化辩论纪要输出
+- **可解释性分析**：`/api/v1/explainability` — 模型决策路径可视化、特征重要性排序
+- **风险分析**：`/api/v1/risk` — 多维度风险评估（市场/信用/操作/流动性）
+
+#### 财务建模增强（Phase 1）
+- **比率分析**：`/api/v1/ratios` — 盈利能力/偿债能力/营运能力/成长能力四大类比率自动计算
+- **三表建模**：`/api/v1/three_statement` — DCF/DDM/LBO 增强，利润表/资产负债表/现金流量表联动建模
+- **数据连接管理**：`/api/v1/data_connections` — 外部数据源（数据库/API/文件）统一接入与凭证管理
+
+#### 扩展体系完善
+- **回测增强**：`/api/v1/backtesting` — 多策略回测、绩效归因、夏普/最大回撤等指标
+- **因子挖掘**：`/api/v1/factor_mining` — 基本面/技术面/另类数据因子库
+- **MCP 服务器管理**：`/api/v1/mcp_servers` — MCP 协议服务器注册/启停/状态监控
+- **技能管理**：`/api/v1/skills` — 可插拔技能注册与调用
+- **工具管理**：`/api/v1/tools` — 工具注册/参数校验/调用日志
+- **提示词管理**：`/api/v1/prompts` — 系统提示词版本管理与 A/B 测试
+- **沙箱配置**：`/api/v1/sandbox_configs` — 代码执行沙箱安全策略配置
+
+#### 运维与可观测性
+- **运行时日志**：`/api/v1/runtime_logs` — 实时日志流、按模块/级别过滤
+- **管理仪表盘**：`/api/v1/dashboard` — 系统状态总览、模块健康度
+- **用户仪表盘**：`/api/v1/dashboard/user` — 用户维度用量统计
+- **报告订阅调度**：`/api/v1/report_subscriptions` — 定时生成 + 邮件/Webhook 推送
+- **报告模板管理**：`/api/v1/report_templates` — 模板 CRUD + 变量替换
+
+#### Agent 鲁棒性增强
+- **死循环检测**：`FINPILOT_GUARDRAILS_LOOP_LIMIT` — 同一工具连续调用 N 次无进展自动终止
+- **上下文压缩**：`FINPILOT_GUARDRAILS_CONTEXT_TOKENS` — Token 超阈值自动压缩历史
+- **幻觉校验**：`FINPILOT_GUARDRAILS_HALLUCINATION_CHECK` — 关键事实回查验证
+
+#### 基础设施
+- **Route 数量**：从 v1.0.0 的 ~25 条扩展至 **41 条**子路由
+- **健康检查**：`GET /api/v1/` 返回 `{"status": "ok", "version": "2.0"}`
+- **前端兼容路由**：`compat.py` 确保旧版前端路径不 404
+
+### 变更
+- **版本号**：`setup.py` 1.0.0 → 2.0.0；`main.py` version 参数同步更新
+- **路由架构**：扩展路由采用 try/except 懒加载，单个模块失败不阻断其他路由
+- **辩论引擎**：Bull/Bear Agent 共享上下文，结构化输出辩论纪要（论点/反驳/证据/置信度）
 
 ## [1.0.0] — 2026-07-20
 

@@ -10,7 +10,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from finpilot.database.models import ReportTemplate, User
+from finpilot.database.models import ReportTemplate
 from finpilot.services.audit_service import log_action
 from finpilot.utils.pagination import paginate
 

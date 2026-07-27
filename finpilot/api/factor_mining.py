@@ -8,10 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-# TODO: FinPilot deps 暂未提供 get_current_user_or_api_key（带 API Key + scope 校验），
-#       暂用 get_current_user；如需 API Key 鉴权与 scope 校验，需扩展 finpilot.api.deps。
-# TODO: FinPilot 暂未直接引用 User ORM 模型作为依赖返回类型，认证依赖返回 dict。
-from finpilot.api.deps import get_current_user
+from finpilot.api.deps import require_scope
 
 router = APIRouter(prefix="/factor-mining", tags=["Factor Mining"])
 
@@ -105,7 +102,7 @@ class CorrelationRequest(BaseModel):
 @router.post("/mine")
 def mine_factors_endpoint(
     body: MineRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """执行完整因子挖掘流程（计算因子 + 可选 IC 评估）."""
     from finpilot.services.factor_mining import mine_factors
@@ -120,7 +117,7 @@ def mine_factors_endpoint(
 @router.post("/calculate")
 def calculate_factors_endpoint(
     body: CalculateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """仅计算因子值（不做 IC 评估）."""
     from finpilot.services.factor_mining import calculate_factors
@@ -131,7 +128,7 @@ def calculate_factors_endpoint(
 
 @router.get("/factor-categories")
 def list_factor_categories(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """返回可用因子分类."""
     categories = [
@@ -172,7 +169,7 @@ def list_factor_categories(
 @router.post("/mine-deep")
 def mine_factors_deep_endpoint(
     body: MineDeepRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """执行深度因子挖掘流水线（中性化 + 多期 IR + 单期 IC + 衰减 + 相关性）."""
     from finpilot.services.factor_mining import mine_factors_deep
@@ -190,7 +187,7 @@ def mine_factors_deep_endpoint(
 @router.post("/neutralize")
 def neutralize_factor_endpoint(
     body: NeutralizeRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """对单个因子执行行业 / 市值中性化."""
     from finpilot.services.factor_mining import neutralize_factor
@@ -206,7 +203,7 @@ def neutralize_factor_endpoint(
 @router.post("/decay-analysis")
 def decay_analysis_endpoint(
     body: DecayAnalysisRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """分析因子预测能力的衰减（half-life）."""
     from finpilot.services.factor_mining import analyze_factor_decay
@@ -222,7 +219,7 @@ def decay_analysis_endpoint(
 @router.post("/correlation")
 def correlation_endpoint(
     body: CorrelationRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_scope("factor_mining:execute")),
 ) -> dict[str, Any]:
     """计算因子间相关性矩阵与聚类."""
     from finpilot.services.factor_mining import FactorResult, analyze_factor_correlation

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 # 确保 finpilot 包可导入（demo 作为独立脚本运行时）

@@ -15,7 +15,7 @@ import json
 import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -27,6 +27,7 @@ from finpilot.database import crud
 from finpilot.database.models import Conversation, Message, LlmProvider, LlmModel
 
 from .deps import get_current_user, get_db_session
+from .rate_limit import limiter, get_user_key
 from .schemas import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -181,7 +182,6 @@ def get_suggestions(
     else:
         has_file_upload = any("上传" in (m.content or "") or "文件" in (m.content or "") for m in msgs)
         last_role = msgs[0].role if msgs else None
-        last_content = (msgs[0].content or "")[:200] if msgs else ""
 
         if has_file_upload:
             suggestions = [
@@ -304,8 +304,10 @@ def _tenant_of(user: dict) -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
+@limiter.limit("20/minute", key_func=get_user_key)
 def chat(
     req: ChatRequest,
+    request: Request,
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -394,8 +396,10 @@ def _sse(event_type: str, data: dict) -> str:
 
 
 @router.post("/chat/stream")
+@limiter.limit("20/minute", key_func=get_user_key)
 def chat_stream(
     req: ChatStreamRequest,
+    request: Request,
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
