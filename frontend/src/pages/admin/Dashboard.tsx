@@ -39,7 +39,7 @@ export default function Dashboard() {
     setError(null)
     try {
       const [statsRes, healthRes] = await Promise.all([
-        adminApi.get('/dashboard/stats'),
+        adminApi.get('/dashboard/admin/stats'),
         getHealthCheck(),
       ])
       setStats(statsRes.data.data)

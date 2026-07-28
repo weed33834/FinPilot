@@ -305,18 +305,33 @@ class AuditLog(Base, TenantMixin):
         return f"<AuditLog(id={self.id}, action='{self.action}', status='{self.status}')>"
 
 
-class ApiKey(Base):
-    """API 密钥表 - 用户访问平台的密钥"""
+class ApiKey(Base, TenantMixin):
+    """API 密钥表 - 用户访问平台的密钥.
+
+    扩展字段（板块C）：tenant_id 隔离、expires_at 过期、usage_count/first_used_at
+    调用统计、rotated_from 轮换溯源、updated_at。
+    """
     __tablename__ = "api_keys"
+    __table_args__ = (
+        Index("ix_api_keys_tenant_active", "tenant_id", "is_active"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     key_hash: Mapped[str] = mapped_column(String(255))  # 密钥哈希值
+    # 明文前缀（如 fp_live_a1b2c3d4），用于列表展示识别，不泄露完整密钥
+    key_prefix: Mapped[Optional[str]] = mapped_column(String(32))
     name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     scopes: Mapped[Optional[str]] = mapped_column(Text, default="", comment="逗号分隔的权限范围")
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    first_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # 轮换溯源：新 Key 指向被轮换的旧 Key id
+    rotated_from: Mapped[Optional[int]] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
 
     # 关系
     user = relationship("User", back_populates="api_keys")
@@ -1155,4 +1170,174 @@ class QueryRecord(Base, TenantMixin):
         return (
             f"<QueryRecord(id={self.id}, status='{self.status}', "
             f"rows={self.row_count})>"
+        )
+
+
+# ============================================================
+# 板块C 新增模型：补齐前端 404 页面对应的后端数据模型.
+#
+# - AccessPolicy: ABAC 访问策略（访问策略页）
+# - HitlRequest:  Human-in-the-loop 人工介入请求（HITL 页）
+# - EvalRecord:   NL2SQL / RAG 评估记录（评估管理页）
+# - ReflectionLog: 错误自省日志（自省页）
+# ============================================================
+
+
+class AccessPolicy(Base, TenantMixin):
+    """ABAC 访问策略 — 基于资源类型 + 动作 + 条件的访问控制.
+
+    优先级数字越小越先匹配；effect=allow/deny。
+    conditions 为 JSON（如 {"role": "auditor"}），可空。
+    """
+    __tablename__ = "access_policies"
+    __table_args__ = (
+        Index("ix_access_policies_tenant_resource", "tenant_id", "resource_type", "action"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128))
+    # 资源类型：report / document / audit / approval / user / api_key
+    resource_type: Mapped[str] = mapped_column(String(64))
+    # 动作：read / write / delete / export / approve
+    action: Mapped[str] = mapped_column(String(64))
+    # 效果：allow / deny
+    effect: Mapped[str] = mapped_column(String(16), default="allow")
+    # 优先级：数字越小越先匹配
+    priority: Mapped[int] = mapped_column(Integer, default=100)
+    # 条件 JSON（可空），如 {"role": "auditor"}
+    conditions: Mapped[Optional[dict]] = mapped_column(JSON)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<AccessPolicy(id={self.id}, name='{self.name}', "
+            f"{self.resource_type}:{self.action}={self.effect})>"
+        )
+
+
+class HitlRequest(Base, TenantMixin):
+    """Human-in-the-loop 人工介入请求 — 高风险动作需人工审批后执行.
+
+    status: pending / approved / rejected
+    risk_level: low / medium / high
+    action_type: 触发 HITL 的动作类型（如 tool_call / report_export / data_delete）
+    """
+    __tablename__ = "hitl_requests"
+    __table_args__ = (
+        Index("ix_hitl_tenant_status", "tenant_id", "status"),
+        Index("ix_hitl_tenant_risk", "tenant_id", "risk_level"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 动作类型
+    action_type: Mapped[str] = mapped_column(String(64))
+    # 人类可读描述
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    # 风险等级：low / medium / high
+    risk_level: Mapped[str] = mapped_column(String(16), default="medium")
+    # 动作参数（JSON）
+    action_params: Mapped[Optional[dict]] = mapped_column(JSON)
+    # 上下文（JSON，如会话/工具链快照）
+    context: Mapped[Optional[dict]] = mapped_column(JSON)
+    # 状态：pending / approved / rejected
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    # 请求人
+    requested_by: Mapped[Optional[str]] = mapped_column(String(100))
+    # 审批人
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(100))
+    # 审批意见
+    comment: Mapped[Optional[str]] = mapped_column(Text)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<HitlRequest(id={self.id}, action='{self.action_type}', "
+            f"status='{self.status}', risk='{self.risk_level}')>"
+        )
+
+
+class EvalRecord(Base, TenantMixin):
+    """评估记录 — NL2SQL / RAG 系统评估.
+
+    eval_type: nl2sql / rag
+    eval_method: 评估方法（如 llm_judge / exact_match / ragas）
+    score: 评分（0-1 或 0-100，前端归一化）
+    metrics: JSON，附加指标（如 mrr/ndcg/hit_rate for rag, sql_valid for nl2sql）
+    """
+    __tablename__ = "eval_records"
+    __table_args__ = (
+        Index("ix_eval_tenant_type", "tenant_id", "eval_type"),
+        Index("ix_eval_tenant_created", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 评估类型：nl2sql / rag
+    eval_type: Mapped[str] = mapped_column(String(16))
+    # 评估问题
+    question: Mapped[str] = mapped_column(Text)
+    # 评估方法
+    eval_method: Mapped[Optional[str]] = mapped_column(String(64))
+    # 评分
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    # 附加指标 JSON
+    metrics: Mapped[Optional[dict]] = mapped_column(JSON)
+    # 评估详情（如生成 SQL、检索文档等）
+    detail: Mapped[Optional[str]] = mapped_column(Text)
+    created_by: Mapped[Optional[str]] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<EvalRecord(id={self.id}, type='{self.eval_type}', "
+            f"score={self.score})>"
+        )
+
+
+class ReflectionLog(Base, TenantMixin):
+    """错误自省日志 — 任务失败时记录异常、根因分析、修复建议.
+
+    与 RuntimeLog 互补：RuntimeLog 记运行事件，本表记错误自省语义，
+    支持 resolved 标记与 resolution 记录。
+    error_category: retryable / business / config / security / unknown
+    """
+    __tablename__ = "reflection_logs"
+    __table_args__ = (
+        Index("ix_reflection_tenant_category", "tenant_id", "error_category"),
+        Index("ix_reflection_tenant_resolved", "tenant_id", "resolved"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 任务名（如 agent.chat_stream / llm.client）
+    task_name: Mapped[Optional[str]] = mapped_column(String(128))
+    # 任务 ID / 追踪 ID
+    task_id: Mapped[Optional[str]] = mapped_column(String(128), index=True)
+    # 资源类型与 ID（如 report:123）
+    resource_type: Mapped[Optional[str]] = mapped_column(String(64))
+    resource_id: Mapped[Optional[str]] = mapped_column(String(64))
+    # 异常信息
+    exception_type: Mapped[str] = mapped_column(String(255))
+    exception_message: Mapped[str] = mapped_column(Text)
+    stack_trace: Mapped[Optional[str]] = mapped_column(Text)
+    # 错误分类：retryable / business / config / security / unknown
+    error_category: Mapped[str] = mapped_column(String(32), default="unknown")
+    # 根因分析与修复建议（best-effort，由自省服务填充）
+    root_cause: Mapped[Optional[str]] = mapped_column(Text)
+    suggested_fix: Mapped[Optional[str]] = mapped_column(Text)
+    # 是否已重试
+    retried: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 是否已解决
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 解决方案记录
+    resolution: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<ReflectionLog(id={self.id}, type='{self.exception_type}', "
+            f"category='{self.error_category}', resolved={self.resolved})>"
         )

@@ -23,7 +23,7 @@ from finpilot.api.schemas import (
     PromptTemplateUpdate,
     PromptTestRequest,
 )
-from finpilot.database.models import PromptTemplate
+from finpilot.database.models import PromptTemplate, PromptVersion
 
 router = APIRouter(prefix="/prompts", tags=["Prompts"])
 
@@ -364,6 +364,221 @@ def export_prompts(
             "exported_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
             "count": len(payload),
             "items": payload,
+        },
+    }
+
+
+@router.get("/{template_id}/versions")
+def list_versions(
+    template_id: str,
+    current_user: dict = Depends(require_scope("prompts:admin")),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """列出指定模板的版本历史（按版本号降序）."""
+    try:
+        tid = int(template_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+    tpl = db.get(PromptTemplate, tid)
+    if not tpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+
+    versions = (
+        db.query(PromptVersion)
+        .filter(PromptVersion.prompt_id == tid)
+        .order_by(PromptVersion.version.desc())
+        .all()
+    )
+
+    def _v_to_response(v: PromptVersion) -> dict[str, Any]:
+        return {
+            "id": str(v.id),
+            "version": v.version,
+            "content": v.content,
+            "change_description": v.change_description,
+            "is_active": bool(v.is_active_version),
+            "created_by": str(v.created_by) if v.created_by is not None else None,
+            "created_at": v.created_at.isoformat(sep=" ") if v.created_at else None,
+        }
+
+    return {"code": 0, "message": "ok", "data": [_v_to_response(v) for v in versions]}
+
+
+@router.post("/{template_id}/versions", status_code=status.HTTP_201_CREATED)
+def create_version(
+    template_id: str,
+    payload: dict,
+    current_user: dict = Depends(require_scope("prompts:admin")),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """基于当前模板内容创建新版本快照."""
+    try:
+        tid = int(template_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+    tpl = db.get(PromptTemplate, tid)
+    if not tpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+
+    content = (payload.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="content 不能为空")
+
+    # 计算新版本号
+    max_version = (
+        db.query(PromptVersion)
+        .filter(PromptVersion.prompt_id == tid)
+        .order_by(PromptVersion.version.desc())
+        .first()
+    )
+    next_version = (max_version.version + 1) if max_version else 1
+
+    # 把旧的活动版本置为非活动
+    if max_version and max_version.is_active_version:
+        max_version.is_active_version = False
+
+    v = PromptVersion(
+        prompt_id=tid,
+        version=next_version,
+        content=content,
+        variables=payload.get("variables"),
+        change_description=payload.get("change_description"),
+        created_by=current_user.get("user_id"),
+        is_active_version=True,
+    )
+    db.add(v)
+    # 同步更新模板当前内容
+    tpl.content = content
+    try:
+        db.commit()
+        db.refresh(v)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"创建版本失败: {exc}"
+        ) from exc
+
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": {
+            "id": str(v.id),
+            "version": v.version,
+            "content": v.content,
+            "change_description": v.change_description,
+            "is_active": bool(v.is_active_version),
+            "created_by": str(v.created_by) if v.created_by is not None else None,
+            "created_at": v.created_at.isoformat(sep=" ") if v.created_at else None,
+        },
+    }
+
+
+@router.post("/{template_id}/versions/{version}/rollback")
+def rollback_version(
+    template_id: str,
+    version: int,
+    current_user: dict = Depends(require_scope("prompts:admin")),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """回滚到指定版本：把该版本内容设为模板当前内容，并标记为活动版本."""
+    try:
+        tid = int(template_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+    tpl = db.get(PromptTemplate, tid)
+    if not tpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+
+    target = (
+        db.query(PromptVersion)
+        .filter(PromptVersion.prompt_id == tid, PromptVersion.version == version)
+        .first()
+    )
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"版本 v{version} 不存在",
+        )
+
+    # 取消其他活动版本
+    db.query(PromptVersion).filter(
+        PromptVersion.prompt_id == tid,
+        PromptVersion.is_active_version.is_(True),
+    ).update({PromptVersion.is_active_version: False})
+
+    target.is_active_version = True
+    tpl.content = target.content
+    try:
+        db.commit()
+        db.refresh(tpl)
+        db.refresh(target)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"回滚失败: {exc}"
+        ) from exc
+
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": {
+            "id": str(tpl.id),
+            "name": tpl.name,
+            "content": tpl.content,
+            "rolled_back_to": version,
+        },
+    }
+
+
+@router.get("/{template_id}/versions/{version}/diff")
+def diff_version(
+    template_id: str,
+    version: int,
+    current_user: dict = Depends(require_scope("prompts:admin")),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """对比指定版本与当前模板内容差异（逐行 diff）."""
+    import difflib
+
+    try:
+        tid = int(template_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+    tpl = db.get(PromptTemplate, tid)
+    if not tpl:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
+
+    target = (
+        db.query(PromptVersion)
+        .filter(PromptVersion.prompt_id == tid, PromptVersion.version == version)
+        .first()
+    )
+    if not target:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"版本 v{version} 不存在",
+        )
+
+    current_lines = (tpl.content or "").splitlines(keepends=True)
+    version_lines = (target.content or "").splitlines(keepends=True)
+    diff = "".join(
+        difflib.unified_diff(
+            version_lines,
+            current_lines,
+            fromfile=f"v{version}",
+            tofile="current",
+            lineterm="",
+        )
+    )
+
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": {
+            "version": version,
+            "version_content": target.content,
+            "current_content": tpl.content,
+            "diff": diff,
         },
     }
 

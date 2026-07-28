@@ -79,6 +79,14 @@ _EXTENSION_ROUTERS: list[tuple[str, str]] = [
     (".data_connections", "router"),
     # v1.1.0: 企业 SSO (OAuth 2.0 / OIDC)
     (".sso", "router"),
+    # 板块C：前端 404 页面后端补齐
+    (".api_keys", "router"),
+    (".reflections", "router"),
+    (".access_policies", "router"),
+    (".hitl", "router"),
+    (".eval", "router"),
+    (".prompt_ab_tests", "router"),
+    (".prompt_few_shot", "router"),
 ]
 
 

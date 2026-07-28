@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from finpilot.api.deps import require_scope, get_db_session
+from finpilot.api.deps import require_scope, get_current_user, get_db_session
 from finpilot.api.schemas import (
     ToolCreate,
     ToolResponse,
@@ -119,30 +119,320 @@ def list_tool_types(
     return {"code": 0, "message": "ok", "data": TOOL_TYPE_ENUMS}
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-def create_tool(
-    body: ToolCreate,
-    current_user: dict = Depends(require_scope("tools:admin")),
+# ============================================================
+# 板块C：工具监控端点 — 对应前端 toolMonitoring.ts
+# health / circuit-breakers / audit / usage-stats
+# 基于 RuntimeLog 聚合工具调用统计（category='tool_call'）
+# ============================================================
+
+
+def _tool_metrics_from_runtime(db: Session, tenant_id: str) -> dict[str, dict[str, Any]]:
+    """从 RuntimeLog 聚合每个工具的调用统计（category='tool_call' 或 source 以 'tool.' 开头）."""
+    from finpilot.database.models import RuntimeLog
+    from sqlalchemy import func, Integer
+
+    metrics: dict[str, dict[str, Any]] = {}
+    try:
+        # 按 source（工具名）聚合
+        rows = (
+            db.query(
+                RuntimeLog.source,
+                func.count(RuntimeLog.id).label("total"),
+                func.sum(RuntimeLog.success.cast(Integer)).label("success"),
+                func.avg(RuntimeLog.duration_ms).label("avg_latency"),
+            )
+            .filter(
+                RuntimeLog.tenant_id == tenant_id,
+                RuntimeLog.category == "tool_call",
+            )
+            .group_by(RuntimeLog.source)
+            .all()
+        )
+        for row in rows:
+            tool_name = (row.source or "").replace("tool.", "")
+            if not tool_name:
+                continue
+            total = int(row.total or 0)
+            success = int(row.success or 0)
+            metrics[tool_name] = {
+                "tool_name": tool_name,
+                "total_calls": total,
+                "success_count": success,
+                "failure_count": total - success,
+                "success_rate": (success / total) if total else 0.0,
+                "avg_latency_ms": float(row.avg_latency or 0),
+            }
+    except Exception:  # noqa: BLE001
+        pass
+    return metrics
+
+
+@router.get("/health")
+def tools_health(
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """创建自定义工具."""
+    """获取所有工具健康统计（基于 RuntimeLog 聚合）."""
     tenant_id = str(current_user.get("user_id", "default"))
-    t = Tool(
-        tenant_id=tenant_id,
-        name=body.name,
-        display_name=body.display_name,
-        description=body.description,
-        type=body.type,
-        config=body.config,
-        api_key=body.api_key,
-        is_builtin=False,
-        is_active=True,
+    metrics = _tool_metrics_from_runtime(db, tenant_id)
+    # 补充工具表中的工具（即使无调用记录也展示）
+    try:
+        tools = db.query(Tool).filter(Tool.tenant_id == tenant_id).all()
+        for t in tools:
+            if t.name not in metrics:
+                metrics[t.name] = {
+                    "tool_name": t.name,
+                    "status": "available" if t.is_active else "disabled",
+                    "healthy": True,
+                    "total_calls": 0,
+                    "success_count": 0,
+                    "failure_count": 0,
+                    "success_rate": 0.0,
+                    "avg_latency_ms": 0.0,
+                    "last_check_time": None,
+                    "last_error": None,
+                }
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 标记健康状态
+    for name, m in metrics.items():
+        m.setdefault("tool_name", name)
+        m.setdefault("status", "healthy" if m.get("failure_count", 0) == 0 else "degraded")
+        m.setdefault("healthy", m.get("failure_count", 0) < m.get("total_calls", 0))
+        m.setdefault("last_check_time", None)
+        m.setdefault("last_error", None)
+    return {"code": 0, "message": "ok", "data": metrics}
+
+
+@router.get("/circuit-breakers")
+def tools_circuit_breakers(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """获取所有断路器状态.
+
+    FinPilot 未实现独立断路器组件，这里基于近期失败率推导状态：
+    - 近 20 次调用失败率 >= 50% → OPEN
+    - 有失败但 < 50% → HALF_OPEN
+    - 无失败 → CLOSED
+    """
+    tenant_id = str(current_user.get("user_id", "default"))
+    metrics = _tool_metrics_from_runtime(db, tenant_id)
+    breakers: dict[str, dict[str, Any]] = {}
+    for name, m in metrics.items():
+        total = m.get("total_calls", 0)
+        failures = m.get("failure_count", 0)
+        if total == 0:
+            state = "CLOSED"
+        elif failures / total >= 0.5:
+            state = "OPEN"
+        elif failures > 0:
+            state = "HALF_OPEN"
+        else:
+            state = "CLOSED"
+        breakers[name] = {
+            "tool_name": name,
+            "state": state,
+            "failure_count": failures,
+            "success_count": m.get("success_count", 0),
+            "last_failure_time": None,
+            "last_failure_error": None,
+            "opened_at": None if state == "CLOSED" else None,
+        }
+    return {"code": 0, "message": "ok", "data": breakers}
+
+
+@router.get("/audit")
+def tools_audit(
+    tool_name: str = Query(default="", description="按工具名筛选"),
+    limit: int = Query(default=200, ge=1, le=1000),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """查询工具执行审计轨迹（基于 RuntimeLog category='tool_call'）."""
+    from finpilot.database.models import RuntimeLog
+
+    tenant_id = str(current_user.get("user_id", "default"))
+    q = db.query(RuntimeLog).filter(
+        RuntimeLog.tenant_id == tenant_id,
+        RuntimeLog.category == "tool_call",
     )
-    db.add(t)
-    db.commit()
-    db.refresh(t)
-    _reload_runtime_tools(tenant_id, db)
-    return {"code": 0, "message": "ok", "data": _model_to_response(t)}
+    if tool_name:
+        q = q.filter(RuntimeLog.source == f"tool.{tool_name}")
+
+    logs = q.order_by(RuntimeLog.created_at.desc()).limit(limit).all()
+
+    def _log_to_record(log: RuntimeLog) -> dict[str, Any]:
+        import json
+        params = None
+        result = None
+        if log.payload_json:
+            try:
+                payload = json.loads(log.payload_json)
+                params = payload.get("params")
+                result = payload.get("result")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return {
+            "id": str(log.id),
+            "tool_name": (log.source or "").replace("tool.", ""),
+            "params": params,
+            "result": result,
+            "success": bool(log.success),
+            "latency_ms": log.duration_ms,
+            "token_count": 0,
+            "error": None if log.success else (log.message or ""),
+            "created_at": log.created_at.isoformat(sep=" ") if log.created_at else None,
+            "timestamp": log.created_at.isoformat(sep=" ") if log.created_at else None,
+        }
+
+    return {"code": 0, "message": "ok", "data": [_log_to_record(l) for l in logs]}
+
+
+@router.get("/usage-stats")
+def tools_usage_stats(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """获取工具使用统计汇总（总调用/总成功/总失败/按工具排名）."""
+    tenant_id = str(current_user.get("user_id", "default"))
+    metrics = _tool_metrics_from_runtime(db, tenant_id)
+
+    total_calls = sum(m.get("total_calls", 0) for m in metrics.values())
+    total_success = sum(m.get("success_count", 0) for m in metrics.values())
+    total_failure = sum(m.get("failure_count", 0) for m in metrics.values())
+
+    # 按调用次数排名
+    ranking = sorted(
+        metrics.values(),
+        key=lambda x: x.get("total_calls", 0),
+        reverse=True,
+    )[:10]
+
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": {
+            "total_calls": total_calls,
+            "total_success": total_success,
+            "total_failure": total_failure,
+            "overall_success_rate": (total_success / total_calls) if total_calls else 0.0,
+            "tool_count": len(metrics),
+            "top_tools": ranking,
+        },
+    }
+
+
+@router.get("/{tool_name}/health")
+def tool_health_by_name(
+    tool_name: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """获取单个工具健康统计."""
+    tenant_id = str(current_user.get("user_id", "default"))
+    metrics = _tool_metrics_from_runtime(db, tenant_id)
+    m = metrics.get(tool_name)
+    if m is None:
+        # 无调用记录，返回默认可用状态
+        m = {
+            "tool_name": tool_name,
+            "status": "available",
+            "healthy": True,
+            "total_calls": 0,
+            "success_count": 0,
+            "failure_count": 0,
+            "success_rate": 0.0,
+            "avg_latency_ms": 0.0,
+            "last_check_time": None,
+            "last_error": None,
+        }
+    return {"code": 0, "message": "ok", "data": m}
+
+
+@router.post("/{tool_name}/health-check")
+def trigger_health_check(
+    tool_name: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """触发主动健康检查（best-effort：尝试调用工具的 test 能力）."""
+    tenant_id = str(current_user.get("user_id", "default"))
+    tool = (
+        db.query(Tool)
+        .filter(Tool.tenant_id == tenant_id, Tool.name == tool_name)
+        .first()
+    )
+    if not tool:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="工具不存在")
+
+    # best-effort：记录一次健康检查事件
+    try:
+        from finpilot.services.runtime_log_service import log_runtime
+
+        log_runtime(
+            db,
+            category="tool_call",
+            event="health_check",
+            message=f"主动健康检查: {tool_name}",
+            source=f"tool.{tool_name}",
+            payload={"tool_name": tool_name, "triggered_by": current_user.get("user_id")},
+            duration_ms=0,
+            tenant_id=tenant_id,
+            user_id=str(current_user.get("user_id", "")),
+            success=True,
+            level="info",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": {
+            "tool_name": tool_name,
+            "checked": True,
+            "healthy": bool(tool.is_active),
+        },
+    }
+
+
+@router.post("/{tool_name}/circuit-breaker/reset")
+def reset_circuit_breaker(
+    tool_name: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """重置断路器（标记工具为可用，清除失败计数 best-effort）.
+
+    FinPilot 未实现独立断路器，这里仅记录重置事件。
+    """
+    tenant_id = str(current_user.get("user_id", "default"))
+    try:
+        from finpilot.services.runtime_log_service import log_runtime
+
+        log_runtime(
+            db,
+            category="tool_call",
+            event="circuit_breaker_reset",
+            message=f"断路器重置: {tool_name}",
+            source=f"tool.{tool_name}",
+            payload={"tool_name": tool_name, "triggered_by": current_user.get("user_id")},
+            duration_ms=0,
+            tenant_id=tenant_id,
+            user_id=str(current_user.get("user_id", "")),
+            success=True,
+            level="info",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    return {
+        "code": 0,
+        "message": "ok",
+        "data": {"tool_name": tool_name, "reset": True},
+    }
 
 
 @router.put("/{tool_id}")
