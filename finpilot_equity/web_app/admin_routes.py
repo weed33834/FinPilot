@@ -1,6 +1,7 @@
 """
 Admin API routes for viewing users and request logs
 """
+import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from .database.connection import SessionLocal
@@ -18,27 +19,31 @@ def get_db():
 
 
 def require_admin(request: Request):
-    """Simple admin check - in production, use proper role-based auth"""
-    # For now, just check if user is logged in
-    # You can add admin role check here later
+    """管理员校验 —— 校验登录态后再按 FINPILOT_ADMIN_EMAILS 校验管理员身份。
+
+    与 web_app/main.py 的管理员端点保持一致：admin 邮箱通过环境变量
+    FINPILOT_ADMIN_EMAILS（逗号分隔，默认 admin@finpilot.ai）配置。
+    此前为残桩实现（仅校验登录，admin 角色校验被注释掉），存在越权风险；
+    板块E（冗余统一/admin 角色校验一致）补齐强校验。
+    """
     session_id = request.cookies.get("session_id")
     if not session_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     db = SessionLocal()
     try:
         session = crud.get_session(db, session_id)
         if not session:
             raise HTTPException(status_code=401, detail="Invalid session")
-        
+
         user = crud.get_user_by_id(db, session.user_id)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        
-        # Add admin check here if needed
-        # if user.email not in ADMIN_EMAILS:
-        #     raise HTTPException(status_code=403, detail="Admin access required")
-        
+
+        admin_emails = [e.strip() for e in os.getenv("FINPILOT_ADMIN_EMAILS", "admin@finpilot.ai").split(",")]
+        if user.email not in admin_emails:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
         return user
     finally:
         db.close()

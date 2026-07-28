@@ -1,27 +1,10 @@
-import axios from 'axios'
-import { useAuthStore } from '../stores/authStore'
+import { api } from './client'
 
-/** 管理后台专用 API 客户端 — 与主 API 客户端统一使用环境变量配置 baseURL */
-export const adminApi = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 30000,
-  withCredentials: true,
-})
-
-adminApi.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      const url = error.config?.url || ''
-      const safe401Urls = ['/auth/login', '/auth/verify-2fa', '/auth/change-password', '/auth/oauth/', '/auth/me']
-      const isSafe = safe401Urls.some((u) => {
-        if (u.endsWith('/')) return url.includes(u)
-        return url.endsWith(u)
-      })
-      if (!isSafe) {
-        useAuthStore.getState().unauthorize()
-      }
-    }
-    return Promise.reject(error)
-  },
-)
+/**
+ * 管理后台专用 API 客户端 — 复用主 API 客户端（client.ts）的同一 axios 实例与拦截器。
+ *
+ * 板块E（冗余统一）：此前本文件与 client.ts 各自 create 了一份配置完全相同的 axios
+ * 实例与 401 拦截器，属重复代码。现统一为同一实例，adminApi 仅为语义别名，
+ * 消费方（admin 页面与 api/* 封装模块）无需改动。
+ */
+export const adminApi = api

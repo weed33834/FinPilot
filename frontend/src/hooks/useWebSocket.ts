@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * ------------
  * 通用 WebSocket Hook，支持自动连接、指数退避重连、心跳、消息队列与连接状态追踪。
  *
- * 后端协议（见 backend/app/services/websocket_service.py）：
+ * 后端协议：
  *  - 连接时通过 query 参数 tenant_id 标识租户
  *  - 客户端发送 "ping"，服务端回复 "pong"（心跳）
  *  - 服务端推送 JSON：{ type, data, timestamp }

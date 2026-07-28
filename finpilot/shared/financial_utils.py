@@ -1,7 +1,7 @@
 """财务计算通用工具函数.
 
 集中放置跨服务重复实现的辅助函数,消除 _safe_div / _safe_float / 统计函数
-在 financial_ratios / valuation_service / kpi_service / backtesting / factor_mining
+在 financial_ratios / valuation_service / backtesting / factor_mining
 等模块中的重复定义。
 """
 from __future__ import annotations

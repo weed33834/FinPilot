@@ -313,8 +313,7 @@ FinPilot AI
 ├── CODE_OF_CONDUCT.md        # 行为准则
 ├── Dockerfile                # 容器构建定义
 ├── setup.py                  # Python 包定义
-├── requirements.txt          # Python 依赖
-├── requirements-equity.txt   # Web 应用最小依赖
+├── requirements.txt          # Python 依赖（同时覆盖 finpilot/ 与 finpilot_equity/）
 └── README.md
 ```
 
