@@ -11,9 +11,12 @@ from .schema import (
     METRIC_TO_COLUMN,
     DERIVED_METRICS,
     build_schema_context,
+    reflect_db_schema,
+    invalidate_schema_cache,
     extract_year,
     extract_period,
 )
+from .rewrite import rewrite_query
 from .rule_engine import RuleBasedEngine
 from .llm_engine import LLMEngine
 
@@ -27,6 +30,9 @@ __all__ = [
     "METRIC_TO_COLUMN",
     "DERIVED_METRICS",
     "build_schema_context",
+    "reflect_db_schema",
+    "invalidate_schema_cache",
+    "rewrite_query",
     "extract_year",
     "extract_period",
 ]

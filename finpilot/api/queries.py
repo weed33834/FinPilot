@@ -150,6 +150,29 @@ def _audit_query(
         pass
 
 
+def _load_conversation_history(db: Session, conversation_id: Optional[int], limit: int = 6) -> list:
+    """板块F（多轮）：按会话加载最近 N 条消息作为 text2sql 上下文。
+
+    返回按时间正序排列的消息列表（role/content）。conversation_id 为空或加载失败时返回 []。
+    这些消息会经 NL2SQLEngine.generate_sql(history=...) → rewrite_query + LLM prompt 双注入，
+    使"那净利润呢"这类省略问句能结合上文生成正确 SQL。
+    """
+    if not conversation_id:
+        return []
+    try:
+        msgs = (
+            db.query(Message)
+            .filter(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        msgs.reverse()  # 转为时间正序
+        return msgs
+    except Exception:  # noqa: BLE001  历史加载失败不应阻断查询
+        return []
+
+
 @router.post("", response_model=QueryResponse)
 def execute_query(
     req: QueryRequest,
@@ -162,8 +185,10 @@ def execute_query(
     started = time.time()
 
     engine = NL2SQLEngine(db)
+    # 板块F（多轮）：按会话加载历史，传入 generate_sql 支撑省略问句重写与多轮生成
+    history = _load_conversation_history(db, req.conversation_id)
     # 生成一次拿到置信度，避免重复调用 LLM
-    gen = engine.generate_sql(req.question)
+    gen = engine.generate_sql(req.question, history=history)
     if not gen.sql:
         rec_id = _persist_query_record(
             db,
@@ -295,7 +320,9 @@ def execute_query_wrapped(
     user_id = str(current_user["user_id"])
     started = time.time()
     engine = NL2SQLEngine(db)
-    gen = engine.generate_sql(req.question)
+    # 板块F（多轮）：按会话加载历史
+    history = _load_conversation_history(db, req.conversation_id)
+    gen = engine.generate_sql(req.question, history=history)
 
     # 无法生成 SQL
     if not gen.sql:

@@ -16,6 +16,7 @@ from finpilot.llm.client import LLMUnavailableError
 
 from .schema import FINANCIAL_TABLES, build_schema_context
 from .sandbox import SQLSandbox
+from .rewrite import rewrite_query
 
 
 @dataclass
@@ -45,23 +46,33 @@ class NL2SQLEngine:
         # 沙箱使用财务表白名单
         self.sandbox = SQLSandbox(list(FINANCIAL_TABLES.keys()))
 
-    def generate_sql(self, question: str) -> NL2SQLResult:
-        """规则引擎优先；confidence>0.5 直接返回，否则走 LLM；LLM 失败回退规则结果"""
-        rule_result = self.rule_engine.generate_sql(question)
+    def generate_sql(self, question: str, history: Optional[list] = None) -> NL2SQLResult:
+        """规则引擎优先；confidence>0.5 直接返回，否则走 LLM；LLM 失败回退规则结果。
+
+        板块F（多轮）：history 非空时，先用 rewrite_query 把省略问题重写为自包含问题，
+        再喂给规则引擎 / LLM；LLM 路径同时把 history 注入 prompt。LLM 不可用时 rewrite 降级为原问题。
+        """
+        # 多轮：基于历史重写当前问题（LLM 不可用/无历史时原样返回）
+        resolved = rewrite_query(question, history, db=self.db) if history else question
+
+        rule_result = self.rule_engine.generate_sql(resolved)
         if rule_result.confidence > 0.5:
             return rule_result
 
-        # 规则引擎无法匹配，走 LLM
-        llm_result = self.llm_engine.generate_sql(question, db=self.db)
+        # 规则引擎无法匹配，走 LLM（带 history）
+        llm_result = self.llm_engine.generate_sql(resolved, db=self.db, history=history)
         if llm_result.confidence > 0:
             return llm_result
 
         # LLM 失败时返回规则引擎结果（即便 confidence=0）
         return rule_result
 
-    def execute(self, question: str, db: Session) -> dict:
-        """生成 SQL -> 沙箱 prepare -> 执行，返回 {sql, rows, columns, explanation}"""
-        result = self.generate_sql(question)
+    def execute(self, question: str, db: Session, history: Optional[list] = None) -> dict:
+        """生成 SQL -> 沙箱 prepare -> 执行，返回 {sql, rows, columns, explanation}
+
+        板块F：支持多轮，history 经 rewrite_query + LLM prompt 双路径注入。
+        """
+        result = self.generate_sql(question, history=history)
         if not result.sql:
             return {
                 "sql": "",
@@ -97,6 +108,7 @@ class NL2SQLEngine:
         failed_sql: str,
         error: str,
         db: Optional[Session] = None,
+        history: Optional[list] = None,
     ) -> NL2SQLResult:
         """SQL 自修复：回灌错误信息让 LLM 修正"""
         client = _get_client(db)
@@ -106,8 +118,16 @@ class NL2SQLEngine:
                 explanation="LLM不可用，无法修复", error="LLM不可用",
             )
 
+        # 板块F：用 db 绑定 engine 反射 schema
+        schema_engine = None
+        if db is not None:
+            try:
+                schema_engine = db.get_bind()
+            except Exception:  # noqa: BLE001
+                schema_engine = None
+
         system_prompt = (
-            build_schema_context()
+            build_schema_context(schema_engine)
             + "\n\n你是 SQL 专家。根据执行错误信息修复下面的 SQL，"
             "只输出修复后的纯 SQL，不要任何解释或 markdown 代码块。"
         )

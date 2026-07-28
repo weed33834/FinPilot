@@ -32,8 +32,9 @@ def nl2sql(ctx: ToolContext, **kwargs: Any) -> dict:
         # 无数据库会话无法执行 SQL，返回错误供上层降级/回灌
         return {"error": "无数据库会话，无法执行 SQL"}
     # 双引擎：规则优先，LLM 兜底；execute 内部完成生成+沙箱+执行
+    # 板块F：传入 ctx.history，支持多轮查询（rewrite + LLM prompt 双注入）
     engine = NL2SQLEngine(ctx.db)
-    return engine.execute(question, ctx.db)
+    return engine.execute(question, ctx.db, history=ctx.history)
 
 
 @tool_registry.register(

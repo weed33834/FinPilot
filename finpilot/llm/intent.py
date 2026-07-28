@@ -68,7 +68,11 @@ def _match_rule(question: str) -> tuple[Optional[str], str]:
 
 
 def _classify_by_llm(question: str, history: Optional[list], db) -> Optional[dict]:
-    """调用 LLM 进行意图分类，失败时返回 None 触发降级"""
+    """调用 LLM 进行意图分类，失败时返回 None 触发降级
+
+    板块F（多轮意图重路由）：把会话历史拼进 user_prompt，使分类器在多轮场景下
+    能结合上文判断意图（如"那净利润呢"应判为 nl2sql 而非 unknown）。
+    """
     try:
         config = get_default_config(db)
         if config is None:
@@ -78,9 +82,26 @@ def _classify_by_llm(question: str, history: Optional[list], db) -> Optional[dic
             "你是意图分类器。将用户问题分类为以下意图之一："
             "nl2sql(数据查询), create_report(生成报告), "
             "parse_document(解析文档), document_qa(文档问答), unknown(无法判断)。"
+            "结合对话历史判断当前问题的真实意图（当前问题可能省略或含指代）。"
             '仅输出 JSON：{"intent": "...", "reasoning": "..."}'
         )
-        user_prompt = f"问题：{question}"
+        if history:
+            history_lines = []
+            for item in history[-6:]:
+                role = ""
+                content = ""
+                if isinstance(item, dict):
+                    role = str(item.get("role") or "user")
+                    content = str(item.get("content") or item.get("question") or item.get("answer") or "")
+                else:
+                    role = str(getattr(item, "role", "user") or "user")
+                    content = str(getattr(item, "content", "") or "")
+                if content.strip():
+                    history_lines.append(f"{role}: {content.strip()}")
+            history_text = "\n".join(history_lines)
+            user_prompt = f"对话历史:\n{history_text}\n\n当前问题：{question}"
+        else:
+            user_prompt = f"问题：{question}"
         raw = client.chat(system_prompt, user_prompt, temperature=0.0, max_tokens=200)
         return _parse_llm_intent(raw)
     except LLMUnavailableError as exc:
@@ -121,7 +142,8 @@ def extract_parameters(
 
     # 仅在需要结构化参数的意图下尝试 LLM 增强（带降级）
     if db is not None and intent in ("create_report", "nl2sql"):
-        llm_params = _extract_by_llm(question, intent, db)
+        # 板块F：把历史传入，让 LLM 抽取时能补全上文中的年份/公司等参数
+        llm_params = _extract_by_llm(question, intent, db, history)
         if llm_params is not None:
             # LLM 结果覆盖规则结果中为空的字段
             for key, value in llm_params.items():
@@ -168,8 +190,11 @@ def _extract_by_rule(question: str, intent: str) -> dict:
     return params
 
 
-def _extract_by_llm(question: str, intent: str, db) -> Optional[dict]:
-    """调用 LLM 抽取参数，失败返回 None 触发降级"""
+def _extract_by_llm(question: str, intent: str, db, history: Optional[list] = None) -> Optional[dict]:
+    """调用 LLM 抽取参数，失败返回 None 触发降级
+
+    板块F：history 非空时拼进 prompt，让 LLM 能从上文补全当前问题缺失的年份/公司等参数。
+    """
     try:
         config = get_default_config(db)
         if config is None:
@@ -179,9 +204,21 @@ def _extract_by_llm(question: str, intent: str, db) -> Optional[dict]:
             "你是参数抽取器。从用户问题中抽取以下字段，缺失填 null："
             "title(报告标题), report_type(balance_sheet/income_statement/cash_flow), "
             "year(4位年份), period(如 2024-Q1), document_id(文档ID)。"
-            "仅输出 JSON。"
+            "若当前问题省略，可结合对话历史补全。仅输出 JSON。"
         )
-        raw = client.chat(system_prompt, question, temperature=0.0, max_tokens=300)
+        if history:
+            history_lines = []
+            for item in history[-6:]:
+                if isinstance(item, dict):
+                    content = str(item.get("content") or item.get("question") or item.get("answer") or "")
+                else:
+                    content = str(getattr(item, "content", "") or "")
+                if content.strip():
+                    history_lines.append(content.strip())
+            user_prompt = f"对话历史:\n{chr(10).join(history_lines)}\n\n当前问题：{question}"
+        else:
+            user_prompt = question
+        raw = client.chat(system_prompt, user_prompt, temperature=0.0, max_tokens=300)
         return _parse_llm_params(raw)
     except LLMUnavailableError as exc:
         # LLM 不可用时降级为规则结果
