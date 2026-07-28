@@ -133,8 +133,11 @@ class LlmModel(Base):
         return f"<LlmModel(id={self.id}, model_name='{self.model_name}', tier='{self.tier}')>"
 
 
-class FinancialReport(Base):
-    """财务报表表 - 资产负债表/利润表/现金流量表等"""
+class FinancialReport(Base, TenantMixin):
+    """财务报表表 - 资产负债表/利润表/现金流量表等.
+
+    document_id 溯源到用户上传的文档，使 text2sql 查询结果与上传内容挂钩。
+    """
     __tablename__ = "financial_reports"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -145,10 +148,13 @@ class FinancialReport(Base):
     period: Mapped[Optional[str]] = mapped_column(String(50))  # 如 2024-Q1 / 2024-FY
     # data_json 存储报表的原始 JSON 数据，便于灵活扩展
     data_json: Mapped[Optional[str]] = mapped_column(Text)
+    # 溯源到上传文档（文档解析抽取结构化报表时写入）
+    document_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # 关系
     accounts = relationship("FinancialAccount", back_populates="report", cascade="all, delete-orphan")
+    document = relationship("Document", backref="financial_reports")
 
     def __repr__(self) -> str:
         return f"<FinancialReport(id={self.id}, name='{self.report_name}', type='{self.report_type}')>"
@@ -179,10 +185,18 @@ class Report(Base, TenantMixin):
     # 状态: draft/processing/reviewing/approved/rejected/failed
     status: Mapped[str] = mapped_column(String(32), default="processing")
     error_message: Mapped[Optional[str]] = mapped_column(Text)
-    # 关联模板 ID（可选）
-    template_id: Mapped[Optional[str]] = mapped_column(String(64))
+    # 溯源：报告基于哪些文档/数据连接/模板生成
+    document_id: Mapped[Optional[int]] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"), index=True)
+    data_connection_id: Mapped[Optional[int]] = mapped_column(ForeignKey("data_connections.id", ondelete="SET NULL"), index=True)
+    template_id: Mapped[Optional[int]] = mapped_column(ForeignKey("report_templates.id", ondelete="SET NULL"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    # 关系
+    document = relationship("Document", foreign_keys=[document_id])
+    data_connection = relationship("DataConnection", foreign_keys=[data_connection_id])
+    template = relationship("ReportTemplate", foreign_keys=[template_id])
+    approvals = relationship("Approval", back_populates="report", cascade="all, delete-orphan")
 
 
 class FinancialAccount(Base):
@@ -213,11 +227,14 @@ class Conversation(Base, TenantMixin):
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     title: Mapped[Optional[str]] = mapped_column(String(500))    # 是否归档：前端 ConversationsPage 按此分桶（active/archived）
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # 绑定的 Agent 配置（运行时按此配置实例化 agent）
+    agent_config_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agent_configs.id", ondelete="SET NULL"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
 
     # 关系
     user = relationship("User", back_populates="conversations")
+    agent_config = relationship("AgentConfig", backref="conversations")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
@@ -225,13 +242,23 @@ class Conversation(Base, TenantMixin):
 
 
 class Message(Base):
-    """消息表 - 会话中的单条消息"""
+    """消息表 - 会话中的单条消息.
+
+    扩展 LLM 运行时元数据（model_name/tokens/latency/tool_calls），
+    用于会话维度的成本聚合与调用追溯。
+    """
     __tablename__ = "messages"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"))
     role: Mapped[str] = mapped_column(String(20))  # user/assistant/system
     content: Mapped[str] = mapped_column(Text)
+    # LLM 运行时元数据（仅 assistant 消息填充）
+    model_name: Mapped[Optional[str]] = mapped_column(String(200))
+    tokens_in: Mapped[Optional[int]] = mapped_column(Integer)
+    tokens_out: Mapped[Optional[int]] = mapped_column(Integer)
+    latency_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    tool_calls: Mapped[Optional[str]] = mapped_column(Text)  # JSON 数组：调用的工具列表
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # 关系
@@ -246,11 +273,17 @@ class AuditLog(Base, TenantMixin):
 
     落库内容经 PII 脱敏，不存明文敏感信息。用于合规追溯、注入攻击取证、
     调用量统计。tenant_id / user_id 缺失时记为 None / 匿名。
+
+    target_object_type/target_object_id 支持结构化关联业务对象
+    （report/document/query/subscription/user 等），便于按对象反查审计历史。
     """
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_target", "target_object_type", "target_object_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    # 事件类型：llm_call / injection_blocked / login / policy_denied 等
+    # 事件类型：llm_call / injection_blocked / login / document_upload / report_create / approval / query_exec 等
     action: Mapped[str] = mapped_column(String(50), index=True)
     user_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     # 结果：ok / blocked / error
@@ -259,6 +292,13 @@ class AuditLog(Base, TenantMixin):
     detail: Mapped[Optional[str]] = mapped_column(Text)
     # 结构化元数据 JSON（模型名、耗时、威胁分等）
     meta_json: Mapped[Optional[str]] = mapped_column(Text)
+    # 业务对象关联（结构化）：report / document / query / subscription / user / agent_config / data_connection 等
+    target_object_type: Mapped[Optional[str]] = mapped_column(String(32))
+    target_object_id: Mapped[Optional[str]] = mapped_column(String(64))
+    # 操作资源描述（前端 audit.ts 期望的 resource 字段）
+    resource: Mapped[Optional[str]] = mapped_column(String(255))
+    # 来源 IP
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
     def __repr__(self) -> str:
@@ -363,8 +403,8 @@ class ReportSubscription(Base, TenantMixin):
     is_active: Mapped[str] = mapped_column(String(1), default="Y")
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # 上次执行时间
     next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)  # 下次执行时间
-    # 上次生成的报告 ID（源端外键 reports.id 已移除：reports 表在 FinPilot 中不存在）
-    last_report_id: Mapped[Optional[str]] = mapped_column(String(64))
+    # 上次生成的报告 ID（FK 到 reports）
+    last_report_id: Mapped[Optional[int]] = mapped_column(ForeignKey("reports.id", ondelete="SET NULL"))
     last_error: Mapped[Optional[str]] = mapped_column(Text)  # 上次执行错误信息
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
@@ -672,6 +712,9 @@ class Account(Base, TenantMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    # 关系：科目下的日记账分录
+    journal_entries = relationship("JournalEntry", back_populates="account")
+
     def __repr__(self) -> str:
         return f"<Account(id={self.id}, code='{self.code}', name='{self.name}')>"
 
@@ -693,6 +736,9 @@ class JournalEntry(Base, TenantMixin):
     reference: Mapped[Optional[str]] = mapped_column(String(128))  # 凭证编号
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # 关系
+    account = relationship("Account", back_populates="journal_entries")
 
     def __repr__(self) -> str:
         return (f"<JournalEntry(id={self.id}, date='{self.entry_date}', "
@@ -1020,4 +1066,93 @@ class SearchEngine(Base):
         return (
             f"<SearchEngine(id={self.id}, name='{self.name}', "
             f"type='{self.engine_type}', active={self.is_active})>"
+        )
+
+
+# ============================================================
+# 因果链条修复：独立审批表 + text2sql 查询记录
+# ============================================================
+
+
+class Approval(Base, TenantMixin):
+    """审批记录表 — 独立于 Report.status 的结构化审批历史.
+
+    每次审批动作（approve/reject/request_changes）落一条记录，
+    持久化审批人身份、意见、时间，支持完整审批历史追溯。
+    target_object_type 扩展支持 report/budget/data_connection 等多业务对象。
+    """
+    __tablename__ = "approvals"
+    __table_args__ = (
+        Index("ix_approvals_tenant_target", "tenant_id", "target_object_type", "target_object_id"),
+        Index("ix_approvals_tenant_action", "tenant_id", "action"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 审批对象类型：report / budget / data_connection / agent_config 等
+    target_object_type: Mapped[str] = mapped_column(String(32), default="report")
+    # 审批对象 ID（多数情况为 report.id）
+    target_object_id: Mapped[int] = mapped_column(Integer, index=True)
+    # 反向关联 Report（target_object_type='report' 时使用）
+    report_id: Mapped[Optional[int]] = mapped_column(ForeignKey("reports.id", ondelete="CASCADE"), index=True)
+    # 审批人
+    reviewer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    reviewer_name: Mapped[Optional[str]] = mapped_column(String(100))
+    # 审批动作：approve / reject / request_changes
+    action: Mapped[str] = mapped_column(String(32))
+    # 审批意见
+    comments: Mapped[Optional[str]] = mapped_column(Text)
+    # 审批前状态 → 审批后状态
+    prev_status: Mapped[Optional[str]] = mapped_column(String(32))
+    new_status: Mapped[Optional[str]] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # 关系
+    report = relationship("Report", back_populates="approvals")
+
+    def __repr__(self) -> str:
+        return (
+            f"<Approval(id={self.id}, target='{self.target_object_type}:"
+            f"{self.target_object_id}', action='{self.action}')>"
+        )
+
+
+class QueryRecord(Base, TenantMixin):
+    """text2sql 查询记录表 — 持久化每次自然语言查询的全链路上下文.
+
+    保存 question/sql/rows/confidence/engine，支持查询回放、失败统计、
+    审计追溯。与 RuntimeLog 互补：RuntimeLog 记运行事件，本表记业务查询语义。
+    """
+    __tablename__ = "query_records"
+    __table_args__ = (
+        Index("ix_query_records_tenant_created", "tenant_id", "created_at"),
+        Index("ix_query_records_tenant_conv", "tenant_id", "conversation_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    conversation_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), index=True)
+    # 用户自然语言问题
+    question: Mapped[str] = mapped_column(Text)
+    # 识别的意图
+    intent: Mapped[Optional[str]] = mapped_column(String(64))
+    # 生成的 SQL
+    sql_text: Mapped[Optional[str]] = mapped_column(Text)
+    # 执行引擎：rule / llm
+    engine: Mapped[Optional[str]] = mapped_column(String(16))
+    # 规则引擎置信度
+    confidence: Mapped[Optional[float]] = mapped_column(Float)
+    # 执行结果（JSON 序列化，截断到合理大小）
+    rows_json: Mapped[Optional[str]] = mapped_column(Text)
+    row_count: Mapped[int] = mapped_column(Integer, default=0)
+    # 执行状态：success / failed / blocked
+    status: Mapped[str] = mapped_column(String(16), default="success")
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    # 耗时（毫秒）
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<QueryRecord(id={self.id}, status='{self.status}', "
+            f"rows={self.row_count})>"
         )
