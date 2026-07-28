@@ -105,6 +105,8 @@ class LlmProvider(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # 板块D：补齐前端 ModelConfigItem 期望的更新时间字段
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
 
     # 关系：删除供应商时级联删除其下模型
     models = relationship("LlmModel", back_populates="provider", cascade="all, delete-orphan")
@@ -125,6 +127,8 @@ class LlmModel(Base):
     # 性能层级：low/medium/high，用于按需路由模型
     tier: Mapped[str] = mapped_column(String(20), default="medium")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 板块D：补齐前端 ModelConfigItem 期望的 parameters 字段（temperature/max_tokens/top_p）
+    parameters: Mapped[Optional[dict]] = mapped_column(JSON)
 
     # 关系
     provider = relationship("LlmProvider", back_populates="models")
@@ -1009,10 +1013,19 @@ class AgentConfig(Base, TenantMixin):
     name: Mapped[str] = mapped_column(String(128))                  # Agent 名称
     display_name: Mapped[str] = mapped_column(String(128))          # 展示名称
     description: Mapped[Optional[str]] = mapped_column(Text)       # 描述
+    # 板块D：补齐前端 AgentConfigItem 期望的字段（此前硬编码导致配置丢失）
+    # 智能体类型：react / plan_execute / debate
+    agent_type: Mapped[str] = mapped_column(String(32), default="react")
+    # 关联的提示词模板 ID（可空，与 system_prompt 二选一或叠加）
+    prompt_id: Mapped[Optional[int]] = mapped_column(ForeignKey("prompt_templates.id", ondelete="SET NULL"))
     # 绑定的 LLM 模型 ID
     model_id: Mapped[Optional[int]] = mapped_column(ForeignKey("llm_models.id", ondelete="SET NULL"))
     # 系统提示词
     system_prompt: Mapped[Optional[str]] = mapped_column(Text)
+    # ReAct 最大迭代轮数
+    max_iterations: Mapped[int] = mapped_column(Integer, default=10)
+    # 采样温度
+    temperature: Mapped[float] = mapped_column(Float, default=0.7)
     # 关联的工具 ID 列表（JSON 数组）
     tool_ids: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     # 关联的技能 ID 列表（JSON 数组）
@@ -1021,6 +1034,9 @@ class AgentConfig(Base, TenantMixin):
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    # 关系
+    prompt_template = relationship("PromptTemplate", foreign_keys=[prompt_id])
 
     def __repr__(self) -> str:
         return f"<AgentConfig(id={self.id}, name='{self.name}', active={self.is_active})>"
@@ -1058,13 +1074,16 @@ class ModelConfig(Base, TenantMixin):
         )
 
 
-class SearchEngine(Base):
+class SearchEngine(Base, TenantMixin):
     """搜索引擎配置 — 管理后台 Dashboard 中展示的搜索引擎配置项。
 
     管理 Agent 可用的外部搜索服务（自定义搜索、Web 搜索等），支持多种搜索引擎
     后端（Google/Bing/自定义 API），统一管理 API Key 和搜索参数。
     """
     __tablename__ = "search_engines"
+    __table_args__ = (
+        Index("ix_search_engines_tenant_active", "tenant_id", "is_active"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128))                  # 引擎名称
@@ -1074,6 +1093,11 @@ class SearchEngine(Base):
     max_results: Mapped[int] = mapped_column(Integer, default=10)   # 单次搜索最大结果数
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 板块D：补齐前端 SearchEngineItem 期望的字段（此前硬编码导致配置丢失）
+    # 额外参数 JSON：{cx, region, safe_search, ...} + 动态键值对
+    extra_params: Mapped[Optional[dict]] = mapped_column(JSON)
+    # 优先级（数字越小越优先）
+    priority: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
 
@@ -1341,3 +1365,63 @@ class ReflectionLog(Base, TenantMixin):
             f"<ReflectionLog(id={self.id}, type='{self.exception_type}', "
             f"category='{self.error_category}', resolved={self.resolved})>"
         )
+
+
+# ============================================================
+# 板块D 新增模型：占位功能补全 —— 长期记忆 + 系统设置持久化.
+#
+# - Memory:        长期记忆条目（上下文管理页 MemoriesPanel）
+# - SystemSetting: 系统设置键值存储（系统设置页 SystemSettings）
+# ============================================================
+
+
+class Memory(Base, TenantMixin):
+    """长期记忆条目 — 跨会话持久化的用户偏好 / 事实 / 指令 / 摘要.
+
+    category: preference / fact / instruction / summary / other
+    importance: 0-10，前端按 ≥8/≥5/其他 分高/中/低徽章
+    source_conversation_id: 记忆来源会话（可空）
+    """
+    __tablename__ = "memories"
+    __table_args__ = (
+        Index("ix_memories_tenant_user", "tenant_id", "user_id"),
+        Index("ix_memories_tenant_category", "tenant_id", "category"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    category: Mapped[Optional[str]] = mapped_column(String(32), default="other")
+    content: Mapped[str] = mapped_column(Text)
+    importance: Mapped[Optional[int]] = mapped_column(Integer, default=5)
+    source_conversation_id: Mapped[Optional[str]] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now())
+
+    def __repr__(self) -> str:
+        return (
+            f"<Memory(id={self.id}, category='{self.category}', "
+            f"importance={self.importance})>"
+        )
+
+
+class SystemSetting(Base, TenantMixin):
+    """系统设置键值存储 — 对应前端 SystemSettingsData 扁平结构.
+
+    每个 key 对应 SystemSettingsData 的一个字段（system_name / log_level / ...），
+    value 以 JSON 编码存储（兼容字符串/数字/布尔）。GET 时聚合为扁平 dict，
+    缺失 key 用默认值补齐。
+    """
+    __tablename__ = "system_settings"
+    __table_args__ = (
+        Index("ix_system_settings_tenant_key", "tenant_id", "key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(64))
+    # JSON 编码的值（字符串/数字/布尔/null）
+    value: Mapped[Optional[str]] = mapped_column(Text)
+    updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=func.now(), server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<SystemSetting(key='{self.key}')>"
