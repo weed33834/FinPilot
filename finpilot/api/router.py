@@ -229,3 +229,24 @@ app.add_middleware(TenantMiddleware)
 
 configure_cors(app)
 app.include_router(create_router())
+
+
+# 启动订阅调度后台线程（可由 FINPILOT_SUBSCRIPTION_SCHEDULER=0 关闭）
+@app.on_event("startup")
+def _start_subscription_scheduler() -> None:
+    try:
+        from finpilot.services.subscription_scheduler import start_scheduler
+
+        start_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("subscription_scheduler_start_failed: %s", exc)
+
+
+@app.on_event("shutdown")
+def _stop_subscription_scheduler() -> None:
+    try:
+        from finpilot.services.subscription_scheduler import stop_scheduler
+
+        stop_scheduler()
+    except Exception:  # noqa: BLE001
+        pass

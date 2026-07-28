@@ -48,6 +48,10 @@ def log_action(
     user: Any = None,
     reason: str | None = None,
     commit: bool = False,
+    target_object_type: str | None = None,
+    target_object_id: str | None = None,
+    ip_address: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> None:
     """记录一条审计日志（best-effort，永不抛错）.
 
@@ -59,6 +63,9 @@ def log_action(
         user: 触发者，可为 dict / User ORM / None.
         reason: 附带说明（如 ``subscription=42``）.
         commit: 是否在记录后 ``db.commit()`` 当前事务.
+        target_object_type / target_object_id: 业务对象关联（结构化）.
+        ip_address: 来源 IP.
+        meta: 结构化元数据。
     """
     try:
         from finpilot.security.audit import record_event
@@ -77,6 +84,11 @@ def log_action(
             status="ok",
             tenant_id=tenant_id,
             user_id=user_id,
+            meta=meta,
+            target_object_type=target_object_type,
+            target_object_id=str(target_object_id) if target_object_id is not None else None,
+            resource=resource,
+            ip_address=ip_address,
         )
     except Exception as exc:  # noqa: BLE001
         # 审计失败不能阻断主业务，降级为本地日志

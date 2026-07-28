@@ -1,7 +1,16 @@
-"""订阅调度器：扫描到期订阅并逐个执行."""
+"""订阅调度器：扫描到期订阅并逐个执行.
+
+提供 ``run_due_subscriptions``（单轮扫描）和 ``start_scheduler``（后台线程定期扫描）。
+``start_scheduler`` 在 app 启动时调用，默认每 600s 扫描一次到期订阅。
+可通过环境变量 ``FINPILOT_SUBSCRIPTION_INTERVAL`` 调整间隔，
+``FINPILOT_SUBSCRIPTION_SCHEDULER=0`` 关闭调度器。
+"""
 
 from __future__ import annotations
 
+import logging
+import os
+import threading
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
@@ -11,6 +20,13 @@ from sqlalchemy.orm import Session
 from finpilot.database.models import ReportSubscription
 from finpilot.services.subscription_crud import compute_next_run
 from finpilot.services.subscription_runner import run_subscription_once
+
+logger = logging.getLogger(__name__)
+
+# 调度器单例：避免重复启动多个后台线程
+_scheduler_thread: threading.Thread | None = None
+_scheduler_stop = threading.Event()
+_DEFAULT_INTERVAL = int(os.getenv("FINPILOT_SUBSCRIPTION_INTERVAL", "600"))
 
 
 def _set_tenant_session(db: Session, tenant_id: str | None) -> None:
@@ -109,3 +125,51 @@ def run_due_subscriptions(
             }
         )
     return results
+
+
+def _scheduler_loop(interval: int) -> None:
+    """后台调度循环：每 interval 秒扫描一次到期订阅。"""
+    from finpilot.database import SessionLocal
+
+    logger.info("subscription_scheduler_started interval=%ss", interval)
+    while not _scheduler_stop.wait(timeout=interval):
+        db = SessionLocal()
+        try:
+            results = run_due_subscriptions(db)
+            if results:
+                logger.info("subscription_scheduler_run executed=%d", len(results))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("subscription_scheduler_run_failed: %s", exc)
+        finally:
+            db.close()
+    logger.info("subscription_scheduler_stopped")
+
+
+def start_scheduler(interval: int | None = None) -> None:
+    """启动订阅调度后台线程（幂等，重复调用不会启动多个线程）。
+
+    通过环境变量 ``FINPILOT_SUBSCRIPTION_SCHEDULER=0`` 可关闭调度器，
+    便于在测试 / CI 环境中禁用后台线程。
+    """
+    global _scheduler_thread
+    if os.getenv("FINPILOT_SUBSCRIPTION_SCHEDULER", "1") in ("0", "false", "no", "off"):
+        logger.info("subscription_scheduler_disabled_by_env")
+        return
+    if _scheduler_thread is not None and _scheduler_thread.is_alive():
+        return
+    iv = interval or _DEFAULT_INTERVAL
+    _scheduler_stop.clear()
+    _scheduler_thread = threading.Thread(
+        target=_scheduler_loop, args=(iv,), name="finpilot-subscription-scheduler",
+        daemon=True,
+    )
+    _scheduler_thread.start()
+
+
+def stop_scheduler() -> None:
+    """停止订阅调度后台线程（主要用于测试 / 优雅关闭）。"""
+    global _scheduler_thread
+    _scheduler_stop.set()
+    if _scheduler_thread is not None:
+        _scheduler_thread.join(timeout=5)
+        _scheduler_thread = None

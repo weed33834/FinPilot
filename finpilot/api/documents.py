@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from finpilot.database import crud
+from finpilot.database.models import FinancialAccount, FinancialReport
 from finpilot.parser import ParserError, get_parser
 from finpilot.rag import RagService
 
@@ -37,6 +38,106 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 def _tenant_of(user: dict) -> str:
     """按用户生成租户 ID，用于文档隔离"""
     return f"user_{user['user_id']}"
+
+
+def _parse_number(value: str) -> float | None:
+    """尽力把表格单元格解析为数字；失败返回 None。"""
+    if value is None:
+        return None
+    s = str(value).strip().replace(",", "").replace("，", "")
+    if not s or s in {"-", "—", "nan", "None"}:
+        return None
+    # 去掉百分号、括号负数等常见格式
+    neg = False
+    if s.startswith("(") and s.endswith(")"):
+        neg = True
+        s = s[1:-1]
+    if s.endswith("%"):
+        s = s[:-1]
+    try:
+        num = float(s)
+        return -num if neg else num
+    except (TypeError, ValueError):
+        return None
+
+
+def _persist_tables(
+    db: Session,
+    *,
+    document_id: int,
+    tenant_id: str,
+    filename: str,
+    tables: list[list[list[str]]],
+) -> int:
+    """把解析出的表格结构化入库为 FinancialReport + FinancialAccount.
+
+    每张表（首行视为表头）落一条 FinancialReport（关联 document_id 溯源），
+    其每一数据行落一条 FinancialAccount：account_name=首列文本，
+    account_category=其他文本列，balance=首个可解析数值列。
+
+    返回成功入库的科目数（0 表示无可用结构化数据）。
+    """
+    if not tables:
+        return 0
+
+    base_name = os.path.splitext(filename)[0]
+    accounts_count = 0
+
+    for idx, table in enumerate(tables, start=1):
+        # 至少需要表头 + 1 行数据
+        if not table or len(table) < 2:
+            continue
+        header = [str(c or "").strip() for c in table[0]]
+        if not any(header):
+            continue
+
+        report = FinancialReport(
+            tenant_id=tenant_id,
+            report_name=f"{base_name} - 表{idx}",
+            report_type="auto_extracted",
+            period=None,
+            data_json=None,
+            document_id=document_id,
+        )
+        db.add(report)
+        db.flush()  # 拿到 report.id
+
+        for row in table[1:]:
+            cells = [str(c or "").strip() for c in row]
+            if not any(cells):
+                continue
+            account_name = cells[0] if cells[0] else (header[0] or f"行{idx}")
+            # 首个可解析数值列作为 balance
+            balance: float | None = None
+            for cell in cells[1:]:
+                balance = _parse_number(cell)
+                if balance is not None:
+                    break
+            # 其余文本列拼为 account_category
+            text_cols = [
+                cells[i]
+                for i in range(1, len(cells))
+                if i < len(header) and cells[i] and _parse_number(cells[i]) is None
+            ]
+            account_category = " / ".join(text_cols[:2]) if text_cols else None
+
+            db.add(
+                FinancialAccount(
+                    report_id=report.id,
+                    account_name=account_name,
+                    account_category=account_category,
+                    balance=balance if balance is not None else 0.0,
+                    debit_amount=0.0,
+                    credit_amount=0.0,
+                )
+            )
+            accounts_count += 1
+
+    if accounts_count:
+        db.commit()
+    else:
+        db.rollback()
+    return accounts_count
 
 
 @router.get("", response_model=list[DocumentResponse])
@@ -104,6 +205,10 @@ async def upload_document(
             tbls = getattr(p, "tables", None)
             if tbls:
                 tables_count += len(tbls)
+        # 顶层汇总表格（更可靠）
+        top_tables = getattr(parsed, "tables", []) or []
+        if top_tables:
+            tables_count = max(tables_count, len(top_tables))
     except ParserError as exc:
         parse_success = False
         parse_error = str(exc)
@@ -147,6 +252,21 @@ async def upload_document(
     crud.update_document_status(db, doc.id, "indexed")
     db.refresh(doc)
 
+    # 结构化入库：把解析出的表格落为 FinancialReport/FinancialAccount，
+    # 建立文档→结构化报表→text2sql 查询 的因果链条
+    structured_accounts = 0
+    structured_error = ""
+    try:
+        structured_accounts = _persist_tables(
+            db,
+            document_id=doc.id,
+            tenant_id=tenant_id,
+            filename=file.filename or saved_name,
+            tables=top_tables,
+        )
+    except Exception as exc:  # noqa: BLE001
+        structured_error = str(exc)
+
     # best-effort 埋点：解析成功
     try:
         from finpilot.services.runtime_log_service import log_runtime
@@ -163,6 +283,8 @@ async def upload_document(
                 "file_size": len(content),
                 "pages": pages_count,
                 "tables": tables_count,
+                "structured_accounts": structured_accounts,
+                "structured_error": structured_error or None,
                 "document_id": str(doc.id),
             },
             duration_ms=int((_time.time() - started_at) * 1000),
@@ -170,6 +292,30 @@ async def upload_document(
             user_id=str(current_user["user_id"]),
             success=parse_success,
             level="info",
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 审计埋点：文档上传 + 结构化入库结果
+    try:
+        from finpilot.services.audit_service import log_action
+
+        log_action(
+            db,
+            action="document_upload",
+            resource=f"document:{doc.id}",
+            user=current_user,
+            reason=f"上传文件 {file.filename or saved_name}",
+            commit=False,
+            target_object_type="document",
+            target_object_id=str(doc.id),
+            meta={
+                "filename": file.filename or saved_name,
+                "file_type": ext.lstrip(".").lower(),
+                "pages": pages_count,
+                "tables": tables_count,
+                "structured_accounts": structured_accounts,
+            },
         )
     except Exception:  # noqa: BLE001
         pass

@@ -581,34 +581,64 @@ def toggle_agent_config(
 @agent_configs_router.post("/{_id}/test")
 def test_agent_config(
     _id: str,
+    payload: dict | None = None,
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(require_admin),
 ):
-    """测试 Agent 配置 —— 返回模拟测试结果（不真实调用 LLM）。"""
+    """测试 Agent 配置 —— 真实调用 run_agent 验证配置是否生效。
+
+    payload: { message?: string }  缺省用「你好，请简要介绍你能做什么」。
+    返回真实运行结果（answer/thinking/耗时），LLM 不可用时降级为规则回复。
+    """
     cfg = _get_agent_config_or_404(db, _id, _tenant_of(current_user))
+    message = ((payload or {}).get("message") or "").strip() or "你好，请简要介绍你能做什么"
     start = time.perf_counter()
-    # 模拟测试：校验配置完整性并返回稳定结果
-    issues = []
+
+    # 配置完整性预检（缺 system_prompt + model_id 仍允许运行，但给出提示）
+    warnings = []
     if not cfg.system_prompt:
-        issues.append("缺少系统提示词")
+        warnings.append("缺少系统提示词，将使用默认 ReAct 提示词")
     if cfg.model_id is None:
-        issues.append("未绑定 LLM 模型")
-    latency_ms = int((time.perf_counter() - start) * 1000) + 42
-    if issues:
+        warnings.append("未绑定 LLM 模型，将使用默认档位路由")
+
+    try:
+        from finpilot.agent import run_agent
+
+        tenant_id = _tenant_of(current_user)
+        result = run_agent(
+            question=message,
+            tenant_id=tenant_id,
+            user_id=str(current_user.get("user_id")),
+            db=db,
+            conversation_id=None,
+            agent_config=cfg,
+        )
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        steps = result.get("steps") or []
+        thinking = steps[0].get("thought", "") if steps else None
+        answer = result.get("answer") or ""
+        success = bool(answer)
+        msg = f"Agent「{cfg.display_name or cfg.name}」运行"
+        if warnings:
+            msg += "（" + "；".join(warnings) + "）"
+        return _ok({
+            "success": success,
+            "message": msg,
+            "thinking": thinking,
+            "answer": answer,
+            "execution_time_ms": latency_ms,
+            "intent": result.get("intent"),
+            "confidence": result.get("confidence"),
+        })
+    except Exception as exc:  # noqa: BLE001
+        latency_ms = int((time.perf_counter() - start) * 1000)
         return _ok({
             "success": False,
-            "message": "配置不完整：" + "；".join(issues),
+            "message": f"运行失败: {exc}",
             "thinking": None,
             "answer": None,
             "execution_time_ms": latency_ms,
         })
-    return _ok({
-        "success": True,
-        "message": f"Agent「{cfg.display_name or cfg.name}」配置校验通过",
-        "thinking": f"已加载 {len(cfg.tool_ids or [])} 个工具 / {len(cfg.skill_ids or [])} 个技能",
-        "answer": f"模拟回复：Agent「{cfg.name}」运行正常（model_id={cfg.model_id}）",
-        "execution_time_ms": latency_ms,
-    })
 
 
 @agent_configs_router.post("/{_id}/duplicate")

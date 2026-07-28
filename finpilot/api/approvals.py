@@ -3,7 +3,7 @@
 
 响应统一包裹为 ``{code, message, data}`` 格式。
 
-- GET    /              列出审批历史记录
+- GET    /              列出审批历史记录（来自独立 approvals 表）
 - POST   /{id}/action   对报告执行审批动作（approve/reject/modify）
 
 前端 ApprovalsPage.tsx 期望：
@@ -11,11 +11,8 @@
   { id, report_id, reviewer_id, action, comments, created_at }
 - POST /approvals/{reportId}/action { action, comments? } 将报告状态推进
 
-由于 FinPilot 当前没有独立 approvals 表，审批记录复用 Report.status 字段：
-- approve   -> report.status = 'approved'
-- reject    -> report.status = 'rejected'
-- modify    -> report.status = 'draft'（退回修改）
-审批历史以「已审批过的报告」（status in approved/rejected）+ 当前 reviewing 为来源返回。
+因果链：每次审批动作落一条 Approval 记录（持久化审批人/意见/前后状态），
+同时推进 Report.status，建立 报告生成→审批→发布 的完整可追溯链条。
 """
 from __future__ import annotations
 
@@ -25,7 +22,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from finpilot.database.models import Report
+from finpilot.database.models import Approval, Report
 
 from .deps import get_db_session, require_admin
 
@@ -36,14 +33,13 @@ def _ok(data: Any, message: str = "success") -> dict:
     return {"code": 0, "message": message, "data": data}
 
 
-# 已完成审批的 report.status 取值
-_FINAL_STATUSES = ("approved", "rejected")
-# 审批动作 -> 目标状态
+# 审批动作 -> 目标 Report.status
 _ACTION_TO_STATUS = {
     "approve": "approved",
     "reject": "rejected",
-    "modify": "draft",
+    "modify": "draft",  # 退回修改
 }
+_ACTION_LABEL = {"approve": "通过", "reject": "驳回", "modify": "退回修改"}
 
 
 @router.get("")
@@ -55,11 +51,38 @@ def list_approvals(
     """列出审批历史记录。
 
     返回 ApprovalRecord[]，按 created_at 倒序。
-    来源：Report 表中 status 处于已审批状态（approved/rejected）的记录。
+    数据来源：独立 approvals 表（完整审批历史）。
+    若 approvals 表为空（旧数据），回退到 Report 表中 status in (approved/rejected)。
     """
     rows = (
+        db.query(Approval)
+        .order_by(Approval.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    if rows:
+        return _ok([
+            {
+                "id": str(r.id),
+                "report_id": str(r.target_object_id)
+                if r.target_object_type == "report" and r.report_id is None
+                else (str(r.report_id) if r.report_id is not None else ""),
+                "reviewer_id": str(r.reviewer_id) if r.reviewer_id is not None else "",
+                "reviewer_name": r.reviewer_name or "",
+                "action": r.action,
+                "comments": r.comments,
+                "prev_status": r.prev_status,
+                "new_status": r.new_status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ])
+
+    # 回退：旧数据从 Report 表推导
+    final_statuses = ("approved", "rejected")
+    reports = (
         db.query(Report)
-        .filter(Report.status.in_(_FINAL_STATUSES))
+        .filter(Report.status.in_(final_statuses))
         .order_by(Report.updated_at.desc().nullsfirst(), Report.created_at.desc())
         .limit(limit)
         .all()
@@ -69,14 +92,16 @@ def list_approvals(
             "id": str(r.id),
             "report_id": str(r.id),
             "reviewer_id": str(r.created_by) if r.created_by is not None else "",
-            # status 即审批结论：approved -> approve / rejected -> reject
+            "reviewer_name": "",
             "action": "approve" if r.status == "approved" else "reject",
             "comments": r.summary or None,
+            "prev_status": None,
+            "new_status": r.status,
             "created_at": (r.updated_at or r.created_at).isoformat()
             if (r.updated_at or r.created_at)
             else None,
         }
-        for r in rows
+        for r in reports
     ])
 
 
@@ -90,6 +115,11 @@ def approval_action(
     """对报告执行审批动作。
 
     payload: { action: 'approve'|'reject'|'modify', comments?: string }
+
+    实现：
+    1. 落一条 Approval 记录（审批人/意见/前后状态）
+    2. 推进 Report.status
+    3. 审计埋点
     """
     action = (payload.get("action") or "").strip().lower()
     if action not in _ACTION_TO_STATUS:
@@ -100,28 +130,112 @@ def approval_action(
     r = db.get(Report, report_id)
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="报告不存在")
-    if r.status not in ("reviewing", "draft", "approved", "rejected"):
-        # 兼容各种中间状态，都允许操作
-        pass
 
-    r.status = _ACTION_TO_STATUS[action]
+    prev_status = r.status
+    new_status = _ACTION_TO_STATUS[action]
     comments = (payload.get("comments") or "").strip()
+
+    reviewer_id = current_user.get("user_id")
+    reviewer_name = (
+        current_user.get("name")
+        or current_user.get("email")
+        or str(reviewer_id)
+        if reviewer_id is not None
+        else None
+    )
+
+    # 1. 落 Approval 记录
+    approval = Approval(
+        tenant_id=r.tenant_id,
+        target_object_type="report",
+        target_object_id=report_id,
+        report_id=report_id,
+        reviewer_id=reviewer_id,
+        reviewer_name=reviewer_name,
+        action=action,
+        comments=comments or None,
+        prev_status=prev_status,
+        new_status=new_status,
+    )
+    db.add(approval)
+
+    # 2. 推进 Report.status
+    r.status = new_status
     if comments:
-        # 把审批意见追加到 summary（无独立字段），保留原内容
-        prefix = r.summary + "\n\n" if r.summary else ""
+        prefix = (r.summary + "\n\n") if r.summary else ""
         r.summary = f"{prefix}[审批-{action}] {comments}"
     r.updated_at = datetime.utcnow()
+
     try:
         db.commit()
         db.refresh(r)
+        db.refresh(approval)
     except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"审批失败: {exc}"
         ) from exc
+
+    # 3. 审计埋点（best-effort）
+    try:
+        from finpilot.services.audit_service import log_action
+
+        log_action(
+            db,
+            action=f"report_{action}",
+            resource=f"report:{r.id}",
+            user=current_user,
+            reason=comments or f"报告审批 {action}",
+            commit=False,
+            target_object_type="report",
+            target_object_id=str(r.id),
+            meta={
+                "approval_id": approval.id,
+                "prev_status": prev_status,
+                "new_status": new_status,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     return _ok({
         "report_id": str(r.id),
+        "approval_id": str(approval.id),
         "status": r.status,
-        "reviewer_id": str(current_user.get("user_id", "")),
+        "reviewer_id": str(reviewer_id) if reviewer_id is not None else "",
+        "reviewer_name": reviewer_name or "",
         "action": action,
-    }, f"已{ {'approve': '通过', 'reject': '驳回', 'modify': '退回修改'}[action] }")
+        "prev_status": prev_status,
+        "new_status": new_status,
+    }, f"已{_ACTION_LABEL[action]}")
+
+
+@router.get("/{report_id}/history")
+def approval_history(
+    report_id: int,
+    db: Session = Depends(get_db_session),
+    _: dict = Depends(require_admin),
+):
+    """获取某报告的完整审批历史（按时间正序）。"""
+    r = db.get(Report, report_id)
+    if not r:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="报告不存在")
+    rows = (
+        db.query(Approval)
+        .filter(Approval.report_id == report_id)
+        .order_by(Approval.created_at.asc())
+        .all()
+    )
+    return _ok([
+        {
+            "id": str(a.id),
+            "reviewer_id": str(a.reviewer_id) if a.reviewer_id is not None else "",
+            "reviewer_name": a.reviewer_name or "",
+            "action": a.action,
+            "comments": a.comments,
+            "prev_status": a.prev_status,
+            "new_status": a.new_status,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in rows
+    ])

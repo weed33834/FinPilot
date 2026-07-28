@@ -133,6 +133,24 @@ def create_report(
     db.commit()
     db.refresh(report)
 
+    # 审计埋点：报告创建
+    try:
+        from finpilot.services.audit_service import log_action
+
+        log_action(
+            db,
+            action="report_create",
+            resource=f"report:{report.id}",
+            user=current_user,
+            reason=f"创建研报 {title}",
+            commit=False,
+            target_object_type="report",
+            target_object_id=str(report.id),
+            meta={"report_type": report_type, "template_id": payload.get("template_id")},
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     # 异步生成报告内容
     background_tasks.add_task(
         _generate_report_content,
@@ -204,6 +222,24 @@ def export_report(
 
     report.content_url = content_url
     db.commit()
+
+    # 审计埋点：报告导出
+    try:
+        from finpilot.services.audit_service import log_action
+
+        log_action(
+            db,
+            action="report_export",
+            resource=f"report:{report.id}",
+            user=current_user,
+            reason=f"导出研报 {report.title} ({format})",
+            commit=False,
+            target_object_type="report",
+            target_object_id=str(report.id),
+            meta={"format": format},
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return _ok({"content_url": content_url, "format": format})
 
 

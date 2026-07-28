@@ -58,6 +58,8 @@ class DocumentResponse(BaseModel):
 class QueryRequest(BaseModel):
     question: str
     deep: bool = False
+    # 可选：关联会话，便于查询历史按会话回放
+    conversation_id: Optional[int] = None
 
 
 class QueryResponse(BaseModel):

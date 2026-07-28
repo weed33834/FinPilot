@@ -303,6 +303,30 @@ def _tenant_of(user: dict) -> str:
     return f"user_{user['user_id']}"
 
 
+def _load_agent_config(db: Session, conversation_id: str | None) -> Any:
+    """从会话加载绑定的 AgentConfig（best-effort）。
+
+    因果链：管理员在后台配置 AgentConfig → 会话绑定 agent_config_id →
+    运行时读取该配置并注入 run_agent（覆盖 system_prompt / model_id）。
+    会话未绑定或配置已被禁用/删除时返回 None，回退到默认 ReAct 行为。
+    """
+    if not conversation_id:
+        return None
+    try:
+        conv = db.get(Conversation, int(conversation_id))
+        if not conv or conv.agent_config_id is None:
+            return None
+        from finpilot.database.models import AgentConfig
+
+        cfg = db.get(AgentConfig, conv.agent_config_id)
+        # 仅当配置存在且激活时才生效
+        if cfg is None or not getattr(cfg, "is_active", True):
+            return None
+        return cfg
+    except (ValueError, TypeError, Exception):  # noqa: BLE001
+        return None
+
+
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("20/minute", key_func=get_user_key)
 def chat(
@@ -332,6 +356,9 @@ def chat(
     # 把上传文件解析后注入问题上下文（best-effort，失败则用原问题）
     effective_question = _inject_file_context(req.question, getattr(req, "files", []) or [], tenant_id)
 
+    # 从会话加载绑定的 AgentConfig（若有），让管理员后台配置真正接入运行时
+    agent_config = _load_agent_config(db, conversation_id)
+
     # 运行智能体（内部按 thread_id 持久化 ReAct 状态）
     started_at = time.time()
     success = True
@@ -344,6 +371,7 @@ def chat(
             db=db,
             conversation_id=conversation_id,
             intent_question=req.question,  # 意图识别用原始问题，避免被注入上下文污染
+            agent_config=agent_config,
         )
     except Exception as exc:  # noqa: BLE001
         success = False

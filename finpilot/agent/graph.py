@@ -37,17 +37,21 @@ def build_agent(
     tenant_id: str = "default",
     user_id: str | None = None,
     db: Any = None,
+    agent_config: Any = None,
 ) -> Any:
     """构建 ReAct 智能体编译图。
 
-    通过闭包将 db/tenant_id/user_id 注入 agent 与 tools 节点。
+    通过闭包将 db/tenant_id/user_id/agent_config 注入 agent 与 tools 节点。
+    agent_config 为可选的 AgentConfig ORM 对象，传入时其 system_prompt / model_id
+    会覆盖默认 ReAct 提示词与模型档位路由（见 react_agent_node）。
     条件边 should_continue 返回 "tools" 或 "end"（"end" 路由到 finalize 终止节点）。
     """
     workflow = StateGraph(AgentState)
     workflow.add_node(
         "agent",
         lambda state: react_agent_node(
-            state, db=db, tenant_id=tenant_id, user_id=user_id
+            state, db=db, tenant_id=tenant_id, user_id=user_id,
+            agent_config=agent_config,
         ),
     )
     workflow.add_node(
@@ -83,6 +87,7 @@ def run_agent(
     conversation_id: str | None = None,
     history: list[Any] | None = None,
     intent_question: str | None = None,
+    agent_config: Any = None,
 ) -> dict[str, Any]:
     """一次性运行智能体并返回结果。
 
@@ -91,6 +96,8 @@ def run_agent(
         intent_question: 用于意图识别的原始问题；若为 None 则回退到 ``question``。
             分开传是因为注入的「# 上传文档上下文」会污染关键词规则，把
             document_qa 误判为 parse_document（参见 api/agent.py 的 _inject_file_context）。
+        agent_config: 可选的 AgentConfig ORM 对象。传入时其 system_prompt / model_id
+            会覆盖默认 ReAct 提示词与模型档位路由，让管理员后台配置真正生效。
 
     Returns:
         {"answer": str, "intent": str, "confidence": float,
@@ -123,7 +130,9 @@ def run_agent(
     }
 
     # 3. 编译并执行图；thread_id 驱动 MemorySaver 会话持久化
-    agent = build_agent(tenant_id=tenant_id, user_id=user_id, db=db)
+    agent = build_agent(
+        tenant_id=tenant_id, user_id=user_id, db=db, agent_config=agent_config
+    )
     thread_id = make_thread_id(tenant_id, conversation_id)
     config = {"configurable": {"thread_id": thread_id}}
     final_state = agent.invoke(initial_state, config=config)

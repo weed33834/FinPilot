@@ -30,16 +30,24 @@ def record_event(
     tenant_id: str | None = None,
     user_id: str | None = None,
     meta: dict[str, Any] | None = None,
+    target_object_type: str | None = None,
+    target_object_id: str | None = None,
+    resource: str | None = None,
+    ip_address: str | None = None,
 ) -> None:
     """Write one audit event (best-effort).
 
     Args:
-        action: event type, e.g. ``llm_call`` / ``injection_blocked``.
+        action: event type, e.g. ``llm_call`` / ``injection_blocked`` / ``document_upload``.
         detail: plaintext description; auto PII-masked before persisting.
         status: ``ok`` / ``blocked`` / ``error``.
         tenant_id / user_id: subject identifiers; None when missing.
         meta: structured metadata (model name, latency, threat score, ...),
             serialized to JSON.
+        target_object_type / target_object_id: 业务对象关联（report/document/query 等），
+            便于按对象反查审计历史。
+        resource: 操作资源描述（前端 audit.ts 期望的 resource 字段）。
+        ip_address: 来源 IP。
     """
     try:
         # Lazy import avoids a circular dependency with the database package and
@@ -60,6 +68,10 @@ def record_event(
                     user_id=user_id,
                     detail=masked,
                     meta_json=meta_json,
+                    target_object_type=target_object_type,
+                    target_object_id=target_object_id,
+                    resource=resource,
+                    ip_address=ip_address,
                 )
             )
             db.commit()

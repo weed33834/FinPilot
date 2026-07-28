@@ -283,3 +283,52 @@ def annotate_answer_with_confidence(
     unverified_list = "\n".join(f"  - {f}" for f in report.unverified_facts[:5])
     suffix = "建议人工核对上述数据后再采信。"
     return f"{prefix}\n{unverified_list}\n\n{answer}\n\n{suffix}"
+
+
+# ---------------------------------------------------------------------------
+# 5. 风险拦截 — 投资建议类回答合规化
+# ---------------------------------------------------------------------------
+
+# 触发风险拦截的关键词：包含投资建议 / 操作指令 / 价格预测等高风险语义
+_RISK_KEYWORDS = (
+    "买入", "卖出", "加仓", "减仓", "清仓", "满仓",
+    "目标价", "止损价", "止盈价",
+    "强烈推荐", "建议购买", "建议卖出",
+    "必涨", "必跌", "稳赚", "包赚",
+    "内幕消息", "内部消息",
+)
+_RISK_DISCLAIMER = (
+    "\n\n---\n⚠️ 风险提示：以上内容仅为基于数据的分析，不构成任何投资建议。"
+    "投资有风险，决策需谨慎，请结合自身风险承受能力独立判断。"
+)
+
+
+@dataclass
+class RiskGuardResult:
+    """风险拦截结果。"""
+    triggered: bool
+    matched_keywords: list[str]
+    new_answer: str
+    confidence_factor: float  # 触发时用于降低置信度的乘数
+
+
+def apply_risk_guard(answer: str) -> RiskGuardResult:
+    """对最终答案做风险拦截。
+
+    命中投资建议 / 价格预测类关键词时：
+    1. 在答案末尾追加风险免责声明；
+    2. 返回 confidence_factor=0.7 用于降低整体置信度，提示人工复核。
+
+    best-effort：纯文本扫描，不依赖 LLM / DB，任何异常都返回未触发。
+    """
+    if not answer:
+        return RiskGuardResult(False, [], answer, 1.0)
+    try:
+        matched = [kw for kw in _RISK_KEYWORDS if kw in answer]
+        if not matched:
+            return RiskGuardResult(False, [], answer, 1.0)
+        new_answer = answer.rstrip() + _RISK_DISCLAIMER
+        return RiskGuardResult(True, matched, new_answer, 0.7)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("risk_guard_failed: %s", exc)
+        return RiskGuardResult(False, [], answer, 1.0)

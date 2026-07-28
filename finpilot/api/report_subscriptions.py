@@ -188,13 +188,16 @@ def run_subscription_api(
             log_action(
                 db=db,
                 action="report_subscription.run",
-                resource=f"report_subscription://{sub.id}",
+                resource=f"report_subscription:{sub.id}",
                 user=current_user,
                 reason=f"report_id={outcome['report_id']}",
-                result="success",
+                commit=False,
+                target_object_type="report_subscription",
+                target_object_id=str(sub.id),
+                meta={"result": "success", "report_id": outcome["report_id"]},
             )
-        except ImportError:
-            logger.warning("audit_service_not_implemented")
+        except Exception:  # noqa: BLE001
+            logger.warning("audit_log_failed", subscription_id=sub.id)
         return {
             "code": 0,
             "message": "ok",
@@ -221,13 +224,16 @@ def run_subscription_api(
             log_action(
                 db=db,
                 action="report_subscription.run",
-                resource=f"report_subscription://{sub.id}",
+                resource=f"report_subscription:{sub.id}",
                 user=current_user,
                 reason="run_failed",
-                result="fail",
+                commit=False,
+                target_object_type="report_subscription",
+                target_object_id=str(sub.id),
+                meta={"result": "failed", "error": str(exc)},
             )
-        except ImportError:
-            logger.warning("audit_service_not_implemented")
+        except Exception:  # noqa: BLE001
+            logger.warning("audit_log_failed", subscription_id=sub.id)
         return {
             "code": 0,
             "message": "ok",

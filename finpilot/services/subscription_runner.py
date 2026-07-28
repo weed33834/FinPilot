@@ -1,28 +1,23 @@
 """订阅单次执行：生成报告 → 导出.
 
-FinPilot 内核尚未提供 ``finpilot.core.tenant_context`` / ``finpilot.reporting.generator``
-/ ``finpilot.services.export_service`` / ``finpilot.storage`` 等模块；本文件已把这些
-导入移到函数内部并加 best-effort fallback，使模块导入不再因缺失依赖而失败。
+原始实现依赖 ``finpilot.reporting.generator`` / ``finpilot.services.export_service``
+/ ``finpilot.storage`` / ``finpilot.core.tenant_context`` 等模块，但 FinPilot 内核
+并未提供这些模块，导致订阅执行必然失败（坏 import）。
 
-仅当真正调用 ``run_subscription_once`` 时才会触发对应 ImportError，并在那时以
-清晰错误信息提示；列表/查询接口不会受影响。
+本文件已重写为复用 ``finpilot.api.reports._generate_report_content`` 的生成逻辑
+（FinancialReport + FinancialAccount 聚合 + LLM 摘要），导出改为 data: URI 方式
+（与 reports.export_report 一致），使订阅执行链路真正打通。
 """
 
 from __future__ import annotations
 
+import urllib.parse
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-# Report ORM 在 FinPilot 中尚未定义（仅有 FinancialReport），导入时置 None，
-# 真正调用 run_subscription_once 时若仍为 None 则抛清晰错误。
-try:
-    from finpilot.database.models import Report
-except ImportError:  # pragma: no cover
-    Report = None  # type: ignore[assignment,misc]
-
-from finpilot.database.models import ReportSubscription
+from finpilot.database.models import Report, ReportSubscription
 from finpilot.services.audit_service import log_action
 from finpilot.services.subscription_crud import _resolve_creator
 
@@ -40,25 +35,31 @@ def _set_tenant_session(db: Session, tenant_id: str | None) -> None:
         return
 
 
-def _get_report_generator(db: Session):
-    """加载 ReportGenerator；缺失时抛清晰错误."""
-    from finpilot.reporting.generator import ReportGenerator  # noqa: PLC0415
+def _generate_report_content(report_id: int, tenant_id: str) -> None:
+    """复用 reports.py 的报告生成逻辑（同步执行）.
 
-    return ReportGenerator(db)
+    直接调用 finpilot.api.reports._generate_report_content，避免重复实现
+    FinancialReport/FinancialAccount 聚合 + LLM 摘要逻辑。
+    """
+    from finpilot.api.reports import _generate_report_content as _gen
 
-
-def _get_storage_client():
-    """加载 storage client；缺失时抛清晰错误."""
-    from finpilot.storage import get_storage_client  # noqa: PLC0415
-
-    return get_storage_client()
+    _gen(report_id=report_id, tenant_id=tenant_id)
 
 
-def _export_report(*, db, report, storage, user, fmt):
-    """调用 export_service；缺失时抛清晰错误."""
-    from finpilot.services.export_service import export_report  # noqa: PLC0415
-
-    return export_report(db=db, report=report, storage=storage, user=user, fmt=fmt)
+def _export_report_as_data_uri(report: Report) -> str:
+    """把报告内容序列化为 markdown data: URI（与 reports.export_report 一致）."""
+    content = report.content or {}
+    md_lines = [f"# {report.title}", ""]
+    if report.summary:
+        md_lines.append(f"**摘要**: {report.summary}")
+        md_lines.append("")
+    for section in content.get("sections", []):
+        md_lines.append(f"## {section.get('name', '')}")
+        md_lines.append(f"值: {section.get('value', 'N/A')}")
+        md_lines.append("")
+    md_text = "\n".join(md_lines)
+    encoded = urllib.parse.quote(md_text)
+    return f"data:text/markdown;charset=utf-8,{encoded}"
 
 
 def run_subscription_once(
@@ -68,20 +69,22 @@ def run_subscription_once(
 ) -> dict[str, Any]:
     """执行单次订阅：生成报告 → 导出。
 
-    报告生成失败抛 ``ReportGenerationError``（或 ImportError 当依赖缺失时）；导出
-    失败记入 warnings 不抛出。返回 ``{"report_id", "content_url", "warnings"}``。
+    流程：
+    1. 创建 Report 行（status=processing）并提交，拿到 report.id；
+    2. 调用 _generate_report_content 同步生成内容（聚合财务数据 + LLM 摘要），
+       生成失败时把 Report.status 置 failed 并抛出异常；
+    3. 导出为 data: URI 写入 Report.content_url（best-effort，失败记 warnings）；
+    4. 审计埋点 report_subscription.generate。
+
+    返回 ``{"report_id", "content_url", "warnings"}``。
     """
     if now is None:
         now = datetime.now(UTC)
 
     creator = _resolve_creator(db, sub)
 
-    # 事务段 1：生成报告
+    # 事务段 1：创建 Report 行
     _set_tenant_session(db, sub.tenant_id)
-    if Report is None:
-        raise RuntimeError(
-            "Report ORM 模型未定义，无法执行订阅；请在 finpilot.database.models 中补充 Report 表"
-        )
     report = Report(
         tenant_id=sub.tenant_id,
         created_by=sub.created_by,
@@ -90,43 +93,46 @@ def run_subscription_once(
         parameters=sub.parameters or {},
         status="processing",
     )
-
-    report_generator = _get_report_generator(db)
-    result = report_generator.generate(report)
-    report.content = result["content"]
-    report.summary = result["summary"]
-    report.status = "reviewing"
-
     db.add(report)
-    db.flush()
-
-    log_action(
-        db=db,
-        action="report_subscription.generate",
-        resource=f"report://{report.id}",
-        user=creator,
-        reason=f"subscription={sub.id}",
-        commit=False,
-    )
     db.commit()
     db.refresh(report)
 
+    # 事务段 2：生成报告内容（复用 reports.py 逻辑）
     warnings: list[str] = []
-    content_url: str | None = None
-
-    # 事务段 2：导出（失败不阻断主流程）
-    _set_tenant_session(db, sub.tenant_id)
     try:
-        content_url = _export_report(
-            db=db,
-            report=report,
-            storage=_get_storage_client(),
-            user=creator,
-            fmt=sub.export_format,
-        )
+        _generate_report_content(report.id, sub.tenant_id)
+        db.refresh(report)
+    except Exception as exc:  # noqa: BLE001
+        # 生成失败：标记 Report 失败并抛出，让 scheduler 记录 last_error
+        report.status = "failed"
+        report.error_message = str(exc)[:500]
+        db.commit()
+        raise RuntimeError(f"报告生成失败: {exc}") from exc
+
+    # 事务段 3：导出为 data: URI（best-effort）
+    try:
+        content_url = _export_report_as_data_uri(report)
+        report.content_url = content_url
         db.commit()
         db.refresh(report)
     except Exception as exc:  # noqa: BLE001
         warnings.append(f"导出失败: {exc}")
+        content_url = None
+
+    # 审计埋点
+    try:
+        log_action(
+            db=db,
+            action="report_subscription.generate",
+            resource=f"report:{report.id}",
+            user=creator,
+            reason=f"subscription={sub.id}",
+            commit=False,
+            target_object_type="report",
+            target_object_id=str(report.id),
+            meta={"subscription_id": sub.id, "report_type": sub.report_type},
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
     return {"report_id": report.id, "content_url": content_url, "warnings": warnings}

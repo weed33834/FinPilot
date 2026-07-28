@@ -30,6 +30,7 @@ from finpilot.parser import ParserError
 
 from .guardrails import (
     annotate_answer_with_confidence,
+    apply_risk_guard,
     check_hallucination,
     compress_context,
     detect_tool_loop,
@@ -302,6 +303,24 @@ def _resolve_llm_config(db: Any, tier: str, fallbacks: list[str]) -> Any:
         return None
 
 
+def _resolve_model_tier(db: Any, model_id: Any) -> str | None:
+    """按 AgentConfig.model_id 解析对应 LlmModel 的 tier。
+
+    用于让管理员通过 AgentConfig 指定运行模型档位。db 为空或查询失败返回 None，
+    调用方会回退到 ModelRouter 默认路由。
+    """
+    if db is None or model_id is None:
+        return None
+    try:
+        from finpilot.database.models import LlmModel
+
+        m = db.get(LlmModel, int(model_id))
+        return getattr(m, "tier", None) if m else None
+    except (SQLAlchemyError, ValueError, TypeError) as exc:
+        logger.warning("resolve_model_tier_failed: model_id=%s err=%s", model_id, exc)
+        return None
+
+
 def _map_intent_to_tool(
     intent: str, question: str, params: dict[str, Any]
 ) -> tuple[str, dict[str, Any]]:
@@ -511,8 +530,14 @@ def react_agent_node(
     db: Any = None,
     tenant_id: str = "default",
     user_id: str | None = None,
+    agent_config: Any = None,
 ) -> dict[str, Any]:
-    """LLM 推理节点：生成下一轮 Thought/Action/Action Input。"""
+    """LLM 推理节点：生成下一轮 Thought/Action/Action Input。
+
+    agent_config：可选的 AgentConfig ORM 对象。传入时：
+    - 用其 system_prompt 覆盖默认 ReAct 提示词（若非空）；
+    - 用其绑定的 LlmModel.tier 作为首选档位（fallback 仍走原路由）。
+    """
     question = state.get("question", "")
     intent = state.get("intent")
     steps = state.get("react_steps") or []
@@ -524,14 +549,45 @@ def react_agent_node(
         steps = compression.new_steps
         state = {**state, "react_steps": steps}
 
-    system_prompt = _REACT_SYSTEM_PROMPT.format(
-        tools=tool_registry.build_description(),
-        max_steps=MAX_REACT_STEPS,
-    )
+    if agent_config is not None and getattr(agent_config, "system_prompt", None):
+        # 允许管理员自定义系统提示词，但保留 ReAct 格式约束与工具描述
+        custom_intro = agent_config.system_prompt.strip()
+        system_prompt = (
+            f"{custom_intro}\n\n"
+            f"可用工具：\n{tool_registry.build_description()}\n\n"
+            "请严格按以下格式输出，不要输出任何额外内容：\n"
+            "Thought: <你对问题的思考与推理>\n"
+            "Action: <工具名称，或 FinalAnswer 表示给出最终答案>\n"
+            "Action Input: <工具参数的 JSON，或最终答案文本>\n\n"
+            "当你已获得足够信息可以直接回答用户时，使用：\n"
+            "Thought: <推理>\n"
+            "Action: FinalAnswer\n"
+            "Action Input: <最终答案>\n\n"
+            "规则：\n"
+            "- 每次只调用一个工具。\n"
+            "- 调用工具时 Action Input 必须是合法 JSON（如 {\"question\": \"...\"}），"
+            "给出最终答案时为纯文本。\n"
+            "- 不要自行编造 Observation，工具结果将由系统在下轮提供。\n"
+            f"- 最多进行 {MAX_REACT_STEPS} 轮工具调用，之后必须给出 FinalAnswer。\n"
+        )
+    else:
+        system_prompt = _REACT_SYSTEM_PROMPT.format(
+            tools=tool_registry.build_description(),
+            max_steps=MAX_REACT_STEPS,
+        )
 
-    # 按问题复杂度路由模型档位
+    # 按问题复杂度路由模型档位；若 agent_config 绑定模型，优先用其 tier
     decision = ModelRouter().route(question, intent=intent)
-    config = _resolve_llm_config(db, decision.tier, decision.fallback_tiers)
+    if agent_config is not None and getattr(agent_config, "model_id", None):
+        preferred_tier = _resolve_model_tier(db, agent_config.model_id)
+        if preferred_tier:
+            config = _resolve_llm_config(
+                db, preferred_tier, [decision.tier] + decision.fallback_tiers
+            )
+        else:
+            config = _resolve_llm_config(db, decision.tier, decision.fallback_tiers)
+    else:
+        config = _resolve_llm_config(db, decision.tier, decision.fallback_tiers)
     if config is None:
         # LLM 配置不可用 → 规则降级
         return _degrade_to_rule(state, db, tenant_id, user_id, "LLM 配置不可用")
@@ -745,6 +801,19 @@ def react_finalize_node(state: AgentState) -> dict[str, Any]:
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning("hallucination_check_failed: %s", exc)
+
+        # 风险拦截：命中投资建议类关键词时追加免责声明并降低置信度
+        try:
+            risk_guard = apply_risk_guard(answer)
+            if risk_guard.triggered:
+                answer = risk_guard.new_answer
+                confidence = round(confidence * risk_guard.confidence_factor, 2)
+                logger.info(
+                    "guardrails_risk: triggered keywords=%s",
+                    risk_guard.matched_keywords,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("risk_guard_failed: %s", exc)
         return {"answer": answer, "confidence": confidence}
     if error:
         return {"answer": f"处理失败：{error}", "confidence": confidence}
