@@ -75,6 +75,52 @@ def create_notification(
     return n
 
 
+def notify_user(
+    db: Session,
+    user_id: str,
+    channel: str,
+    title: str,
+    content: Optional[str] = None,
+    tenant_id: Optional[str] = None,
+    ws_push: bool = True,
+) -> Notification:
+    """业务模块推送通知的便捷入口：先落 DB 再 WebSocket 实时推送。
+
+    ``user_id`` 须为 ``user_{id}`` 格式（与 ``_user_id_of`` / ``tenant_of`` 一致），
+    同时也是 ``ConnectionManager`` 的连接分组键。WebSocket 推送为 best-effort：
+    跨线程 / 无事件循环场景会自动降级，失败不影响 DB 写入。
+
+    调用方示例::
+
+        notify_user(db, f"user_{report.created_by}", "report",
+                    "报告生成完成", f"《{report.title}》已就绪")
+    """
+    n = create_notification(
+        db,
+        user_id=user_id,
+        channel=channel,
+        title=title,
+        content=content,
+        tenant_id=tenant_id,
+    )
+
+    if ws_push:
+        # 局部导入避免在 notifications 模块加载时强依赖 websocket（避免循环导入）
+        try:
+            from .websocket import manager
+
+            manager.send_to_user_sync(user_id, {
+                "type": "notification",
+                "data": _serialize(n),
+                "timestamp": (
+                    n.created_at.isoformat() if n.created_at else None
+                ),
+            })
+        except Exception:  # noqa: BLE001  WS 推送失败不影响通知主流程
+            pass
+    return n
+
+
 @router.get("")
 def list_notifications(
     page: int = Query(1, ge=1),

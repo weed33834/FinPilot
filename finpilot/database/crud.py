@@ -1,11 +1,13 @@
 """
 基础 CRUD 操作 - 文档、用户、会话、LLM配置
-API key 使用 base64 简单编解码（减少依赖，非强加密）。
+API key 使用 Fernet (AES) 对称加密存储（见 finpilot.core.crypto），
+旧 base64 数据可平滑迁移：decode_api_key 自动回退解码。
 """
-import base64
 from typing import Optional
 
 from sqlalchemy.orm import Session
+
+from finpilot.core.crypto import decrypt as _crypto_decrypt, encrypt as _crypto_encrypt
 
 from .models import (
     User,
@@ -17,15 +19,15 @@ from .models import (
 )
 
 
-# ---------- API Key base64 编解码工具 ----------
+# ---------- API Key 加密工具（Fernet AES，向后兼容 base64）----------
 def encode_api_key(raw_key: str) -> str:
-    """使用 base64 对明文 API key 做简单编码后存储"""
-    return base64.b64encode(raw_key.encode("utf-8")).decode("utf-8")
+    """加密明文 API key 后存储（Fernet AES-128-CBC + HMAC）。"""
+    return _crypto_encrypt(raw_key)
 
 
 def decode_api_key(encoded_key: str) -> str:
-    """解码 base64 编码的 API key"""
-    return base64.b64decode(encoded_key.encode("utf-8")).decode("utf-8")
+    """解密 API key；旧 base64 数据自动回退解码（平滑迁移）。"""
+    return _crypto_decrypt(encoded_key)
 
 
 # ---------- 文档 CRUD ----------

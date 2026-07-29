@@ -68,6 +68,14 @@ configure_middleware(app)
 # 挂载 /api/v1 路由
 app.include_router(create_router())
 
+# WebSocket 实时通知端点：与 finpilot.api.router.app 入口对齐，
+# 双入口下 /ws/notifications 均可达（此前 web_app 入口下 404）。
+try:
+    from finpilot.api.websocket import router as websocket_router
+    app.include_router(websocket_router)
+except Exception as exc:  # noqa: BLE001
+    logger.warning("websocket_router 加载失败: %s", exc)
+
 # Auth Models
 class LoginRequest(BaseModel):
     email: str

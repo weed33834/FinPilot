@@ -197,9 +197,14 @@ def configure_middleware(app: FastAPI) -> None:
             except Exception:  # noqa: BLE001
                 pass
 
-    # 设置 lifespan（若 app 已有 lifespan 则跳过，避免覆盖）
-    if app.router.lifespan_context is None:
-        app.router.lifespan = _lifespan
+    # 设置 lifespan：赋值 ``app.router.lifespan_context``。
+    # Starlette 1.3+ 中 ``Router.lifespan`` 是 ASGI lifespan 处理 *方法*
+    # (self, scope, receive, send)，实际逻辑存于 ``lifespan_context``（一个接受 app
+    # 返回异步上下文管理器的可调用对象）。此前用 ``app.router.lifespan = _lifespan``
+    # 会覆盖该方法导致 ``TypeError: takes 1 positional argument but 3 were given``；
+    # 而更早的 ``if lifespan_context is None`` 守卫因默认非 None 永不成立，
+    # 致使订阅调度线程与 MCP 工具启动注册静默失效。现直接赋值 lifespan_context 修复。
+    app.router.lifespan_context = _lifespan
 
     # Rate Limiting
     app.state.limiter = limiter
@@ -310,3 +315,12 @@ setup_logging()
 app = FastAPI(title="FinPilot AI", version="1.0.0")
 configure_middleware(app)
 app.include_router(create_router())
+
+# WebSocket 实时通知端点：直接挂载在 app 上（不带 /api/v1 前缀），
+# 与前端 useWebSocket.ts 默认 URL `/ws/notifications` 对齐。
+try:
+    from .websocket import router as websocket_router
+
+    app.include_router(websocket_router)
+except Exception as exc:  # noqa: BLE001
+    logger.warning("websocket_router 加载失败: %s", exc)

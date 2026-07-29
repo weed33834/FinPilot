@@ -25,7 +25,22 @@ from finpilot.core.logging import get_logger
 logger = get_logger(__name__)
 
 # ── 共享 Limiter 实例 ──
-try:
+# 注意：Limiter(...) 构造时不会实际连接 Redis（仅存 storage_uri），
+# 故 try/except 包裹构造无法捕获连接失败——Redis 宕机时所有限流端点会 500。
+# 这里在构造前做一次真实同步 ping 探测：不通则降级 memory://。
+def _probe_redis(url: str) -> bool:
+    """同步探测 Redis 是否可达（短超时），避免限流器落入不可用后端。"""
+    try:
+        import redis  # sync client
+        client = redis.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+        client.ping()
+        client.close()
+        return True
+    except Exception:
+        return False
+
+
+if _probe_redis(settings.redis_url):
     limiter = Limiter(
         key_func=get_remote_address,
         storage_uri=settings.redis_url,
@@ -34,8 +49,11 @@ try:
         headers_enabled=True,
     )
     logger.info("slowapi Limiter 已连接 Redis: %s", settings.redis_url)
-except Exception:
-    logger.warning("slowapi Limiter 无法连接 Redis，降级为内存模式（进程重启后重置）")
+else:
+    logger.warning(
+        "slowapi Limiter Redis 不可达 (%s)，降级为内存模式（进程重启后重置）",
+        settings.redis_url,
+    )
     limiter = Limiter(
         key_func=get_remote_address,
         storage_uri="memory://",

@@ -110,6 +110,13 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _apply_schema_patches()
+    # 安装租户自动过滤事件（此前从未调用，导致 current_tenant_id ContextVar 形同虚设）。
+    # 过滤器将当前租户 ID 注入查询 execution_options，作为端点手动 filter 之外的防御层。
+    try:
+        from finpilot.database.tenant_filter import install_tenant_filter
+        install_tenant_filter(engine)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("tenant_filter 安装失败: %s", exc)
     logger.info("数据库已初始化：%s", DATABASE_PATH)
 
 

@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from finpilot.core.crypto import decrypt as crypto_decrypt, encrypt as crypto_encrypt
 from finpilot.core.logging import get_logger
 from finpilot.core.session import session_store
 from finpilot.database import crud
@@ -137,7 +138,7 @@ async def login(
     if not user or not user.password_hash:
         await _record_login_failure(email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误")
-    if not verify_password(req.password, user.password_hash):
+    if not verify_password(req.password, user.password_hash)[0]:
         await _record_login_failure(email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误")
 
@@ -292,7 +293,7 @@ async def two_fa_verify(
     if not totp.verify(code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码错误")
 
-    user.totp_secret = secret
+    user.totp_secret = crypto_encrypt(secret)
     user.totp_enabled = True
     db.commit()
 
@@ -327,10 +328,12 @@ async def two_fa_disable(
 
     # 二选一验证：密码 或 TOTP 码
     if password:
-        if not verify_password(password, user.password_hash or ""):
+        # verify_password 返回 (ok, new_hash) 元组，不可直接当布尔用
+        ok, _ = verify_password(password, user.password_hash or "")
+        if not ok:
             raise HTTPException(status_code=400, detail="密码错误")
     elif totp_code:
-        totp = pyotp.TOTP(user.totp_secret)
+        totp = pyotp.TOTP(crypto_decrypt(user.totp_secret))
         if not totp.verify(totp_code):
             raise HTTPException(status_code=400, detail="验证码错误")
     else:
@@ -382,7 +385,7 @@ async def verify_2fa(
     if not user.totp_enabled or not user.totp_secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 未启用")
 
-    totp = pyotp.TOTP(user.totp_secret)
+    totp = pyotp.TOTP(crypto_decrypt(user.totp_secret))
     if not totp.verify(code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码错误")
 
@@ -404,7 +407,7 @@ async def change_password(
     if not current_password or not new_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="参数缺失")
     user = crud.get_user_by_email(db, current_user.get("email", ""))
-    if not user or not verify_password(current_password, user.password_hash):
+    if not user or not verify_password(current_password, user.password_hash or "")[0]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="当前密码错误")
     user.password_hash = hash_password(new_password)
     db.commit()

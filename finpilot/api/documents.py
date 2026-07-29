@@ -353,6 +353,25 @@ async def upload_document(
         )
     except Exception:  # noqa: BLE001
         pass
+
+    # 通知上传人：文档解析+索引完成（best-effort，DB 写入 + WebSocket 推送）
+    try:
+        from .notifications import _user_id_of, notify_user
+
+        notify_user(
+            db,
+            _user_id_of(current_user),
+            channel="document",
+            title="文档处理完成",
+            content=(
+                f"《{file.filename or saved_name}》已解析并索引"
+                f"（{pages_count} 页 / {tables_count} 表 / "
+                f"{structured_accounts} 科目）"
+            ),
+            tenant_id=tenant_id,
+        )
+    except Exception:  # noqa: BLE001
+        pass
     return _ok(_doc_to_dict(doc), "上传成功")
 
 

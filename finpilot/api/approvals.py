@@ -204,6 +204,25 @@ def approval_action(
     except Exception:  # noqa: BLE001
         pass
 
+    # 4. 通知报告创建人：审批结果 + WebSocket 实时推送（best-effort）
+    if r.created_by is not None:
+        try:
+            from .notifications import notify_user
+
+            notify_user(
+                db,
+                f"user_{r.created_by}",
+                channel="approval",
+                title=f"报告审批{_ACTION_LABEL[action]}",
+                content=(
+                    f"《{r.title}》已{_ACTION_LABEL[action]}"
+                    + (f"，意见：{comments}" if comments else "")
+                ),
+                tenant_id=r.tenant_id,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     return _ok({
         "report_id": str(r.id),
         "approval_id": str(approval.id),
@@ -220,10 +239,15 @@ def approval_action(
 def approval_history(
     report_id: int,
     db: Session = Depends(get_db_session),
-    _: dict = Depends(require_admin),
+    current_user: dict = Depends(require_admin),
 ):
-    """获取某报告的完整审批历史（按时间正序）。"""
-    r = db.get(Report, report_id)
+    """获取某报告的完整审批历史（按时间正序）。
+
+    多租户隔离：即使管理员也只能查看本租户报告的审批历史，
+    避免租户管理员越权读取其他租户数据。
+    """
+    tenant_id = tenant_of(current_user)
+    r = db.query(Report).filter(Report.id == report_id, Report.tenant_id == tenant_id).first()
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="报告不存在")
     rows = (

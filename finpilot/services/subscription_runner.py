@@ -135,4 +135,20 @@ def run_subscription_once(
     except Exception:  # noqa: BLE001
         pass
 
+    # 通知订阅创建人：订阅报告已生成（best-effort，DB 写入 + WebSocket 推送）
+    if sub.created_by is not None:
+        try:
+            from finpilot.api.notifications import notify_user
+
+            notify_user(
+                db,
+                f"user_{sub.created_by}",
+                channel="report",
+                title="订阅报告已生成",
+                content=f"订阅「{sub.name}」触发生成的报告《{report.title}》已完成",
+                tenant_id=sub.tenant_id,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
     return {"report_id": report.id, "content_url": content_url, "warnings": warnings}

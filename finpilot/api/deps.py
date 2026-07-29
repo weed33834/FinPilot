@@ -71,6 +71,15 @@ async def get_current_user(request: Request) -> dict:
         )
     # 每次访问刷新 TTL
     await session_store.refresh(session_id)
+    # 暴露用户信息给后续中间件/依赖（TenantMiddleware 第 2 优先级分支读取 request.state.user），
+    # 并同步设置租户 ContextVar，使 install_tenant_filter 注入的 execution_options 生效。
+    # 此前 request.state.user 从未赋值，导致 TenantMiddleware 仅能从 X-Tenant-ID 头取值（前端不发）。
+    request.state.user = user_data
+    try:
+        from finpilot.middleware.tenant import current_tenant_id
+        current_tenant_id.set(tenant_of(user_data))
+    except Exception:  # noqa: BLE001
+        pass
     return user_data
 
 

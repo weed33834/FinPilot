@@ -351,6 +351,32 @@ def _generate_report_content(report_id: int, tenant_id: str) -> None:
             report.status = "failed"
             report.error_message = str(exc)[:500]
             db.commit()
+
+        # 通知创建人：报告生成完成（best-effort，不阻塞后台任务）
+        if report.created_by is not None:
+            try:
+                from .notifications import notify_user
+
+                if report.status == "reviewing":
+                    notify_user(
+                        db,
+                        f"user_{report.created_by}",
+                        channel="report",
+                        title="报告生成完成",
+                        content=f"《{report.title}》已生成，进入待审阅状态",
+                        tenant_id=report.tenant_id,
+                    )
+                elif report.status == "failed":
+                    notify_user(
+                        db,
+                        f"user_{report.created_by}",
+                        channel="report",
+                        title="报告生成失败",
+                        content=f"《{report.title}》生成失败：{report.error_message or '未知错误'}",
+                        tenant_id=report.tenant_id,
+                    )
+            except Exception:  # noqa: BLE001
+                pass
     finally:
         db.close()
 
