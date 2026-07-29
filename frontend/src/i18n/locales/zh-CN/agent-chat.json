@@ -1,0 +1,86 @@
+{
+  "title": "智能分析终端",
+  "subtitle": "自然语言查询财务数据 | AI 驱动报表分析",
+  "newChat": "新建对话",
+  "empty": {
+    "title": "财务智能分析",
+    "desc": "输入财务问题查询营收、利润率、负债率等关键指标，或生成分析报告。"
+  },
+  "suggestions": {
+    "revenue": "本月营业收入及同比变化",
+    "netMargin": "最新季度净利润率",
+    "assetTurnover": "总资产周转率趋势分析",
+    "liquidity": "流动比率与速动比率",
+    "receivables": "应收账款账龄分布",
+    "pendingReports": "最近待审批报告"
+  },
+  "refine": {
+    "regenerate": "重新生成",
+    "add_details": "添加细节",
+    "more_concise": "更简洁",
+    "polish": "润色"
+  },
+  "refinePrompts": {
+    "add_details": "请为以下回答添加更多细节和深度分析",
+    "more_concise": "请将以下回答压缩为更简洁的版本",
+    "polish": "请润色以下回答使其更加专业流畅"
+  },
+  "message": {
+    "me": "我",
+    "thinking": "思考中...",
+    "thoughtDone": "已深度思考（{{time}}）",
+    "stopped": "已停止生成",
+    "confidence": "置信度 {{percent}}%",
+    "reasoningChain": "推理链 ({{count}} 步)",
+    "copy": "复制",
+    "delete": "删除"
+  },
+  "time": {
+    "ms": "毫秒",
+    "s": "秒"
+  },
+  "errors": {
+    "conversationNotFound": "会话不存在或已被删除",
+    "loadConversationFailed": "加载会话失败",
+    "connectionInterrupted": "连接中断，请稍后重试",
+    "streamBodyNotReadable": "后端未返回流式响应体",
+    "unknown": "未知错误",
+    "fileTooLarge": "文件 {{name}} 超过 50MB 限制，已跳过",
+    "fileReadFailedWrapper": "文件 {{name}} 读取失败：{{message}}",
+    "fileReaderNonString": "FileReader 返回非字符串",
+    "fileReadFailed": "文件读取失败",
+    "unparsableCommand": "无法解析的命令",
+    "commandExecutionFailed": "命令执行失败"
+  },
+  "toast": {
+    "copySuccess": "已复制到剪贴板",
+    "copyFailed": "复制失败，请手动选择文本复制"
+  },
+  "status": {
+    "loading": "加载中..."
+  },
+  "functionBar": {
+    "deepThink": "深度思考",
+    "useWeb": "联网搜索",
+    "uploadFile": "上传文件",
+    "switchModel": "切换模型",
+    "model": "模型"
+  },
+  "input": {
+    "placeholder": "输入问题，或输入 / 调用命令面板控制整个程序（Enter 发送 / Shift+Enter 换行）",
+    "slashPaletteTitle": "斜杠命令面板",
+    "slashPaletteAria": "打开斜杠命令面板",
+    "ariaLabel": "输入问题",
+    "stopTitle": "停止生成",
+    "stop": "停止",
+    "sendAria": "发送",
+    "send": "发送"
+  },
+  "errorBar": {
+    "retry": "重试",
+    "closeAria": "关闭"
+  },
+  "files": {
+    "removeAria": "移除 {{name}}"
+  }
+}

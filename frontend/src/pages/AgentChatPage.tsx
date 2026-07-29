@@ -9,6 +9,10 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import i18n from '../i18n/config.ts'
+import zhCnResource from '../i18n/locales/zh-CN/agent-chat.json'
+import enResource from '../i18n/locales/en/agent-chat.json'
 import { generateId } from '../utils/id'
 import { getConversation, type ConversationMessage } from '../api/conversations'
 import { ICONS } from '../components/ui/Icons'
@@ -19,6 +23,16 @@ import { parseSlashCommand, renderHelpForRole, type SlashCommand } from '../util
 import { useAuthStore } from '../stores/authStore'
 import SlashCommandPalette from '../components/SlashCommandPalette'
 import { toast } from '../components/ui/Toaster'
+
+// 命名空间未在 i18n/config.ts 中注册（按要求不修改该文件），这里在模块加载时
+// 同步注入资源，子组件通过 useTranslation('agentChat') 消费。
+const NS = 'agentChat'
+if (!i18n.hasResourceBundle('zh-CN', NS)) {
+  i18n.addResourceBundle('zh-CN', NS, zhCnResource)
+}
+if (!i18n.hasResourceBundle('en', NS)) {
+  i18n.addResourceBundle('en', NS, enResource)
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -66,14 +80,14 @@ interface SseEvent {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const SUGGESTIONS = [
-  '本月营业收入及同比变化',
-  '最新季度净利润率',
-  '总资产周转率趋势分析',
-  '流动比率与速动比率',
-  '应收账款账龄分布',
-  '最近待审批报告',
-]
+const SUGGESTION_KEYS = [
+  'revenue',
+  'netMargin',
+  'assetTurnover',
+  'liquidity',
+  'receivables',
+  'pendingReports',
+] as const
 
 interface ModelOption {
   id: string
@@ -81,12 +95,7 @@ interface ModelOption {
   tier: string
 }
 
-const REFINE_ACTIONS = [
-  { id: 'regenerate', label: '重新生成', icon: 'refresh' },
-  { id: 'add_details', label: '添加细节', icon: '' },
-  { id: 'more_concise', label: '更简洁', icon: '' },
-  { id: 'polish', label: '润色', icon: '' },
-] as const
+const REFINE_ACTION_IDS = ['regenerate', 'add_details', 'more_concise', 'polish'] as const
 
 const formatTime = (date: Date) =>
   date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -97,21 +106,24 @@ const formatSize = (bytes: number) => {
   return `${(bytes / 1048576).toFixed(1)}MB`
 }
 
-/** 读取文件内容为 base64 字符串（不含 data: 前缀）。 */
-const readFileAsBase64 = (file: File): Promise<string> =>
+/** 读取文件内容为 base64 字符串（不含 data: 前缀）。错误文案由调用方传入（i18n）。 */
+const readFileAsBase64 = (
+  file: File,
+  errors: { nonString: string; readFailed: string },
+): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
       const result = reader.result
       if (typeof result !== 'string') {
-        reject(new Error('FileReader 返回非字符串'))
+        reject(new Error(errors.nonString))
         return
       }
       // result 形如 "data:application/pdf;base64,XXXX" — 去掉前缀
       const commaIdx = result.indexOf(',')
       resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result)
     }
-    reader.onerror = () => reject(reader.error || new Error('文件读取失败'))
+    reader.onerror = () => reject(reader.error || new Error(errors.readFailed))
     reader.readAsDataURL(file)
   })
 
@@ -151,9 +163,11 @@ const ChatMessageRow = memo(function ChatMessageRow({
   onRefine,
   onDelete,
 }: ChatMessageRowProps) {
+  const { t } = useTranslation('agentChat')
+
   const formatThinkingTimeMs = (ms: number) => {
-    if (ms < 1000) return `${ms}毫秒`
-    return `${(ms / 1000).toFixed(1)}秒`
+    if (ms < 1000) return `${ms}${t('time.ms')}`
+    return `${(ms / 1000).toFixed(1)}${t('time.s')}`
   }
 
   return (
@@ -164,7 +178,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
     >
       <div className="chat-avatar" aria-hidden="true">
         {message.role === 'user' ? (
-          '我'
+          t('message.me')
         ) : (
           <span className="chat-avatar-glyph">F</span>
         )}
@@ -186,12 +200,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
               {message.thinkingExpanded || isStreaming ? (
                 <span>
                   {isStreamingTarget
-                    ? '思考中...'
-                    : `已深度思考（${formatThinkingTimeMs(message.thinkingTimeMs || 0)}）`}
+                    ? t('message.thinking')
+                    : t('message.thoughtDone', { time: formatThinkingTimeMs(message.thinkingTimeMs || 0) })}
                 </span>
               ) : (
                 <span>
-                  已深度思考（{formatThinkingTimeMs(message.thinkingTimeMs || 0)}）
+                  {t('message.thoughtDone', { time: formatThinkingTimeMs(message.thinkingTimeMs || 0) })}
                 </span>
               )}
             </button>
@@ -205,14 +219,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
         <MarkdownRenderer content={message.content} className="chat-bubble" />
         {isStreamingTarget && <span className="cursor-blink" />}
         {message.stopped && (
-          <div className="chat-stopped-mark" role="status">已停止生成</div>
+          <div className="chat-stopped-mark" role="status">{t('message.stopped')}</div>
         )}
 
         {/* ---- Confidence badge ---- */}
         {message.role === 'agent' && message.confidence != null && (
           <div className="chat-confidence">
             <span className={`badge ${message.confidence >= 0.7 ? 'success' : message.confidence >= 0.4 ? 'processing' : 'failed'}`}>
-              置信度 {Math.round(message.confidence * 100)}%
+              {t('message.confidence', { percent: Math.round(message.confidence * 100) })}
             </span>
           </div>
         )}
@@ -226,7 +240,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
               onClick={() => onToggleReasoning(message.id)}
             >
               <ICONS.search size={14} />
-              <span>推理链 ({message.reactSteps.length} 步)</span>
+              <span>{t('message.reasoningChain', { count: message.reactSteps.length })}</span>
               <span className="reasoning-arrow">{message.reasoningExpanded ? '▼' : '▶'}</span>
             </button>
             {message.reasoningExpanded && (
@@ -250,31 +264,31 @@ const ChatMessageRow = memo(function ChatMessageRow({
               <button
                 type="button"
                 className="refine-btn"
-                title="复制"
+                title={t('message.copy')}
                 onClick={() => onCopy(message.content)}
               >
                 <ICONS.copy size={14} />
-                <span>复制</span>
+                <span>{t('message.copy')}</span>
               </button>
-              {REFINE_ACTIONS.map((action) => (
+              {REFINE_ACTION_IDS.map((id) => (
                 <button
-                  key={action.id}
+                  key={id}
                   type="button"
                   className="refine-btn"
-                  title={action.label}
-                  onClick={() => onRefine(action.id, message.content, message.id)}
+                  title={t(`refine.${id}`)}
+                  onClick={() => onRefine(id, message.content, message.id)}
                 >
-                  <span>{action.label}</span>
+                  <span>{t(`refine.${id}`)}</span>
                 </button>
               ))}
               <button
                 type="button"
                 className="refine-btn refine-btn-danger"
-                title="删除"
+                title={t('message.delete')}
                 onClick={() => onDelete(message.id)}
               >
                 <ICONS.close size={14} />
-                <span>删除</span>
+                <span>{t('message.delete')}</span>
               </button>
             </div>
           )}
@@ -284,6 +298,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
 })
 
 export default function AgentChatPage() {
+  const { t } = useTranslation('agentChat')
   const location = useLocation()
   const params = new URLSearchParams(location.search)
   const initialQuestion = params.get('question') || ''
@@ -300,7 +315,7 @@ export default function AgentChatPage() {
   const [deepThink, setDeepThink] = useState(false)
   const [useWeb, setUseWeb] = useState(false)
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([])
-  const [activeModel, setActiveModel] = useState<ModelOption>({ id: '', label: '加载中...', tier: '' })
+  const [activeModel, setActiveModel] = useState<ModelOption>(() => ({ id: '', label: t('status.loading'), tier: '' }))
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
 
@@ -405,7 +420,7 @@ export default function AgentChatPage() {
         if (cancelled) return
         const detail = res?.data?.data
         if (!detail || !Array.isArray(detail.messages)) {
-          setError('会话不存在或已被删除')
+          setError(t('errors.conversationNotFound'))
           setErrorLevel('client')
           return
         }
@@ -421,7 +436,7 @@ export default function AgentChatPage() {
       })
       .catch((err) => {
         if (cancelled) return
-        setError(getErrorMessage(err, '加载会话失败'))
+        setError(getErrorMessage(err, t('errors.loadConversationFailed')))
         setErrorLevel(getErrorLevel(err))
       })
       .finally(() => {
@@ -541,7 +556,7 @@ export default function AgentChatPage() {
           throw new FetchError({
             url: `${baseUrl}/agent/chat/stream`,
             method: 'POST',
-            message: 'Response body is not readable — 后端未返回流式响应体',
+            message: t('errors.streamBodyNotReadable'),
           })
         }
 
@@ -594,7 +609,7 @@ export default function AgentChatPage() {
                       }
 
                     case 'error':
-                      setError(event.message || '未知错误')
+                      setError(event.message || t('errors.unknown'))
                       // 后端主动通过 SSE 上报的错误通常属于服务端错误
                       setErrorLevel('server')
                       return m
@@ -645,7 +660,7 @@ export default function AgentChatPage() {
             prev.map((m) => (m.id === answerMessageId ? { ...m, stopped: true } : m)),
           )
         } else {
-          const msg = getErrorMessage(err, '连接中断，请稍后重试')
+          const msg = getErrorMessage(err, t('errors.connectionInterrupted'))
           if (msg) {
             setError(msg)
             setErrorLevel(getErrorLevel(err))
@@ -656,7 +671,7 @@ export default function AgentChatPage() {
         setLoading(false)
       }
     },
-    [loading, conversationId, deepThink, useWeb, activeModel, uploadedFiles],
+    [loading, conversationId, deepThink, useWeb, activeModel, uploadedFiles, t],
   )
 
   /* ------------------------------------------------------------------ */
@@ -727,14 +742,14 @@ export default function AgentChatPage() {
         const parsed = parseSlashCommand(raw, role)
         if (!parsed) {
           // 不是斜杠命令（理论不会走到这里，因为外层已过滤）
-          throw new Error('无法解析的命令')
+          throw new Error(t('errors.unparsableCommand'))
         }
         const result = await parsed.command.handler(parsed.args)
         setMessages((prev) =>
           prev.map((m) => (m.id === answerId ? { ...m, content: result } : m)),
         )
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '命令执行失败'
+        const msg = err instanceof Error ? err.message : t('errors.commandExecutionFailed')
         setError(msg)
         setErrorLevel(getErrorLevel(err) === 'unknown' ? 'client' : getErrorLevel(err))
         // 把空 answer 消息删掉，避免出现一个空气泡
@@ -744,7 +759,7 @@ export default function AgentChatPage() {
         setStreamingMessageId(null)
       }
     },
-    [role],
+    [role, t],
   )
 
   /** 从面板选中命令时，填充到输入框（让用户继续输入参数） */
@@ -821,15 +836,18 @@ export default function AgentChatPage() {
     for (let i = 0; i < files.length; i++) {
       const f = files[i]
       if (f.size > 50 * 1024 * 1024) {
-        setError(`文件 ${f.name} 超过 50MB 限制，已跳过`)
+        setError(t('errors.fileTooLarge', { name: f.name }))
         continue
       }
       // 读取文件内容为 base64，让后端真正解析与注入 agent 上下文
       try {
-        const base64 = await readFileAsBase64(f)
+        const base64 = await readFileAsBase64(f, {
+          nonString: t('errors.fileReaderNonString'),
+          readFailed: t('errors.fileReadFailed'),
+        })
         newFiles.push({ name: f.name, size: f.size, type: f.type, base64 })
       } catch (err) {
-        setError(`文件 ${f.name} 读取失败：${(err as Error).message}`)
+        setError(t('errors.fileReadFailedWrapper', { name: f.name, message: (err as Error).message }))
       }
     }
     setUploadedFiles((prev) => [...prev, ...newFiles].slice(0, 5))
@@ -851,9 +869,9 @@ export default function AgentChatPage() {
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content)
-      toast.success('已复制到剪贴板')
+      toast.success(t('toast.copySuccess'))
     } catch {
-      toast.error('复制失败，请手动选择文本复制')
+      toast.error(t('toast.copyFailed'))
     }
   }
 
@@ -880,9 +898,9 @@ export default function AgentChatPage() {
     }
 
     const prompts: Record<string, string> = {
-      add_details: `请为以下回答添加更多细节和深度分析`,
-      more_concise: `请将以下回答压缩为更简洁的版本`,
-      polish: `请润色以下回答使其更加专业流畅`,
+      add_details: t('refinePrompts.add_details'),
+      more_concise: t('refinePrompts.more_concise'),
+      polish: t('refinePrompts.polish'),
     }
     const refinement = prompts[action] || ''
     if (refinement) {
@@ -950,16 +968,16 @@ export default function AgentChatPage() {
     <div className="container">
       <div className="page-header">
         <div>
-          <h1>智能分析终端</h1>
-          <p className="text-muted text-sm">自然语言查询财务数据 | AI 驱动报表分析</p>
+          <h1>{t('title')}</h1>
+          <p className="text-muted text-sm">{t('subtitle')}</p>
         </div>
         <button
           type="button"
           className="btn btn-outline"
           onClick={handleNewChat}
-          title="新建对话"
+          title={t('newChat')}
         >
-          + 新建对话
+          + {t('newChat')}
         </button>
       </div>
 
@@ -971,20 +989,20 @@ export default function AgentChatPage() {
               <div className="chat-empty-glyph" aria-hidden="true">
                 FA
               </div>
-              <h4 className="chat-empty-title">财务智能分析</h4>
+              <h4 className="chat-empty-title">{t('empty.title')}</h4>
               <p className="chat-empty-desc">
-                输入财务问题查询营收、利润率、负债率等关键指标，或生成分析报告。
+                {t('empty.desc')}
               </p>
               <div className="chat-quick-prompts">
-                {SUGGESTIONS.map((text) => (
+                {SUGGESTION_KEYS.map((key) => (
                   <button
-                    key={text}
+                    key={key}
                     type="button"
                     className="chip"
-                    onClick={() => onSuggestionClick(text)}
+                    onClick={() => onSuggestionClick(t(`suggestions.${key}`))}
                     disabled={loading}
                   >
-                    {text}
+                    {t(`suggestions.${key}`)}
                   </button>
                 ))}
               </div>
@@ -1047,7 +1065,7 @@ export default function AgentChatPage() {
                 onClick={handleRetry}
                 disabled={loading}
               >
-                重试
+                {t('errorBar.retry')}
               </button>
             )}
             <button
@@ -1057,7 +1075,7 @@ export default function AgentChatPage() {
                 setError('')
                 setErrorLevel('unknown')
               }}
-              aria-label="关闭"
+              aria-label={t('errorBar.closeAria')}
             >
               <ICONS.close size={14} />
             </button>
@@ -1075,7 +1093,7 @@ export default function AgentChatPage() {
                   type="button"
                   className="chat-file-tag-remove"
                   onClick={() => removeFile(f.name)}
-                  aria-label={`移除 ${f.name}`}
+                  aria-label={t('files.removeAria', { name: f.name })}
                 >
                   <ICONS.close size={12} />
                 </button>
@@ -1090,32 +1108,32 @@ export default function AgentChatPage() {
             type="button"
             className={`func-btn ${deepThink ? 'active' : ''}`}
             onClick={() => setDeepThink((v) => !v)}
-            title="深度思考"
+            title={t('functionBar.deepThink')}
             aria-pressed={deepThink}
           >
             <ICONS.reflections size={16} className="func-btn-icon" />
-            <span>深度思考</span>
+            <span>{t('functionBar.deepThink')}</span>
           </button>
 
           <button
             type="button"
             className={`func-btn ${useWeb ? 'active' : ''}`}
             onClick={() => setUseWeb((v) => !v)}
-            title="联网搜索"
+            title={t('functionBar.useWeb')}
             aria-pressed={useWeb}
           >
             <ICONS.search size={16} className="func-btn-icon" />
-            <span>联网搜索</span>
+            <span>{t('functionBar.useWeb')}</span>
           </button>
 
           <button
             type="button"
             className="func-btn"
             onClick={() => fileInputRef.current?.click()}
-            title="上传文件"
+            title={t('functionBar.uploadFile')}
           >
             <ICONS.documents size={16} className="func-btn-icon" />
-            <span>上传文件</span>
+            <span>{t('functionBar.uploadFile')}</span>
           </button>
           <input
             ref={fileInputRef}
@@ -1132,9 +1150,9 @@ export default function AgentChatPage() {
               type="button"
               className="func-btn model-btn"
               onClick={() => setShowModelDropdown((v) => !v)}
-              title="切换模型"
+              title={t('functionBar.switchModel')}
             >
-              <span className="func-btn-model-label">模型</span>
+              <span className="func-btn-model-label">{t('functionBar.model')}</span>
               <span className="func-btn-model-name">{activeModel.label}</span>
               <span className={`func-btn-model-chevron ${showModelDropdown ? 'open' : ''}`}>
                 ▾
@@ -1184,8 +1202,8 @@ export default function AgentChatPage() {
                   setTimeout(() => inputRef.current?.focus(), 0)
                 }
               }}
-              title="斜杠命令面板"
-              aria-label="打开斜杠命令面板"
+              title={t('input.slashPaletteTitle')}
+              aria-label={t('input.slashPaletteAria')}
               disabled={loading}
             >
               /
@@ -1196,30 +1214,30 @@ export default function AgentChatPage() {
               value={question}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
-              placeholder="输入问题，或输入 / 调用命令面板控制整个程序（Enter 发送 / Shift+Enter 换行）"
+              placeholder={t('input.placeholder')}
               rows={1}
-              aria-label="输入问题"
+              aria-label={t('input.ariaLabel')}
             />
             {isStreaming ? (
               <button
                 type="button"
                 className="chat-send chat-stop"
                 onClick={handleStop}
-                aria-label="停止生成"
-                title="停止生成"
+                aria-label={t('input.stopTitle')}
+                title={t('input.stopTitle')}
               >
                 <ICONS.stop size={16} />
-                <span>停止</span>
+                <span>{t('input.stop')}</span>
               </button>
             ) : (
               <button
                 type="submit"
                 className="chat-send"
                 disabled={!question.trim()}
-                aria-label="发送"
+                aria-label={t('input.sendAria')}
               >
                 <ICONS.send size={16} />
-                <span>发送</span>
+                <span>{t('input.send')}</span>
               </button>
             )}
           </div>

@@ -1,0 +1,86 @@
+{
+  "title": "Intelligent Analytics Terminal",
+  "subtitle": "Query financial data in natural language | AI-driven report analysis",
+  "newChat": "New Chat",
+  "empty": {
+    "title": "Financial Intelligent Analysis",
+    "desc": "Ask financial questions to query revenue, margins, debt ratios and other key metrics, or generate analysis reports."
+  },
+  "suggestions": {
+    "revenue": "Monthly revenue and YoY change",
+    "netMargin": "Latest quarterly net profit margin",
+    "assetTurnover": "Total asset turnover trend analysis",
+    "liquidity": "Current ratio and quick ratio",
+    "receivables": "Accounts receivable aging distribution",
+    "pendingReports": "Recent reports pending approval"
+  },
+  "refine": {
+    "regenerate": "Regenerate",
+    "add_details": "Add details",
+    "more_concise": "More concise",
+    "polish": "Polish"
+  },
+  "refinePrompts": {
+    "add_details": "Please add more detail and in-depth analysis to the following answer",
+    "more_concise": "Please compress the following answer into a more concise version",
+    "polish": "Please polish the following answer to make it more professional and fluent"
+  },
+  "message": {
+    "me": "Me",
+    "thinking": "Thinking…",
+    "thoughtDone": "Deep thought complete ({{time}})",
+    "stopped": "Generation stopped",
+    "confidence": "Confidence {{percent}}%",
+    "reasoningChain": "Reasoning chain ({{count}} steps)",
+    "copy": "Copy",
+    "delete": "Delete"
+  },
+  "time": {
+    "ms": "ms",
+    "s": "s"
+  },
+  "errors": {
+    "conversationNotFound": "Conversation does not exist or has been deleted",
+    "loadConversationFailed": "Failed to load conversation",
+    "connectionInterrupted": "Connection interrupted, please retry later",
+    "streamBodyNotReadable": "Backend returned no streaming response body",
+    "unknown": "Unknown error",
+    "fileTooLarge": "File {{name}} exceeds the 50MB limit and was skipped",
+    "fileReadFailedWrapper": "Failed to read file {{name}}: {{message}}",
+    "fileReaderNonString": "FileReader returned a non-string",
+    "fileReadFailed": "Failed to read file",
+    "unparsableCommand": "Unparsable command",
+    "commandExecutionFailed": "Command execution failed"
+  },
+  "toast": {
+    "copySuccess": "Copied to clipboard",
+    "copyFailed": "Copy failed, please select the text manually to copy"
+  },
+  "status": {
+    "loading": "Loading…"
+  },
+  "functionBar": {
+    "deepThink": "Deep Think",
+    "useWeb": "Web Search",
+    "uploadFile": "Upload File",
+    "switchModel": "Switch model",
+    "model": "Model"
+  },
+  "input": {
+    "placeholder": "Type a question, or type / to open the command palette to control the app (Enter to send / Shift+Enter for newline)",
+    "slashPaletteTitle": "Slash command palette",
+    "slashPaletteAria": "Open slash command palette",
+    "ariaLabel": "Type a question",
+    "stopTitle": "Stop generating",
+    "stop": "Stop",
+    "sendAria": "Send",
+    "send": "Send"
+  },
+  "errorBar": {
+    "retry": "Retry",
+    "closeAria": "Close"
+  },
+  "files": {
+    "removeAria": "Remove {{name}}"
+  }
+}
