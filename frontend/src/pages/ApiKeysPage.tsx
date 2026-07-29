@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../components/ui/Modal.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
+import { ICONS } from '../components/ui/Icons.tsx'
+import { toast } from '../components/ui/Toaster.tsx'
 import { api } from '../api/client.ts'
 import { getErrorMessage } from '../utils/errors.ts'
 import { formatDateTime } from '../utils/format.ts'
@@ -10,6 +13,7 @@ import type { DataResponse, PaginatedResponse } from '../types/report.ts'
 import type { ApiKey, ApiKeyWithPlain } from '../types/apiKey.ts'
 
 export default function ApiKeysPage() {
+  const { t } = useTranslation()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -23,6 +27,7 @@ export default function ApiKeysPage() {
   const [deleteTarget, setDeleteTarget] = useState<ApiKey | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
   const [rotateTarget, setRotateTarget] = useState<ApiKey | null>(null)
+  const [keyword, setKeyword] = useState('')
 
   const fetchKeys = async () => {
     setLoading(true)
@@ -33,7 +38,7 @@ export default function ApiKeysPage() {
       })
       setKeys(response.data.data?.items || [])
     } catch (err) {
-      setError(getErrorMessage(err, '加载 API Key 列表失败'))
+      setError(getErrorMessage(err, t('common:apiKeys.loadFailed')))
     } finally {
       setLoading(false)
     }
@@ -42,6 +47,17 @@ export default function ApiKeysPage() {
   useEffect(() => {
     fetchKeys()
   }, [])
+
+  // 关键词过滤（客户端，按名称/权限匹配）
+  const filteredKeys = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return keys
+    return keys.filter(
+      (k) =>
+        (k.name || '').toLowerCase().includes(kw) ||
+        k.scopes.some((s) => s.toLowerCase().includes(kw)),
+    )
+  }, [keys, keyword])
 
   const handleCreate = async () => {
     setSubmitting(true)
@@ -60,11 +76,12 @@ export default function ApiKeysPage() {
       if (created) {
         setKeys((prev) => [created, ...prev])
         setPlainKey({ name: created.name, key: created.key })
+        toast.success(t('common:apiKeys.toastCreated'))
       }
       setCreateOpen(false)
       setForm({ name: '', scopes: '', expires_at: '' })
     } catch (err) {
-      setError(getErrorMessage(err, '创建 API Key 失败'))
+      setError(getErrorMessage(err, t('common:apiKeys.createFailed')))
     } finally {
       setSubmitting(false)
     }
@@ -85,9 +102,10 @@ export default function ApiKeysPage() {
           ...prev.map((k) => (k.id === key.id ? { ...k, is_active: 'N' } : k)),
         ])
         setPlainKey({ name: rotated.name, key: rotated.key })
+        toast.success(t('common:apiKeys.toastRotated'))
       }
     } catch (err) {
-      setError(getErrorMessage(err, '轮换 API Key 失败'))
+      toast.error(getErrorMessage(err, t('common:apiKeys.rotateFailed')))
     } finally {
       setActingId(null)
     }
@@ -101,8 +119,9 @@ export default function ApiKeysPage() {
       setKeys((prev) =>
         prev.map((k) => (k.id === key.id ? { ...k, is_active: 'N' } : k)),
       )
+      toast.success(t('common:apiKeys.toastRevoked'))
     } catch (err) {
-      setError(getErrorMessage(err, '吊销 API Key 失败'))
+      toast.error(getErrorMessage(err, t('common:apiKeys.revokeFailed')))
     } finally {
       setActingId(null)
     }
@@ -114,8 +133,9 @@ export default function ApiKeysPage() {
     try {
       await api.delete(`/api-keys/${key.id}`)
       setKeys((prev) => prev.filter((k) => k.id !== key.id))
+      toast.success(t('common:apiKeys.toastDeleted'))
     } catch (err) {
-      setError(getErrorMessage(err, '删除 API Key 失败'))
+      toast.error(getErrorMessage(err, t('common:apiKeys.deleteFailed')))
     } finally {
       setActingId(null)
     }
@@ -131,50 +151,81 @@ export default function ApiKeysPage() {
   return (
     <div className="container">
       <div className="page-header">
-        <h1>API 密钥管理</h1>
-        <button type="button" onClick={() => setCreateOpen(true)}>新建密钥</button>
+        <h1>{t('common:apiKeys.title')}</h1>
+        <button type="button" onClick={() => setCreateOpen(true)}>{t('common:apiKeys.create')}</button>
       </div>
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={fetchKeys}>
+            {t('common:apiKeys.retry')}
+          </button>
+        </div>
+      )}
+
+      {keys.length > 0 && (
+        <div className="toolbar">
+          <div className="search-inline">
+            <ICONS.search size={14} />
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder={t('common:apiKeys.searchPlaceholder')}
+              aria-label={t('common:apiKeys.searchPlaceholder')}
+            />
+          </div>
         </div>
       )}
 
       {loading ? (
-        <Loading text="加载 API Key 中..." />
+        <Loading text={t('common:apiKeys.loading')} />
       ) : keys.length === 0 ? (
-        <EmptyState title="暂无 API 密钥" description="点击「新建密钥」创建第一个 API 密钥。" />
+        <EmptyState
+          icon="apiKeys"
+          title={t('common:apiKeys.emptyTitle')}
+          description={t('common:apiKeys.emptyDesc')}
+          action={
+            <button type="button" onClick={() => setCreateOpen(true)}>{t('common:apiKeys.create')}</button>
+          }
+        />
+      ) : filteredKeys.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title={t('common:apiKeys.emptySearchTitle')}
+          description={t('common:apiKeys.emptySearchDesc')}
+        />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>名称</th>
-                <th>权限范围</th>
-                <th>状态</th>
-                <th>调用次数</th>
-                <th>最后使用</th>
-                <th>过期时间</th>
-                <th>操作</th>
+                <th>{t('common:apiKeys.colName')}</th>
+                <th>{t('common:apiKeys.colScopes')}</th>
+                <th>{t('common:apiKeys.colStatus')}</th>
+                <th>{t('common:apiKeys.colUsage')}</th>
+                <th>{t('common:apiKeys.colLastUsed')}</th>
+                <th>{t('common:apiKeys.colExpires')}</th>
+                <th>{t('common:apiKeys.colActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {keys.map((key) => (
+              {filteredKeys.map((key) => (
                 <tr key={key.id}>
                   <td>{key.name}</td>
                   <td>
                     {key.scopes.length > 0 ? (
                       key.scopes.join(', ')
                     ) : (
-                      <span className="text-muted">全部权限</span>
+                      <span className="text-muted">{t('common:apiKeys.allScopes')}</span>
                     )}
                   </td>
                   <td>
                     {key.is_active === 'Y' ? (
-                      <span className="badge success">启用</span>
+                      <span className="badge success">{t('common:apiKeys.statusActive')}</span>
                     ) : (
-                      <span className="badge rejected">已吊销</span>
+                      <span className="badge rejected">{t('common:apiKeys.statusRevoked')}</span>
                     )}
                   </td>
                   <td>{key.usage_count}</td>
@@ -189,7 +240,7 @@ export default function ApiKeysPage() {
                     {key.expires_at ? (
                       formatDateTime(key.expires_at)
                     ) : (
-                      <span className="text-muted">永不过期</span>
+                      <span className="text-muted">{t('common:apiKeys.neverExpires')}</span>
                     )}
                   </td>
                   <td>
@@ -200,7 +251,7 @@ export default function ApiKeysPage() {
                         onClick={() => setRotateTarget(key)}
                         disabled={actingId === key.id || key.is_active !== 'Y'}
                       >
-                        轮换
+                        {t('common:apiKeys.rotate')}
                       </button>
                       <button
                         type="button"
@@ -208,7 +259,7 @@ export default function ApiKeysPage() {
                         onClick={() => setRevokeTarget(key)}
                         disabled={actingId === key.id || key.is_active !== 'Y'}
                       >
-                        吊销
+                        {t('common:apiKeys.revoke')}
                       </button>
                       <button
                         type="button"
@@ -216,7 +267,7 @@ export default function ApiKeysPage() {
                         onClick={() => setDeleteTarget(key)}
                         disabled={actingId === key.id}
                       >
-                        删除
+                        {t('common:apiKeys.delete')}
                       </button>
                     </div>
                   </td>
@@ -229,40 +280,40 @@ export default function ApiKeysPage() {
 
       {createOpen && (
         <Modal
-          title="新建 API 密钥"
+          title={t('common:apiKeys.createTitle')}
           onClose={() => setCreateOpen(false)}
           footer={
             <>
               <button type="button" className="secondary" onClick={() => setCreateOpen(false)}>
-                取消
+                {t('common:apiKeys.cancel')}
               </button>
               <button type="button" onClick={handleCreate} disabled={submitting || !form.name}>
-                {submitting ? '创建中...' : '创建'}
+                {submitting ? t('common:apiKeys.creating') : t('common:actions.create')}
               </button>
             </>
           }
         >
           {error && <div className="alert alert-error mb-3">{error}</div>}
           <div className="form-group">
-            <label htmlFor="key-name">名称</label>
+            <label htmlFor="key-name">{t('common:apiKeys.name')}</label>
             <input
               id="key-name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="便于识别用途，如「数据看板」"
+              placeholder={t('common:apiKeys.namePlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label htmlFor="key-scopes">权限范围</label>
+            <label htmlFor="key-scopes">{t('common:apiKeys.scopes')}</label>
             <input
               id="key-scopes"
               value={form.scopes}
               onChange={(e) => setForm({ ...form, scopes: e.target.value })}
-              placeholder="逗号分隔，留空表示全部，如 queries:nl2sql,reports:read"
+              placeholder={t('common:apiKeys.scopesPlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label htmlFor="key-expires">过期时间（可选）</label>
+            <label htmlFor="key-expires">{t('common:apiKeys.expires')}</label>
             <input
               id="key-expires"
               type="datetime-local"
@@ -275,32 +326,32 @@ export default function ApiKeysPage() {
 
       {plainKey && (
         <Modal
-          title="API 密钥明文（仅显示一次）"
+          title={t('common:apiKeys.plainKeyTitle')}
           onClose={() => setPlainKey(null)}
           footer={
             <>
               <button type="button" className="secondary" onClick={() => copyToClipboard(plainKey.key)}>
-                {copiedId === 'plain' ? '已复制' : '复制'}
+                {copiedId === 'plain' ? t('common:apiKeys.copied') : t('common:apiKeys.copy')}
               </button>
-              <button type="button" onClick={() => setPlainKey(null)}>我已保存</button>
+              <button type="button" onClick={() => setPlainKey(null)}>{t('common:apiKeys.saved')}</button>
             </>
           }
         >
           <div className="alert alert-warning mb-4">
-            请立即保存以下明文 Key，关闭后将无法再次查看。
+            {t('common:apiKeys.plainKeyWarning')}
           </div>
           <div className="code-block" style={{ wordBreak: 'break-all' }}>
             {plainKey.key}
           </div>
-          <p className="text-muted text-sm mt-4">名称：{plainKey.name}</p>
+          <p className="text-muted text-sm mt-4">{t('common:apiKeys.plainKeyName', { name: plainKey.name })}</p>
         </Modal>
       )}
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="确认删除"
-        message={deleteTarget ? <>确定要删除「<strong>{deleteTarget.name}</strong>」吗？此操作不可恢复。</> : null}
-        confirmText="确认删除"
+        title={t('common:apiKeys.confirmDeleteTitle')}
+        message={deleteTarget ? <>{t('common:apiKeys.confirmDeleteMsg', { name: deleteTarget.name })}</> : null}
+        confirmText={t('common:apiKeys.confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteTarget) {
@@ -313,9 +364,9 @@ export default function ApiKeysPage() {
 
       <ConfirmDialog
         open={!!revokeTarget}
-        title="确认吊销"
-        message={revokeTarget ? <>确定要吊销「<strong>{revokeTarget.name}</strong>」吗？吊销后该 Key 将立即失效。</> : null}
-        confirmText="确认吊销"
+        title={t('common:apiKeys.confirmRevokeTitle')}
+        message={revokeTarget ? <>{t('common:apiKeys.confirmRevokeMsg', { name: revokeTarget.name })}</> : null}
+        confirmText={t('common:apiKeys.confirmRevoke')}
         variant="warning"
         onConfirm={async () => {
           if (revokeTarget) {
@@ -328,9 +379,9 @@ export default function ApiKeysPage() {
 
       <ConfirmDialog
         open={!!rotateTarget}
-        title="确认轮换"
-        message={rotateTarget ? <>确定要轮换「<strong>{rotateTarget.name}</strong>」吗？旧 Key 将被吊销，仅返回一次新明文。</> : null}
-        confirmText="确认轮换"
+        title={t('common:apiKeys.confirmRotateTitle')}
+        message={rotateTarget ? <>{t('common:apiKeys.confirmRotateMsg', { name: rotateTarget.name })}</> : null}
+        confirmText={t('common:apiKeys.confirmRotate')}
         variant="warning"
         onConfirm={async () => {
           if (rotateTarget) {

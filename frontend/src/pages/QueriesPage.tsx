@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
 import { ICONS } from '../components/ui/Icons.tsx'
@@ -7,19 +8,6 @@ import { getErrorMessage } from '../utils/errors.ts'
 import { formatDateTime } from '../utils/format.ts'
 import type { DataResponse } from '../types/report.ts'
 import type { NLQueryResult, QueryHistoryItem } from '../types/query.ts'
-
-// 示例问题，帮助新用户上手
-const SUGGESTIONS = [
-  '本月各科目借贷总额',
-  '最近 30 天差旅费用排名前 10',
-  '应收账款账龄分布',
-  '本季度净利润同比变化',
-]
-
-const BACKEND_LABELS: Record<string, string> = {
-  rule: '规则引擎',
-  vanna: 'Vanna',
-}
 
 const HISTORY_KEY = 'finpilot:query-history'
 const HISTORY_LIMIT = 5
@@ -44,49 +32,73 @@ function saveHistory(items: QueryHistoryItem[]) {
 }
 
 export default function QueriesPage() {
+  const { t } = useTranslation()
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<NLQueryResult | null>(null)
   const [history, setHistory] = useState<QueryHistoryItem[]>(loadHistory)
+  const [lastQuestion, setLastQuestion] = useState('')
+
+  const suggestions = useMemo(
+    () => [t('common:queries.s1'), t('common:queries.s2'), t('common:queries.s3'), t('common:queries.s4')],
+    [t],
+  )
 
   const columns = useMemo(() => {
     if (!result?.data?.length) return []
     return Object.keys(result.data[0])
   }, [result])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const trimmed = question.trim()
-    if (!trimmed || loading) return
-
+  const runQuery = async (q: string) => {
     setLoading(true)
     setError('')
     setResult(null)
     try {
       const response = await api.post<DataResponse<NLQueryResult>>('/queries/nl2sql', {
-        question: trimmed,
+        question: q,
       })
       const data = response.data.data
       if (!data) {
-        throw new Error('查询返回为空')
+        throw new Error('query empty')
       }
       setResult(data)
       const next = [
-        { question: trimmed, createdAt: new Date().toISOString(), ok: !data.error },
-        ...loadHistory().filter((h) => h.question !== trimmed),
+        { question: q, createdAt: new Date().toISOString(), ok: !data.error },
+        ...loadHistory().filter((h) => h.question !== q),
       ].slice(0, HISTORY_LIMIT)
       setHistory(next)
       saveHistory(next)
     } catch (err) {
-      setError(getErrorMessage(err, '查询失败，请稍后重试'))
+      setError(getErrorMessage(err, t('common:queries.queryFailed')))
     } finally {
       setLoading(false)
     }
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = question.trim()
+    if (!trimmed || loading) return
+    setLastQuestion(trimmed)
+    await runQuery(trimmed)
+  }
+
+  const handleRetry = () => {
+    if (!lastQuestion) return
+    setError('')
+    void runQuery(lastQuestion)
+  }
+
   const pickSuggestion = (text: string) => {
     setQuestion(text)
+  }
+
+  const backendLabel = (backend?: string) => {
+    if (!backend) return t('common:queries.generated')
+    if (backend === 'rule') return t('common:queries.backendRule')
+    if (backend === 'vanna') return t('common:queries.backendVanna')
+    return backend
   }
 
   const confidencePct = result?.confidence != null ? Math.round(result.confidence * 100) : null
@@ -115,7 +127,7 @@ export default function QueriesPage() {
     const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`
     const link = document.createElement('a')
     link.href = url
-    link.download = `查询结果_${stamp}.csv`
+    link.download = `query_${stamp}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -126,8 +138,8 @@ export default function QueriesPage() {
     <div className="container">
       <div className="page-header">
         <div>
-          <h1>财务数据查询</h1>
-          <p className="text-muted text-sm">自然语言转SQL，实时检索财务报表与业务数据。</p>
+          <h1>{t('common:queries.title')}</h1>
+          <p className="text-muted text-sm">{t('common:queries.subtitle')}</p>
         </div>
       </div>
 
@@ -137,17 +149,17 @@ export default function QueriesPage() {
             className="query-input"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="例如：本月各科目借贷总额是多少？"
-            aria-label="自然语言问题"
+            placeholder={t('common:queries.placeholder')}
+            aria-label={t('common:queries.title')}
             disabled={loading}
             autoFocus
           />
           <button type="submit" disabled={loading || !question.trim()}>
-            {loading ? '查询中...' : '查询'}
+            {loading ? t('common:queries.querying') : t('common:queries.query')}
           </button>
         </form>
         <div className="suggestion-chips">
-          {SUGGESTIONS.map((s) => (
+          {suggestions.map((s) => (
             <button
               key={s}
               type="button"
@@ -163,17 +175,22 @@ export default function QueriesPage() {
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          {lastQuestion && (
+            <button type="button" className="chat-error-retry" onClick={handleRetry}>
+              {t('common:queries.retry')}
+            </button>
+          )}
         </div>
       )}
 
-      {loading && <Loading text="正在生成 SQL 并执行查询..." />}
+      {loading && <Loading text={t('common:queries.loading')} />}
 
       {!loading && result && (
         <div className="query-result">
           {result.error ? (
             <div className="alert alert-warning mb-4" role="alert">
-              这次没查出来：{result.error}
+              {t('common:queries.notFound', { error: result.error })}
             </div>
           ) : (
             <>
@@ -181,14 +198,14 @@ export default function QueriesPage() {
                 <div className="query-meta">
                   {result.sql && (
                     <span className="badge success">
-                      {BACKEND_LABELS[result.backend || ''] || result.backend || '已生成'}
+                      {backendLabel(result.backend)}
                     </span>
                   )}
                   {confidencePct != null && (
-                    <span className="query-meta-item">置信度 {confidencePct}%</span>
+                    <span className="query-meta-item">{t('common:queries.confidence')} {confidencePct}%</span>
                   )}
                   {result.execution_time_ms != null && (
-                    <span className="query-meta-item">耗时 {result.execution_time_ms} ms</span>
+                    <span className="query-meta-item">{t('common:queries.executionTime')} {result.execution_time_ms} ms</span>
                   )}
                   <button
                     type="button"
@@ -196,16 +213,16 @@ export default function QueriesPage() {
                     style={{ marginLeft: 'auto' }}
                     onClick={handleExportCSV}
                     disabled={result.data.length === 0}
-                    title="导出为 CSV"
+                    title={t('common:queries.exportCsv')}
                   >
                     <ICONS.download size={14} />
-                    导出 CSV
+                    {t('common:queries.exportCsv')}
                   </button>
                 </div>
                 {result.sql ? (
                   <pre className="code-block query-sql">{result.sql}</pre>
                 ) : (
-                  <p className="text-muted text-sm">未生成 SQL</p>
+                  <p className="text-muted text-sm">{t('common:queries.noSql')}</p>
                 )}
                 {result.explanation && (
                   <p className="query-explanation">{result.explanation}</p>
@@ -249,7 +266,7 @@ export default function QueriesPage() {
                   </table>
                 </div>
               ) : (
-                <EmptyState title="查询结果为空" description="SQL 执行成功，但没有匹配的数据。" />
+                <EmptyState title={t('common:queries.emptyResult')} description={t('common:queries.emptyResultDesc')} />
               )}
             </>
           )}
@@ -258,13 +275,13 @@ export default function QueriesPage() {
 
       {!loading && !result && !error && history.length > 0 && (
         <div className="card">
-          <h3 className="card-title">最近查询</h3>
+          <h3 className="card-title">{t('common:queries.recentQueries')}</h3>
           <ul className="activity-list">
             {history.map((h) => (
               <li key={`${h.question}-${h.createdAt}`}>
                 <div className="activity-main">
                   <span className="activity-title">
-                    <span className="activity-icon">{h.ok ? '✓' : '✕'}</span>
+                    <span className="activity-icon">{h.ok ? t('common:queries.historyOk') : t('common:queries.historyFail')}</span>
                     <button
                       type="button"
                       className="link query-history-link"
