@@ -1,11 +1,14 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext.tsx'
+import { useDevice } from './context/DeviceContext'
 import Layout from './components/Layout.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
 import Loading from './components/ui/Loading.tsx'
 import { Toaster } from './components/ui/Toaster.tsx'
 import { ConfirmRoot } from './components/ui/ConfirmDialog.tsx'
+import { isMobileSupportedPath } from './components/mobile/mobileNav'
+import MobileDesktopRequired from './components/mobile/MobileDesktopRequired'
 import './index.css'
 
 const LoginPage = lazy(() => import('./pages/LoginPage.tsx'))
@@ -57,6 +60,8 @@ function PrivateRoute({
   roles?: string[]
 }) {
   const { isAuthenticated, loading, role } = useAuth()
+  const location = useLocation()
+  const { isMobile } = useDevice()
   if (loading) {
     return <Loading />
   }
@@ -67,6 +72,15 @@ function PrivateRoute({
   // 纵深防御：侧边栏已隐藏无权限菜单，此处拦截手动输入 URL 的越权访问。
   if (roles && (!role || !roles.includes(role))) {
     return <Navigate to="/agent" replace />
+  }
+  // 移动端降级：未做独立设计的页面（后台/配置类等）统一提示「建议在桌面端使用」，
+  // 不为这些复杂页面强行塞进小屏，移动端外交由桌面外壳正常渲染。
+  if (isMobile && !isMobileSupportedPath(location.pathname)) {
+    return (
+      <Layout>
+        <MobileDesktopRequired />
+      </Layout>
+    )
   }
   return <Layout>{children}</Layout>
 }

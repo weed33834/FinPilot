@@ -3,8 +3,10 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
+import { DeviceProvider } from './context/DeviceContext.tsx'
 import { setupSentry } from './observability.ts'
 import './index.css'
+import './mobile.css'
 import './i18n/config.ts'
 
 setupSentry()
@@ -28,7 +30,9 @@ ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <DeviceProvider>
+          <App />
+        </DeviceProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

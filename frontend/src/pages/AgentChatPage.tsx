@@ -23,6 +23,8 @@ import { parseSlashCommand, renderHelpForRole, type SlashCommand } from '../util
 import { useAuthStore } from '../stores/authStore'
 import SlashCommandPalette from '../components/SlashCommandPalette'
 import { toast } from '../components/ui/Toaster'
+import { useDevice } from '../context/DeviceContext'
+import AgentChatMobile from './mobile/AgentChatMobile'
 
 // 命名空间未在 i18n/config.ts 中注册（按要求不修改该文件），这里在模块加载时
 // 同步注入资源，子组件通过 useTranslation('agentChat') 消费。
@@ -303,6 +305,10 @@ export default function AgentChatPage() {
   const params = new URLSearchParams(location.search)
   const initialQuestion = params.get('question') || ''
   const cidFromUrl = params.get('cid') || ''
+
+  // 移动端走独立的全屏对话组件（与桌面侧栏对话完全分离，桌面逻辑零改动）
+  const { isMobile } = useDevice()
+  if (isMobile) return <AgentChatMobile />
 
   const [messages, setMessages] = useState<Message[]>([])
   const [conversationId, setConversationId] = useState<string | null>(cidFromUrl || null)

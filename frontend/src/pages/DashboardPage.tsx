@@ -7,6 +7,8 @@ import EmptyState from '../components/ui/EmptyState.tsx'
 import { ICONS } from '../components/ui/Icons.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
 import { useAuth } from '../context/AuthContext.tsx'
+import { useDevice } from '../context/DeviceContext.tsx'
+import DashboardMobile from './mobile/DashboardMobile.tsx'
 import {
   DOCUMENT_STATUS_COLORS,
   REPORT_STATUS_COLORS,
@@ -30,6 +32,8 @@ import {
 export default function DashboardPage() {
   const { t } = useTranslation(['common', 'dashboard'])
   const { username, role } = useAuth()
+  const { isMobile } = useDevice()
+  if (isMobile) return <DashboardMobile />
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

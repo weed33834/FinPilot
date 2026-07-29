@@ -13,6 +13,9 @@ import EmptyState from '../components/ui/EmptyState.tsx'
 import Badge from '../components/ui/Badge.tsx'
 import { ICONS } from '../components/ui/Icons.tsx'
 import { toast } from '../components/ui/Toaster.tsx'
+import { useDevice } from '../context/DeviceContext'
+import ReportsMobile from './mobile/ReportsMobile'
+import ReportDetailMobile from './mobile/ReportDetailMobile'
 
 /** 处于生成中的状态，需要自动轮询刷新 */
 const GENERATING_STATUSES = new Set(['processing', 'pending'])
@@ -20,6 +23,8 @@ const GENERATING_STATUSES = new Set(['processing', 'pending'])
 export default function ReportsPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const { isMobile } = useDevice()
+  if (isMobile) return id ? <ReportDetailMobile id={id} /> : <ReportsMobile />
   const [selected, setSelected] = useState<Report | null>(null)
   const [status, setStatus] = useState('')
   const [keyword, setKeyword] = useState('')

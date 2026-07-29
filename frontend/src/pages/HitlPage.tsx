@@ -10,6 +10,8 @@ import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
 import { formatDateTime } from '../utils/format.ts'
+import { useDevice } from '../context/DeviceContext'
+import HitlMobile from './mobile/HitlMobile'
 
 // ==================== 类型定义 ====================
 
@@ -85,6 +87,8 @@ function toJsonString(
 
 export default function HitlPage() {
   const { t } = useTranslation()
+  const { isMobile } = useDevice()
+  if (isMobile) return <HitlMobile />
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<HitlTab>('pending')
   const [comments, setComments] = useState<Record<string, string>>({})

@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import DOMPurify from 'dompurify'
-import Loading from '../components/ui/Loading.tsx'
-import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
-import { toast } from '../components/ui/Toaster.tsx'
-import { api } from '../api/client.ts'
-import { getErrorMessage } from '../utils/errors.ts'
-import type { DataResponse } from '../types/report.ts'
-import type { BackupCodesResponse, TwoFASetup, TwoFAStatus } from '../types/twoFactor.ts'
-import { useDevice } from '../context/DeviceContext'
-import SecurityMobile from './mobile/SecurityMobile'
+import { api } from '../../api/client'
+import { getErrorMessage } from '../../utils/errors'
+import type { DataResponse } from '../../types/report'
+import type { BackupCodesResponse, TwoFASetup, TwoFAStatus } from '../../types/twoFactor'
+import { toast } from '../../components/ui/Toaster'
+import '../../i18n/mobile'
 
-export default function SecurityPage() {
+/**
+ * 移动端安全中心：2FA 状态卡（启用/禁用/ regenerate 备份码）+ 修改密码卡。
+ * 与桌面配置式表单一致的能力，但重排为单列触屏布局、增大点按区域。
+ */
+export default function SecurityMobile() {
   const { t } = useTranslation('security')
-  const { isMobile } = useDevice()
-  if (isMobile) return <SecurityMobile />
   const [status, setStatus] = useState<TwoFAStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -26,7 +25,6 @@ export default function SecurityPage() {
   const [generatedCodes, setGeneratedCodes] = useState<string[] | null>(null)
 
   const [disablePassword, setDisablePassword] = useState('')
-  const [disableConfirmOpen, setDisableConfirmOpen] = useState(false)
   const [regenPassword, setRegenPassword] = useState('')
 
   const [changePwCurrent, setChangePwCurrent] = useState('')
@@ -47,7 +45,7 @@ export default function SecurityPage() {
   }
 
   useEffect(() => {
-    fetchStatus()
+    void fetchStatus()
   }, [])
 
   const clearMessages = () => {
@@ -105,11 +103,6 @@ export default function SecurityPage() {
       toast.warning(t('validation.passwordRequired'))
       return
     }
-    setDisableConfirmOpen(true)
-  }
-
-  const confirmDisable = async () => {
-    setDisableConfirmOpen(false)
     setLoading(true)
     try {
       await api.post('/auth/2fa/disable', { password: disablePassword })
@@ -135,10 +128,9 @@ export default function SecurityPage() {
     }
     setLoading(true)
     try {
-      const resp = await api.post<DataResponse<BackupCodesResponse>>(
-        '/auth/2fa/backup-codes',
-        { password: regenPassword },
-      )
+      const resp = await api.post<DataResponse<BackupCodesResponse>>('/auth/2fa/backup-codes', {
+        password: regenPassword,
+      })
       setGeneratedCodes(resp.data.data.backup_codes)
       setRegenPassword('')
       setSuccess(t('toast.regenerated.title'))
@@ -189,121 +181,91 @@ export default function SecurityPage() {
   const enabled = status?.enabled ?? false
   const setupInProgress = status?.setup_in_progress ?? false
 
-  // 加载失败且无状态时显示重试
-  if (!loading && !status && error) {
-    return (
-      <div className="container">
-        <div className="page-header">
-          <h1>{t('title')}</h1>
-        </div>
-        <div className="empty-state">
-          <p className="text-muted text-sm">{t('loadFailed')}</p>
-          <button type="button" className="secondary mt-2" onClick={fetchStatus}>
-            {t('actions.retry')}
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="container">
-      <div className="page-header">
-        <h1>{t('title')}</h1>
-      </div>
-
+    <div className="msecurity">
       {error && (
-        <div className="alert alert-error mb-4" role="alert">
+        <div className="msecurity__alert msecurity__alert--error" role="alert">
           {error}
         </div>
       )}
       {success && (
-        <div className="alert alert-info mb-4" role="alert">
+        <div className="msecurity__alert msecurity__alert--info" role="alert">
           {success}
         </div>
       )}
 
       {loading && !status ? (
-        <Loading text={t('loading')} />
+        <div className="msecurity__loading">{t('loading')}</div>
       ) : (
         <>
-          <div className="card mb-4">
-            <h3 className="card-title">{t('twoFA.title')}</h3>
+          <section className="msecurity__card">
+            <h3 className="msecurity__card-title">{t('twoFA.title')}</h3>
 
             {enabled ? (
               <div>
-                <p className="text-sm">
-                  <span className="badge success">{t('twoFA.status.enabled')}</span>
-                  <span className="ml-2">{t('twoFA.enabledHint')}</span>
+                <p className="msecurity__hint">
+                  <span className="badge success">{t('twoFA.status.enabled')}</span>{' '}
+                  <span>{t('twoFA.enabledHint')}</span>
                 </p>
 
                 {generatedCodes && (
-                  <div className="alert alert-warning mt-4" role="alert">
+                  <div className="msecurity__codes" role="alert">
                     <strong>{t('twoFA.backupCodes.savePrompt')}</strong>
-                    <div className="backup-codes-grid mt-2">
+                    <div className="msecurity__codes-grid">
                       {generatedCodes.map((code) => (
                         <code key={code}>{code}</code>
                       ))}
                     </div>
-                    <div className="mt-2">
-                      <button type="button" className="link" onClick={copyAllCodes}>
-                        {t('twoFA.backupCodes.copyAll')}
-                      </button>
-                    </div>
-                    <p className="text-sm mt-2">{t('twoFA.backupCodes.usageHint')}</p>
+                    <button type="button" className="msecurity__link" onClick={() => void copyAllCodes()}>
+                      {t('twoFA.backupCodes.copyAll')}
+                    </button>
+                    <p className="msecurity__hint">{t('twoFA.backupCodes.usageHint')}</p>
                   </div>
                 )}
 
-                <div className="mt-4">
-                  <h4>{t('twoFA.regenerate.title')}</h4>
-                  <p className="text-sm text-muted">{t('twoFA.regenerate.hint')}</p>
-                  <div className="form-group">
-                    <label htmlFor="regen-pw">{t('fields.currentPassword.label')}</label>
-                    <input
-                      id="regen-pw"
-                      type="password"
-                      placeholder={t('fields.currentPassword.placeholder')}
-                      value={regenPassword}
-                      onChange={(e) => setRegenPassword(e.target.value)}
-                      autoComplete="current-password"
-                    />
-                  </div>
-                  <button type="button" onClick={handleRegenerate} disabled={loading}>
+                <div className="msecurity__field-group">
+                  <label htmlFor="regen-pw">{t('fields.currentPassword.label')}</label>
+                  <input
+                    id="regen-pw"
+                    type="password"
+                    placeholder={t('fields.currentPassword.placeholder')}
+                    value={regenPassword}
+                    onChange={(e) => setRegenPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button type="button" onClick={() => void handleRegenerate()} disabled={loading}>
                     {loading ? t('actions.regenerating') : t('actions.regenerate')}
                   </button>
                 </div>
 
-                <div className="mt-4">
-                  <h4>{t('twoFA.disable.title')}</h4>
-                  <p className="text-sm text-muted">{t('twoFA.disable.hint')}</p>
-                  <div className="form-group">
-                    <label htmlFor="disable-pw">{t('fields.currentPassword.label')}</label>
-                    <input
-                      id="disable-pw"
-                      type="password"
-                      placeholder={t('fields.currentPassword.placeholder')}
-                      value={disablePassword}
-                      onChange={(e) => setDisablePassword(e.target.value)}
-                      autoComplete="current-password"
-                    />
-                  </div>
-                  <button type="button" onClick={handleDisable} disabled={loading} className="danger">
+                <div className="msecurity__field-group">
+                  <label htmlFor="disable-pw">{t('fields.currentPassword.label')}</label>
+                  <input
+                    id="disable-pw"
+                    type="password"
+                    placeholder={t('fields.currentPassword.placeholder')}
+                    value={disablePassword}
+                    onChange={(e) => setDisablePassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button type="button" onClick={() => void handleDisable()} disabled={loading} className="danger">
                     {loading ? t('actions.disabling') : t('twoFA.disable.title')}
                   </button>
                 </div>
               </div>
             ) : setupData ? (
               <div>
-                <p className="text-sm">{t('twoFA.setup.step1')}</p>
+                <p className="msecurity__hint">{t('twoFA.setup.step1')}</p>
                 <div
-                  className="qr-display"
+                  className="msecurity__qr"
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(setupData.qr_svg) }}
                 />
-                <p className="text-sm text-muted mt-2">
-                  {t('twoFA.setup.manualSecret')}<code>{setupData.secret}</code>
+                <p className="msecurity__hint">
+                  {t('twoFA.setup.manualSecret')}
+                  <code>{setupData.secret}</code>
                 </p>
-                <form onSubmit={handleEnable} className="mt-4">
-                  <div className="form-group">
+                <form onSubmit={handleEnable}>
+                  <div className="msecurity__field-group">
                     <label htmlFor="enable-code">{t('twoFA.setup.step2')}</label>
                     <input
                       id="enable-code"
@@ -316,7 +278,7 @@ export default function SecurityPage() {
                       required
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="msecurity__field-group">
                     <label htmlFor="enable-pw">{t('fields.currentPassword.label')}</label>
                     <input
                       id="enable-pw"
@@ -328,15 +290,11 @@ export default function SecurityPage() {
                       required
                     />
                   </div>
-                  <div className="form-row">
+                  <div className="msecurity__row">
                     <button type="submit" disabled={loading}>
                       {loading ? t('actions.enabling') : t('actions.confirmEnable')}
                     </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => setSetupData(null)}
-                    >
+                    <button type="button" className="secondary" onClick={() => setSetupData(null)}>
                       {t('actions.cancel')}
                     </button>
                   </div>
@@ -344,24 +302,24 @@ export default function SecurityPage() {
               </div>
             ) : (
               <div>
-                <p className="text-sm">
+                <p className="msecurity__hint">
                   <span className="badge draft">
                     {setupInProgress ? t('twoFA.status.setupInProgress') : t('twoFA.status.disabled')}
-                  </span>
-                  <span className="ml-2">{t('twoFA.disabledHint')}</span>
+                  </span>{' '}
+                  <span>{t('twoFA.disabledHint')}</span>
                 </p>
-                <button type="button" onClick={handleSetup} disabled={loading} className="mt-2">
+                <button type="button" onClick={() => void handleSetup()} disabled={loading}>
                   {setupInProgress ? t('actions.regenerateSecret') : t('actions.enable')}
                 </button>
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="card">
-            <h3 className="card-title">{t('changePassword.title')}</h3>
-            <p className="text-sm text-muted mb-4">{t('changePassword.hint')}</p>
+          <section className="msecurity__card">
+            <h3 className="msecurity__card-title">{t('changePassword.title')}</h3>
+            <p className="msecurity__hint">{t('changePassword.hint')}</p>
             <form onSubmit={handleChangePassword}>
-              <div className="form-group">
+              <div className="msecurity__field-group">
                 <label htmlFor="current-pw">{t('fields.currentPassword.label')}</label>
                 <input
                   id="current-pw"
@@ -372,7 +330,7 @@ export default function SecurityPage() {
                   required
                 />
               </div>
-              <div className="form-group">
+              <div className="msecurity__field-group">
                 <label htmlFor="new-pw">{t('fields.newPassword.label')}</label>
                 <input
                   id="new-pw"
@@ -383,7 +341,7 @@ export default function SecurityPage() {
                   required
                 />
               </div>
-              <div className="form-group">
+              <div className="msecurity__field-group">
                 <label htmlFor="confirm-pw">{t('fields.confirmPassword.label')}</label>
                 <input
                   id="confirm-pw"
@@ -398,27 +356,9 @@ export default function SecurityPage() {
                 {loading ? t('actions.changing') : t('changePassword.title')}
               </button>
             </form>
-          </div>
+          </section>
         </>
       )}
-
-      <ConfirmDialog
-        open={disableConfirmOpen}
-        title={t('twoFA.disable.confirmTitle')}
-        message={
-          <>
-            {t('twoFA.disable.confirmMessage')}
-            <br />
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>
-              {t('twoFA.disable.confirmHint')}
-            </span>
-          </>
-        }
-        confirmText={t('actions.confirmDisable')}
-        variant="warning"
-        onConfirm={confirmDisable}
-        onCancel={() => setDisableConfirmOpen(false)}
-      />
     </div>
   )
 }

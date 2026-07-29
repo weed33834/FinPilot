@@ -366,7 +366,12 @@
     "colConfidence": "Confidence",
     "colCreatedAt": "Created",
     "colActions": "Actions",
-    "view": "View"
+    "view": "View",
+    "detailStatus": "Status",
+    "detailConfidence": "Confidence",
+    "detailCreatedAt": "Created",
+    "detailError": "Error",
+    "detailParseResult": "Parse Result"
   },
   "reports": {
     "title": "Financial Reports",

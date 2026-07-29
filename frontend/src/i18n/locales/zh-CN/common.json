@@ -366,7 +366,12 @@
     "colConfidence": "置信度",
     "colCreatedAt": "创建时间",
     "colActions": "操作",
-    "view": "查看"
+    "view": "查看",
+    "detailStatus": "状态",
+    "detailConfidence": "置信度",
+    "detailCreatedAt": "创建时间",
+    "detailError": "错误",
+    "detailParseResult": "解析结果"
   },
   "reports": {
     "title": "财务报告",

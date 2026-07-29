@@ -13,10 +13,15 @@ import EmptyState from '../components/ui/EmptyState.tsx'
 import Badge from '../components/ui/Badge.tsx'
 import { ICONS } from '../components/ui/Icons.tsx'
 import { toast } from '../components/ui/Toaster.tsx'
+import { useDevice } from '../context/DeviceContext'
+import DocumentsMobile from './mobile/DocumentsMobile'
+import DocumentDetailMobile from './mobile/DocumentDetailMobile'
 
 export default function DocumentsPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const { isMobile } = useDevice()
+  if (isMobile) return id ? <DocumentDetailMobile id={id} /> : <DocumentsMobile />
   const [documents, setDocuments] = useState<Document[]>([])
   const [selected, setSelected] = useState<Document | null>(null)
   const [loading, setLoading] = useState(false)

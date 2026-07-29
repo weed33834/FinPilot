@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next'
 import Sidebar from './Sidebar.tsx'
 import KeyboardShortcutsDialog from './KeyboardShortcuts.tsx'
 import { useKeyboardShortcuts, type ShortcutGroup } from '../hooks/useKeyboardShortcuts'
+import { useDevice } from '../context/DeviceContext'
+import MobileShell from './mobile/MobileShell'
 
 interface LayoutProps {
   children: ReactNode
 }
 
-export default function Layout({ children }: LayoutProps) {
+/** 桌面外壳：原 Sidebar + 主内容 + 快捷键面板，保持桌面行为不变。 */
+function DesktopShell({ children }: LayoutProps) {
   const { t } = useTranslation('menu')
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
@@ -51,4 +54,13 @@ export default function Layout({ children }: LayoutProps) {
       <KeyboardShortcutsDialog open={showDialog} onClose={closeDialog} groups={shortcutGroups} />
     </div>
   )
+}
+
+/**
+ * 布局分发器：移动端走独立 MobileShell（底部 Tab + 顶栏），桌面端走原 Sidebar 布局。
+ * 两端共用同一路由与页面组件，深链通用；互不污染。
+ */
+export default function Layout({ children }: LayoutProps) {
+  const { isMobile } = useDevice()
+  return isMobile ? <MobileShell>{children}</MobileShell> : <DesktopShell>{children}</DesktopShell>
 }

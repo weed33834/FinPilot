@@ -8,8 +8,10 @@ import { ICONS } from '../components/ui/Icons.tsx'
 import { toast } from '../components/ui/Toaster.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
 import { formatDateTime } from '../utils/format.ts'
+import { useDevice } from '../context/DeviceContext'
 import type { PendingApproval } from '../types/approval'
 import type { DataResponse, PaginatedResponse, Report } from '../types/report'
+import ApprovalsMobile from './mobile/ApprovalsMobile'
 
 interface ApprovalRecord {
   id: string
@@ -32,6 +34,8 @@ function toPendingApproval(report: Report): PendingApproval {
 
 export default function ApprovalsPage() {
   const { t } = useTranslation()
+  const { isMobile } = useDevice()
+  if (isMobile) return <ApprovalsMobile />
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([])
   const [history, setHistory] = useState<ApprovalRecord[]>([])
   const [loading, setLoading] = useState(false)
