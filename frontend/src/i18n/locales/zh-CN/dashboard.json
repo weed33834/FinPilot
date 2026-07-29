@@ -20,6 +20,12 @@
     "parsed": "已解析",
     "today": "今日"
   },
+  "ticker": {
+    "reports": "报表",
+    "pending": "待审批",
+    "documents": "文档",
+    "queries": "查询中"
+  },
   "sections": {
     "reportTrend": "7 天报告趋势",
     "pendingTodo": "待办事项",
@@ -97,7 +103,9 @@
     "recentActivities": "暂无动态",
     "recentActivitiesDesc": "系统操作将自动记录在此",
     "reportTrend": "这周还没有报告产出。",
-    "reportTrendDesc": "尚无审批数据，开始创建报告后趋势会出现在这里"
+    "reportTrendDesc": "尚无审批数据，开始创建报告后趋势会出现在这里",
+    "summary": "暂无工作台数据",
+    "summaryDesc": "点击刷新重新加载工作台数据。"
   },
   "meta": {
     "last7d": "近 7 天",

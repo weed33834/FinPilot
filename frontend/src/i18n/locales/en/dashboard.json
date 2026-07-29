@@ -20,6 +20,12 @@
     "parsed": "Parsed",
     "today": "Today"
   },
+  "ticker": {
+    "reports": "Reports",
+    "pending": "Pending",
+    "documents": "Documents",
+    "queries": "Querying"
+  },
   "sections": {
     "reportTrend": "7-Day Report Trend",
     "pendingTodo": "Pending Tasks",
@@ -97,7 +103,9 @@
     "recentActivities": "No activities",
     "recentActivitiesDesc": "System actions will be logged here automatically",
     "reportTrend": "No reports this week.",
-    "reportTrendDesc": "Once reports are created, the trend will appear here"
+    "reportTrendDesc": "Once reports are created, the trend will appear here",
+    "summary": "No dashboard data",
+    "summaryDesc": "Click refresh to reload dashboard data."
   },
   "meta": {
     "last7d": "Last 7 days",

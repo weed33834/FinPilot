@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client.ts'
 import { PageSkeleton } from '../components/ui/Loading.tsx'
+import EmptyState from '../components/ui/EmptyState.tsx'
 import { ICONS } from '../components/ui/Icons.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
 import { useAuth } from '../context/AuthContext.tsx'
@@ -95,7 +96,10 @@ export default function DashboardPage() {
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={fetchSummary}>
+            {t('common:actions.retry')}
+          </button>
         </div>
       )}
 
@@ -106,19 +110,19 @@ export default function DashboardPage() {
           {/* 实时数据条 */}
           <div className="data-ticker mb-4">
             <div className="data-ticker-item">
-              <span className="data-ticker-label">报表</span>
+              <span className="data-ticker-label">{t('dashboard:ticker.reports')}</span>
               <span className="num-up">{summary.report_count}</span>
             </div>
             <div className="data-ticker-item">
-              <span className="data-ticker-label">待审批</span>
+              <span className="data-ticker-label">{t('dashboard:ticker.pending')}</span>
               <span className={pendingCount ? 'num-up' : 'num-flat'}>{pendingCount}</span>
             </div>
             <div className="data-ticker-item">
-              <span className="data-ticker-label">文档</span>
+              <span className="data-ticker-label">{t('dashboard:ticker.documents')}</span>
               <span>{summary.document_count}</span>
             </div>
             <div className="data-ticker-item">
-              <span className="data-ticker-label">查询中</span>
+              <span className="data-ticker-label">{t('dashboard:ticker.queries')}</span>
               <span>{summary.processing_query_count ?? '-'}</span>
             </div>
           </div>
@@ -229,7 +233,18 @@ export default function DashboardPage() {
             </div>
           </div>
         </>
-      ) : null}
+      ) : (
+        <EmptyState
+          icon="dashboard"
+          title={t('dashboard:empty.summary')}
+          description={t('dashboard:empty.summaryDesc')}
+          action={
+            <button type="button" className="secondary" onClick={fetchSummary}>
+              {t('common:actions.refresh')}
+            </button>
+          }
+        />
+      )}
     </div>
   )
 }
