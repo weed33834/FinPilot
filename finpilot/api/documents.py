@@ -416,6 +416,60 @@ def delete_document(
             os.remove(doc.file_path)
     except OSError:
         pass
+    # 清理 RAG 索引：移除该文档在内存索引与 DocumentChunk 表中的 chunk，
+    # 此前仅删 Document 记录，导致内存索引与 DB 状态不一致、检索命中已删文档
+    try:
+        rag = RagService(db)
+        rag.remove_document(document_id, db)
+    except Exception:  # noqa: BLE001  索引清理失败不阻断文档删除
+        pass
     db.delete(doc)
     db.commit()
     return _ok(None, "已删除")
+
+
+@router.post("/{document_id}/reindex")
+def reindex_document(
+    document_id: int,
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(get_current_user),
+):
+    """重建指定文档的 RAG 索引。
+
+    场景：文档内容更新、embedding 模型升级、或索引损坏后需重新切分+向量化。
+    先移除旧 chunk（内存+DB），再重新解析物理文件并索引。
+    """
+    tenant_id = tenant_of(current_user)
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.tenant_id == tenant_id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
+    if not doc.file_path or not os.path.isfile(doc.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="文档物理文件不存在，无法重建索引",
+        )
+
+    rag = RagService(db)
+    # 1. 移除旧索引
+    removed = rag.remove_document(document_id, db)
+    # 2. 重新解析物理文件
+    try:
+        parser = get_parser(doc.file_path)
+        parsed = parser.parse(doc.file_path)
+    except ParserError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"解析失败: {exc}",
+        )
+    # 3. 重新索引
+    full_text = "\n\n".join(p.text for p in parsed.pages if p.text)
+    chunks = rag.index_document(doc.id, full_text, tenant_id=tenant_id)
+    crud.update_document_status(db, doc.id, "indexed")
+    return _ok(
+        {"document_id": str(doc.id), "removed_chunks": removed, "indexed_chunks": chunks},
+        "索引重建完成",
+    )

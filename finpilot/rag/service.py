@@ -228,3 +228,54 @@ class RagService:
         self.vector_store.clear()
         self.bm25_index.clear()
         self.registry.clear()
+
+    def rebuild_from_db(self, db: Session) -> int:
+        """从 DB ``DocumentChunk`` 表重建内存索引（进程重启后恢复检索能力）。
+
+        此前内存 vector_store / bm25_index / registry 为进程级状态，服务重启后
+        全空，所有 RAG 检索返回空结果。本方法遍历 DB 已持久化的 chunk 重建三份
+        内存索引，使重启后检索立即可用。返回重建的 chunk 数。
+        """
+        self.clear()
+        chunks = db.query(DocumentChunk).all()
+        for ch in chunks:
+            chunk_key = f"{ch.document_id}:{ch.chunk_index}"
+            try:
+                emb_vec = json.loads(ch.embedding) if ch.embedding else []
+            except (TypeError, ValueError):
+                emb_vec = []
+            self.vector_store.add(
+                chunk_key, ch.content, emb_vec, document_id=ch.document_id
+            )
+            self.bm25_index.add(chunk_key, ch.content)
+            self.registry[chunk_key] = {
+                "document_id": ch.document_id,
+                "chunk_index": ch.chunk_index,
+                "text": ch.content,
+                "tenant_id": ch.tenant_id or "default",
+            }
+        logger.info("RAG 内存索引重建完成：从 DB 恢复 %d 个 chunk", len(chunks))
+        return len(chunks)
+
+    def remove_document(self, document_id: int, db: Optional[Session] = None) -> int:
+        """从内存索引与 DB 移除指定文档的所有 chunk，返回移除的 chunk 数。
+
+        ``DELETE /documents/{id}`` 此前只删物理文件 + Document 记录，未清
+        DocumentChunk 表与内存索引，导致内存与 DB 状态不一致、检索命中已删文档。
+        """
+        removed_keys = [
+            k for k, m in self.registry.items() if m["document_id"] == document_id
+        ]
+        for k in removed_keys:
+            self.registry.pop(k, None)
+            self.vector_store.remove(k)
+            self.bm25_index.remove(k)
+        if db is not None and removed_keys:
+            db.query(DocumentChunk).filter(
+                DocumentChunk.document_id == document_id
+            ).delete(synchronize_session=False)
+            db.commit()
+        logger.info(
+            "RAG 移除文档 %s 的 %d 个 chunk", document_id, len(removed_keys)
+        )
+        return len(removed_keys)

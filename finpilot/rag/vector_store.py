@@ -70,3 +70,7 @@ class VectorStore:
     def clear(self) -> None:
         """清空向量库"""
         self.docs.clear()
+
+    def remove(self, doc_id: str) -> None:
+        """按 doc_id 移除单条向量（删除文档时清理其 chunk 索引）"""
+        self.docs.pop(doc_id, None)

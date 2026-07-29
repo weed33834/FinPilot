@@ -188,6 +188,15 @@ def configure_middleware(app: FastAPI) -> None:
                     logger.info("mcp_tools_registered_at_startup: %d", n)
         except Exception as exc:  # noqa: BLE001
             logger.warning("mcp_tools_startup_load_failed: %s", exc)
+        # 3. 从 DB 重建 RAG 内存索引（vector_store/bm25_index/registry 为进程级状态，
+        #    重启后全空导致检索返回空；此前服务重启后所有 RAG 检索失效）
+        try:
+            from finpilot.database import SessionLocal
+            from finpilot.rag import RagService
+            with SessionLocal() as _db:
+                RagService(_db).rebuild_from_db(_db)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("rag_index_rebuild_at_startup_failed: %s", exc)
         try:
             yield
         finally:

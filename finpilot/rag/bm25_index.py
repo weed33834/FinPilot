@@ -56,3 +56,13 @@ class BM25Index:
         self.doc_ids.clear()
         self.corpus.clear()
         self.bm25 = None
+
+    def remove(self, doc_id: str) -> None:
+        """按 doc_id 移除单篇文档；标记索引为脏，查询前惰性重建"""
+        try:
+            idx = self.doc_ids.index(doc_id)
+        except ValueError:
+            return
+        self.doc_ids.pop(idx)
+        self.corpus.pop(idx)
+        self.bm25 = None
