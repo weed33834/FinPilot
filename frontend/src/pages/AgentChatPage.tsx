@@ -18,6 +18,7 @@ import { FetchError, getErrorLevel, getErrorLevelLabel, getErrorMessage, type Er
 import { parseSlashCommand, renderHelpForRole, type SlashCommand } from '../utils/slashCommands'
 import { useAuthStore } from '../stores/authStore'
 import SlashCommandPalette from '../components/SlashCommandPalette'
+import { toast } from '../components/ui/Toaster'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -40,6 +41,8 @@ interface Message {
   confidence?: number
   /** Whether reasoning chain panel is expanded */
   reasoningExpanded?: boolean
+  /** Whether generation was stopped/interrupted by user */
+  stopped?: boolean
 }
 
 interface UploadedFile {
@@ -201,6 +204,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
         {/* ---- Chat bubble ---- */}
         <MarkdownRenderer content={message.content} className="chat-bubble" />
         {isStreamingTarget && <span className="cursor-blink" />}
+        {message.stopped && (
+          <div className="chat-stopped-mark" role="status">已停止生成</div>
+        )}
 
         {/* ---- Confidence badge ---- */}
         {message.role === 'agent' && message.confidence != null && (
@@ -309,23 +315,59 @@ export default function AgentChatPage() {
   const role = useAuthStore((s) => s.role)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const initialSubmittedRef = useRef(false)
   const modelDropdownRef = useRef<HTMLDivElement>(null)
+  /** 最新 messages 快照，供回调内读取，避免把 messages 放进依赖导致流式期间回调重建 */
+  const messagesRef = useRef<Message[]>([])
+  /** 最近一次提交的 user 问题，供错误重试使用 */
+  const lastQuestionRef = useRef<string>('')
+  /** 消息滚动容器，用于判断用户是否停留在底部以决定是否自动跟随 */
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  /** 用户是否处于消息列表底部（true 时流式新 token 才自动滚动跟随） */
+  const isAtBottomRef = useRef(true)
 
   /* ------------------------------------------------------------------ */
   /*  Effects                                                            */
   /* ------------------------------------------------------------------ */
 
+  // 同步 messages 快照，供回调内读取（避免把 messages 放进 useCallback 依赖）
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesRef.current = messages
+  }, [messages])
+
+  // 仅在用户停留在底部时自动跟随滚动，避免用户上滚回看历史时被强制拉回
+  useEffect(() => {
+    if (isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages, loading, streamingMessageId])
+
+  // 监听消息容器滚动，更新"是否在底部"标记
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const handler = () => {
+      const threshold = 80 // 距底部 80px 内视为"在底部"
+      isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    }
+    el.addEventListener('scroll', handler, { passive: true })
+    return () => el.removeEventListener('scroll', handler)
+  }, [])
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // question 变化时自适应 textarea 高度（覆盖发送/新建对话等程序化清空场景）
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+  }, [question])
 
   /* Fetch available models from backend */
   useEffect(() => {
@@ -431,12 +473,13 @@ export default function AgentChatPage() {
 
       setMessages((prev) => [...prev, userMessage])
       setQuestion('')
+      lastQuestionRef.current = trimmed
       setLoading(true)
       setError('')
       setErrorLevel('unknown')
       setStreamingMessageId(null)
 
-      const history = messages
+      const history = messagesRef.current
         .slice(-10)
         .map((m) => ({
           role: m.role === 'agent' ? 'assistant' : m.role,
@@ -597,7 +640,10 @@ export default function AgentChatPage() {
         }
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === 'AbortError') {
-          // user aborted — keep partial content，不上报错误
+          // user aborted — keep partial content，标记该消息为已中断
+          setMessages((prev) =>
+            prev.map((m) => (m.id === answerMessageId ? { ...m, stopped: true } : m)),
+          )
         } else {
           const msg = getErrorMessage(err, '连接中断，请稍后重试')
           if (msg) {
@@ -610,7 +656,7 @@ export default function AgentChatPage() {
         setLoading(false)
       }
     },
-    [loading, messages, conversationId, deepThink, useWeb, activeModel, uploadedFiles],
+    [loading, conversationId, deepThink, useWeb, activeModel, uploadedFiles],
   )
 
   /* ------------------------------------------------------------------ */
@@ -715,8 +761,8 @@ export default function AgentChatPage() {
     setTimeout(() => inputRef.current?.focus(), 0)
   }
 
-  /** 输入框键盘事件：在面板可见时，让面板接管方向键 */
-  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  /** 输入框键盘事件：面板可见时让面板接管方向键；Enter 发送 / Shift+Enter 换行 */
+  const handleInputKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (showSlashPalette) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape') {
         e.preventDefault()
@@ -729,12 +775,32 @@ export default function AgentChatPage() {
         return
       }
     }
+    // Enter 发送 / Shift+Enter 换行（IME 组字中不触发，避免中文输入被打断）
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      const q = question.trim()
+      if (!q || loading) return
+      if (q.startsWith('/')) {
+        void executeSlashCommand(question)
+      } else {
+        void handleSubmitInternal(question)
+      }
+    }
+  }
+
+  /** 自适应高度：根据 scrollHeight 调整 textarea 高度，上限 200px（约 8 行） */
+  const autoResizeInput = () => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }
 
   /** 输入框内容变化时，决定是否显示 slash 面板 */
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     setQuestion(value)
+    autoResizeInput()
     // 仅当输入以 / 开头且尚未按空格定参时显示面板
     const trimmed = value.trim()
     if (trimmed.startsWith('/') && !trimmed.includes(' ')) {
@@ -785,8 +851,9 @@ export default function AgentChatPage() {
   const handleCopy = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content)
+      toast.success('已复制到剪贴板')
     } catch {
-      // fallback silently
+      toast.error('复制失败，请手动选择文本复制')
     }
   }
 
@@ -794,13 +861,14 @@ export default function AgentChatPage() {
     if (action === 'regenerate') {
       // 重新生成：基于该 agent 回答对应的上一条 user 提问重新生成，
       // 而非把 agent 回答当问题重发（此前逻辑反了，导致越生成越偏）
-      const idx = messages.findIndex((m) => m.id === messageId)
+      const list = messagesRef.current
+      const idx = list.findIndex((m) => m.id === messageId)
       if (idx < 0) return
       // 向前找最近一条 user 消息作为原始问题
       let originalQuestion = ''
       for (let i = idx - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') {
-          originalQuestion = messages[i].content
+        if (list[i].role === 'user') {
+          originalQuestion = list[i].content
           break
         }
       }
@@ -828,12 +896,28 @@ export default function AgentChatPage() {
 
   const handleStop = () => {
     // 手动中断当前流式请求（此前仅在新提交时自动 abort，用户无法主动停止）
+    const targetId = streamingMessageId
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
+    // 标记当前流式消息为已中断，让用户立刻看到"已停止生成"
+    if (targetId) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === targetId ? { ...m, stopped: true } : m)),
+      )
+    }
     setLoading(false)
     setStreamingMessageId(null)
+  }
+
+  /** 错误后重试：用最近一次提交的 user 问题重新发起 */
+  const handleRetry = () => {
+    const q = lastQuestionRef.current
+    if (!q) return
+    setError('')
+    setErrorLevel('unknown')
+    void handleSubmitInternal(q)
   }
 
   const handleNewChat = () => {
@@ -880,7 +964,7 @@ export default function AgentChatPage() {
       </div>
 
       <div className="card chat-container">
-        <div className="chat-messages">
+        <div className="chat-messages" ref={scrollContainerRef}>
           {!hasContent ? (
             /* ----- Empty state ----- */
             <div className="chat-empty">
@@ -956,6 +1040,16 @@ export default function AgentChatPage() {
             <span className="chat-error-icon" aria-hidden="true">!</span>
             <span className="chat-error-level">{getErrorLevelLabel(errorLevel)}</span>
             <span className="chat-error-text">{error}</span>
+            {lastQuestionRef.current && (
+              <button
+                type="button"
+                className="chat-error-retry"
+                onClick={handleRetry}
+                disabled={loading}
+              >
+                重试
+              </button>
+            )}
             <button
               type="button"
               className="chat-error-close"
@@ -1096,14 +1190,14 @@ export default function AgentChatPage() {
             >
               /
             </button>
-            <input
+            <textarea
               ref={inputRef}
               className="chat-input-field"
               value={question}
               onChange={handleInputChange}
               onKeyDown={handleInputKeyDown}
-              placeholder="输入问题，或输入 / 调用命令面板控制整个程序"
-              disabled={loading}
+              placeholder="输入问题，或输入 / 调用命令面板控制整个程序（Enter 发送 / Shift+Enter 换行）"
+              rows={1}
               aria-label="输入问题"
             />
             {isStreaming ? (
