@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from finpilot.api.deps import get_current_user, get_db_session

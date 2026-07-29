@@ -2,10 +2,13 @@
 示例财务数据初始化 - 创建3张示例财务报表及科目
 报表：资产负债表、利润表、现金流量表（科目名称支持中文）
 """
+import logging
 
 from sqlalchemy.orm import Session
 
 from .models import FinancialReport, FinancialAccount
+
+logger = logging.getLogger(__name__)
 
 # 科目元组结构：(account_name, account_category, debit_amount, credit_amount, balance)
 COMPANY_NAME = "示例科技有限公司"
@@ -90,7 +93,7 @@ def seed_financial_data(db: Session) -> None:
     """向数据库写入示例财务数据：资产负债表、利润表、现金流量表"""
     # 已存在报表则跳过，避免重复初始化
     if db.query(FinancialReport).count() > 0:
-        print("示例财务数据已存在，跳过初始化。")
+        logger.info("示例财务数据已存在，跳过初始化。")
         return
 
     for report_cfg in REPORTS_DATA:
@@ -118,8 +121,10 @@ def seed_financial_data(db: Session) -> None:
             )
 
     db.commit()
-    print("示例财务数据初始化完成：3 张报表，共 "
-          f"{sum(len(r['accounts']) for r in REPORTS_DATA)} 个科目。")
+    logger.info(
+        "示例财务数据初始化完成：3 张报表，共 %d 个科目。",
+        sum(len(r["accounts"]) for r in REPORTS_DATA),
+    )
 
 
 if __name__ == "__main__":

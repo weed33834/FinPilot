@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -214,7 +215,32 @@ def _ensure_default_admin() -> None:
 # 模块级 FastAPI 应用实例（供 uvicorn 直接加载）
 setup_logging()
 
-app = FastAPI(title="FinPilot AI", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：启动订阅调度后台线程，停止时优雅关闭.
+
+    替代 FastAPI 0.93+ 已弃用的 ``@app.on_event('startup'/'shutdown')``。
+    可由 ``FINPILOT_SUBSCRIPTION_SCHEDULER=0`` 关闭。
+    """
+    try:
+        from finpilot.services.subscription_scheduler import start_scheduler
+
+        start_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("subscription_scheduler_start_failed: %s", exc)
+    try:
+        yield
+    finally:
+        try:
+            from finpilot.services.subscription_scheduler import stop_scheduler
+
+            stop_scheduler()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+app = FastAPI(title="FinPilot AI", version="1.0.0", lifespan=lifespan)
 
 # ── Rate Limiting 全局配置 ──
 app.state.limiter = limiter
@@ -237,24 +263,3 @@ app.add_middleware(TenantMiddleware)
 
 configure_cors(app)
 app.include_router(create_router())
-
-
-# 启动订阅调度后台线程（可由 FINPILOT_SUBSCRIPTION_SCHEDULER=0 关闭）
-@app.on_event("startup")
-def _start_subscription_scheduler() -> None:
-    try:
-        from finpilot.services.subscription_scheduler import start_scheduler
-
-        start_scheduler()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("subscription_scheduler_start_failed: %s", exc)
-
-
-@app.on_event("shutdown")
-def _stop_subscription_scheduler() -> None:
-    try:
-        from finpilot.services.subscription_scheduler import stop_scheduler
-
-        stop_scheduler()
-    except Exception:  # noqa: BLE001
-        pass

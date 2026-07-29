@@ -1,13 +1,25 @@
-"""配置 hcnsec NewAPI channel 作为 LLM provider（包含 25 个模型）。"""
+"""配置 hcnsec NewAPI channel 作为 LLM provider（包含 25 个模型）。
+
+凭据从环境变量读取，避免硬编码：
+- FINPILOT_ADMIN_EMAIL（默认 admin@finpilot.ai）
+- FINPILOT_ADMIN_PASSWORD（必填，未设置则报错退出）
+- HCNSEC_KEY（hcnsec API Key，必填）
+"""
 import os
+import sys
 import requests
 
-BASE = "http://localhost:8001/api/v1"
+BASE = os.getenv("FINPILOT_BASE_URL", "http://localhost:8001/api/v1")
+ADMIN_EMAIL = os.getenv("FINPILOT_ADMIN_EMAIL", "admin@finpilot.ai")
+ADMIN_PASSWORD = os.getenv("FINPILOT_ADMIN_PASSWORD", "")
+if not ADMIN_PASSWORD:
+    print("[ERROR] 未设置 FINPILOT_ADMIN_PASSWORD 环境变量，拒绝使用硬编码凭据。")
+    sys.exit(1)
 
 # 登录
 login_resp = requests.post(
     f"{BASE}/auth/login",
-    json={"username": "admin@finpilot.ai", "password": "admin123", "remember_me": False},
+    json={"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "remember_me": False},
 )
 assert login_resp.status_code == 200, login_resp.text
 token = login_resp.json()["data"]["access_token"]
@@ -77,7 +89,7 @@ if hcnsec:
     print(f"[{'OK' if resp.status_code == 200 else 'FAIL'}] 更新: {resp.status_code} {resp.text[:200]}")
 else:
     # 创建
-    print(f"[INFO] 创建 hcnsec provider")
+    print("[INFO] 创建 hcnsec provider")
     resp = requests.post(
         f"{BASE}/llm-providers",
         headers=headers,

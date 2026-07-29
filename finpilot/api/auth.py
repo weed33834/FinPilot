@@ -22,7 +22,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from finpilot.core.config import settings
 from finpilot.core.logging import get_logger
 from finpilot.core.session import session_store
 from finpilot.database import crud

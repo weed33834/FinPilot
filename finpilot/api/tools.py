@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from finpilot.api.deps import require_scope, get_current_user, get_db_session
 from finpilot.api.schemas import (
-    ToolCreate,
     ToolResponse,
     ToolTestRequest,
     ToolUpdate,
@@ -287,7 +286,7 @@ def tools_audit(
             "timestamp": log.created_at.isoformat(sep=" ") if log.created_at else None,
         }
 
-    return {"code": 0, "message": "ok", "data": [_log_to_record(l) for l in logs]}
+    return {"code": 0, "message": "ok", "data": [_log_to_record(rec) for rec in logs]}
 
 
 @router.get("/usage-stats")

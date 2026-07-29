@@ -13,7 +13,6 @@
   3) 指标→列映射 / 派生指标公式等业务语义。
 """
 import re
-from typing import Optional
 
 from sqlalchemy import inspect
 

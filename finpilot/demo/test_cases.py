@@ -32,7 +32,7 @@ _PKG_ROOT = os.path.dirname(os.path.dirname(_HERE))
 if _PKG_ROOT not in sys.path:
     sys.path.insert(0, _PKG_ROOT)
 
-from finpilot.demo.datasets import get_extreme_dataset
+from finpilot.demo.datasets import get_extreme_dataset  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

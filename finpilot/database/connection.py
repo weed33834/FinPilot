@@ -3,11 +3,14 @@
 - 数据库路径：~/.finpilot/finpilot.db（自动创建目录）
 - 提供 engine、SessionLocal、init_db()、get_db()
 """
+import logging
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
+logger = logging.getLogger(__name__)
 
 # SQLite 数据库路径：~/.finpilot/finpilot.db，自动创建目录
 DB_DIR = Path.home() / ".finpilot"
@@ -61,7 +64,7 @@ def _apply_schema_patches() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
     except Exception as exc:  # noqa: BLE001
         # 补丁失败不应阻断启动（最坏只是新字段读不到，回到旧行为）
-        print(f"[schema_patches] 跳过: {exc}")
+        logger.warning("schema_patches 跳过: %s", exc)
 
 
 def init_db() -> None:
@@ -72,7 +75,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _apply_schema_patches()
-    print(f"数据库已初始化：{DATABASE_PATH}")
+    logger.info("数据库已初始化：%s", DATABASE_PATH)
 
 
 def get_db():
