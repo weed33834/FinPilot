@@ -549,12 +549,31 @@ def react_agent_node(
         steps = compression.new_steps
         state = {**state, "react_steps": steps}
 
+    # 工具暴露控制：
+    # - enabled_tools 非空（显式白名单）→ 仅暴露指定工具
+    # - 否则按 use_web 开关：use_web=False 时隐藏 web 标签工具（避免无搜索配置时
+    #   LLM 误调 web_search 产生噪声）；use_web=True 时暴露全部（含 web 工具）
+    enabled_tools = state.get("enabled_tools") or []
+    use_web = bool(state.get("use_web", False))
+    if enabled_tools:
+        tool_specs = [tool_registry.get(n) for n in enabled_tools]
+        tool_specs = [s for s in tool_specs if s is not None]
+        tools_desc = (
+            tool_registry.build_description(tool_specs) if tool_specs
+            else tool_registry.build_description()
+        )
+    elif not use_web:
+        _non_web = [s for s in tool_registry.all() if "web" not in (s.tags or [])]
+        tools_desc = tool_registry.build_description(_non_web)
+    else:
+        tools_desc = tool_registry.build_description()
+
     if agent_config is not None and getattr(agent_config, "system_prompt", None):
         # 允许管理员自定义系统提示词，但保留 ReAct 格式约束与工具描述
         custom_intro = agent_config.system_prompt.strip()
         system_prompt = (
             f"{custom_intro}\n\n"
-            f"可用工具：\n{tool_registry.build_description()}\n\n"
+            f"可用工具：\n{tools_desc}\n\n"
             "请严格按以下格式输出，不要输出任何额外内容：\n"
             "Thought: <你对问题的思考与推理>\n"
             "Action: <工具名称，或 FinalAnswer 表示给出最终答案>\n"
@@ -572,12 +591,19 @@ def react_agent_node(
         )
     else:
         system_prompt = _REACT_SYSTEM_PROMPT.format(
-            tools=tool_registry.build_description(),
+            tools=tools_desc,
             max_steps=MAX_REACT_STEPS,
         )
 
     # 按问题复杂度路由模型档位；若 agent_config 绑定模型，优先用其 tier
     decision = ModelRouter().route(question, intent=intent)
+    # 深度思考开关：前端 deep_think=True 时强制提升到 high 档位（覆盖路由决策），
+    # 使复杂分析问题使用更强模型。fallback 仍保留路由原档位，避免 high 不可用时无模型可用。
+    if state.get("deep_think") and decision.tier != "high":
+        decision.fallback_tiers = [decision.tier] + [
+            t for t in decision.fallback_tiers if t != "high"
+        ]
+        decision.tier = "high"
     if agent_config is not None and getattr(agent_config, "model_id", None):
         preferred_tier = _resolve_model_tier(db, agent_config.model_id)
         if preferred_tier:

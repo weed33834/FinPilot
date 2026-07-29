@@ -48,6 +48,7 @@ export const ICONS = {
   download: make('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'),
   refresh: make('M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15'),
   send: make('M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z'),
+  stop: make('M6 6h12v12H6z'),
   empty: make('M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'),
   trend: make('M23 6l-9.5 9.5-5-5L1 18M17 6h6v6'),
   search: make('M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35'),

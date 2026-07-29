@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { useLocation } from 'react-router-dom'
 import { generateId } from '../utils/id'
+import { getConversation, type ConversationMessage } from '../api/conversations'
 import { ICONS } from '../components/ui/Icons'
 import ReasoningChain from '../components/ReasoningChain'
 import MarkdownRenderer from '../components/MarkdownRenderer'
@@ -52,6 +53,7 @@ interface SseEvent {
   type: 'start' | 'thinking' | 'thinking_token' | 'answer_token' | 'done' | 'error' | 'interrupt'
   content?: string
   question?: string
+  conversation_id?: string
   thinking_time_ms?: number
   message?: string
   payload?: unknown
@@ -129,7 +131,7 @@ interface ChatMessageRowProps {
   onToggleThinking: (id: string) => void
   onToggleReasoning: (id: string) => void
   onCopy: (content: string) => void
-  onRefine: (action: string, content: string) => void
+  onRefine: (action: string, content: string, messageId: string) => void
   onDelete: (id: string) => void
 }
 
@@ -254,7 +256,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
                   type="button"
                   className="refine-btn"
                   title={action.label}
-                  onClick={() => onRefine(action.id, message.content)}
+                  onClick={() => onRefine(action.id, message.content, message.id)}
                 >
                   <span>{action.label}</span>
                 </button>
@@ -279,9 +281,10 @@ export default function AgentChatPage() {
   const location = useLocation()
   const params = new URLSearchParams(location.search)
   const initialQuestion = params.get('question') || ''
+  const cidFromUrl = params.get('cid') || ''
 
   const [messages, setMessages] = useState<Message[]>([])
-  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(cidFromUrl || null)
   const [question, setQuestion] = useState(initialQuestion)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -326,10 +329,12 @@ export default function AgentChatPage() {
 
   /* Fetch available models from backend */
   useEffect(() => {
+    let cancelled = false
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
     fetch(`${baseUrl}/agent/models`, { credentials: 'include' })
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return
         const models: ModelOption[] = data?.data || []
         setAvailableModels(models)
         if (models.length > 0) {
@@ -337,12 +342,54 @@ export default function AgentChatPage() {
         }
       })
       .catch(() => {
+        if (cancelled) return
         // 降级到硬编码兜底
         const fallback = { id: 'DeepSeek-V4-Pro', label: 'DeepSeek-V4-Pro', tier: 'high' }
         setAvailableModels([fallback])
         setActiveModel(fallback)
       })
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  /* 从 URL ?cid= 加载历史对话并渲染到消息列表（支持从会话管理页续聊） */
+  useEffect(() => {
+    if (!cidFromUrl) return
+    let cancelled = false
+    setLoading(true)
+    getConversation(cidFromUrl)
+      .then((res) => {
+        if (cancelled) return
+        const detail = res?.data?.data
+        if (!detail || !Array.isArray(detail.messages)) {
+          setError('会话不存在或已被删除')
+          setErrorLevel('client')
+          return
+        }
+        const loaded: Message[] = detail.messages.map((msg: ConversationMessage) => ({
+          id: generateId(),
+          role: msg.role === 'assistant' ? 'agent' : (msg.role as 'user' | 'agent'),
+          content: msg.content || '',
+          createdAt: new Date(msg.timestamp || Date.now()),
+          thinkingExpanded: false,
+        }))
+        setMessages(loaded)
+        setConversationId(cidFromUrl)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(getErrorMessage(err, '加载会话失败'))
+        setErrorLevel(getErrorLevel(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cidFromUrl])
 
   /* Close model dropdown on outside click */
   useEffect(() => {
@@ -480,8 +527,13 @@ export default function AgentChatPage() {
 
                   switch (event.type) {
                     case 'start':
-                      if (event.question) {
-                        /* no-op — question already shown */
+                      // 提取后端分配的 conversation_id 并同步到 URL，
+                      // 使刷新/分享链接可恢复当前会话（此前为 no-op 导致会话丢失）
+                      if (event.conversation_id) {
+                        setConversationId(event.conversation_id)
+                        const url = new URL(window.location.href)
+                        url.searchParams.set('cid', event.conversation_id)
+                        window.history.replaceState({}, '', url.toString())
                       }
                       return m
 
@@ -501,6 +553,12 @@ export default function AgentChatPage() {
                         thinkingExpanded: false,
                       }
 
+                    case 'interrupt':
+                      // 后端主动中断（如命中安全策略/超限），保留已生成内容并提示
+                      setError(event.message || '对话已被中断')
+                      setErrorLevel('server')
+                      return { ...m, thinkingExpanded: false }
+
                     case 'error':
                       setError(event.message || '未知错误')
                       // 后端主动通过 SSE 上报的错误通常属于服务端错误
@@ -514,7 +572,6 @@ export default function AgentChatPage() {
               )
 
               if (event.type === 'done') {
-                setConversationId((prev) => prev) // keep existing for now
                 setStreamingMessageId(null)
                 // Parse reasoning chain and confidence from done payload
                 if (event.payload && typeof event.payload === 'object') {
@@ -742,9 +799,28 @@ export default function AgentChatPage() {
     }
   }
 
-  const handleRefine = (action: string, msgContent: string) => {
+  const handleRefine = (action: string, msgContent: string, messageId: string) => {
+    if (action === 'regenerate') {
+      // 重新生成：基于该 agent 回答对应的上一条 user 提问重新生成，
+      // 而非把 agent 回答当问题重发（此前逻辑反了，导致越生成越偏）
+      const idx = messages.findIndex((m) => m.id === messageId)
+      if (idx < 0) return
+      // 向前找最近一条 user 消息作为原始问题
+      let originalQuestion = ''
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          originalQuestion = messages[i].content
+          break
+        }
+      }
+      if (!originalQuestion) return
+      // 移除当前这条 agent 回答，避免重复，再以原问题重新提交
+      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+      void handleSubmitInternal(originalQuestion)
+      return
+    }
+
     const prompts: Record<string, string> = {
-      regenerate: `请重新回答以下问题`,
       add_details: `请为以下回答添加更多细节和深度分析`,
       more_concise: `请将以下回答压缩为更简洁的版本`,
       polish: `请润色以下回答使其更加专业流畅`,
@@ -757,6 +833,35 @@ export default function AgentChatPage() {
 
   const handleDeleteMessage = (msgId: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== msgId))
+  }
+
+  const handleStop = () => {
+    // 手动中断当前流式请求（此前仅在新提交时自动 abort，用户无法主动停止）
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setLoading(false)
+    setStreamingMessageId(null)
+  }
+
+  const handleNewChat = () => {
+    // 新建对话：中断当前流、清空消息与 conversationId、清除 URL cid 参数
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setMessages([])
+    setConversationId(null)
+    setLoading(false)
+    setStreamingMessageId(null)
+    setError('')
+    setQuestion('')
+    const url = new URL(window.location.href)
+    url.searchParams.delete('cid')
+    url.searchParams.delete('question')
+    window.history.replaceState({}, '', url.toString())
+    inputRef.current?.focus()
   }
 
   /* ------------------------------------------------------------------ */
@@ -773,6 +878,14 @@ export default function AgentChatPage() {
           <h1>智能分析终端</h1>
           <p className="text-muted text-sm">自然语言查询财务数据 | AI 驱动报表分析</p>
         </div>
+        <button
+          type="button"
+          className="btn btn-outline"
+          onClick={handleNewChat}
+          title="新建对话"
+        >
+          + 新建对话
+        </button>
       </div>
 
       <div className="card chat-container">
@@ -1002,15 +1115,28 @@ export default function AgentChatPage() {
               disabled={loading}
               aria-label="输入问题"
             />
-            <button
-              type="submit"
-              className="chat-send"
-              disabled={loading || !question.trim()}
-              aria-label="发送"
-            >
-              <ICONS.send size={16} />
-              <span>{loading ? '发送中' : '发送'}</span>
-            </button>
+            {isStreaming ? (
+              <button
+                type="button"
+                className="chat-send chat-stop"
+                onClick={handleStop}
+                aria-label="停止生成"
+                title="停止生成"
+              >
+                <ICONS.stop size={16} />
+                <span>停止</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="chat-send"
+                disabled={!question.trim()}
+                aria-label="发送"
+              >
+                <ICONS.send size={16} />
+                <span>发送</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

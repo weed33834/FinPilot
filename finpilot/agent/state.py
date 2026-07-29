@@ -27,6 +27,10 @@ class AgentState(TypedDict, total=False):
         react_action_input:当前轮 Action Input（工具参数 JSON 或最终答案文本）。
         confidence:        最终答案置信度（0~1）。
         tenant_id:         租户 ID，用于数据隔离。
+        use_web:           是否启用联网搜索（前端开关），为 True 时注入 web_search/fetch_url 工具。
+        deep_think:        是否启用深度思考（前端开关），为 True 时提升模型档位。
+        enabled_tools:     运行时工具白名单，非空时仅暴露该列表中的工具给 LLM。
+                           None/空表表示暴露全部已注册工具。
     """
 
     question: str
@@ -44,3 +48,6 @@ class AgentState(TypedDict, total=False):
     react_action_input: str
     confidence: float
     tenant_id: str
+    use_web: bool
+    deep_think: bool
+    enabled_tools: list[str]

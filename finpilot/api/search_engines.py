@@ -240,10 +240,15 @@ def test_search_engine(
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(require_admin),
 ):
-    """测试搜索引擎 —— 返回模拟测试结果（不真实发起搜索请求）。"""
+    """测试搜索引擎 —— 真实发起一次搜索请求验证配置是否可用。
+
+    复用 agent.web_tools._run_search 的引擎分发逻辑，用固定测试词「FinPilot 财务分析」
+    发起真实请求，返回首条结果摘要。配置缺失或请求失败时返回 success=False 与原因。
+    """
     se = _get_search_engine_or_404(db, _id, tenant_of(current_user))
     issues = []
-    if not se.base_url:
+    if not se.base_url and se.engine_type != "bing":
+        # bing 有官方默认 endpoint，其余需显式 base_url
         issues.append("缺少 API base URL")
     if not se.api_key and se.engine_type in ("google", "bing", "serpapi"):
         issues.append(f"{se.engine_type} 通常需要 API Key")
@@ -254,9 +259,41 @@ def test_search_engine(
             "result_count": None,
             "first_snippet": None,
         })
+
+    # 真实发起搜索请求（复用 agent 联网工具的引擎分发逻辑）
+    from finpilot.agent.web_tools import _run_search
+
+    try:
+        results = _run_search(se, "FinPilot 财务分析", se.max_results or 5)
+    except Exception as exc:  # noqa: BLE001
+        return ok({
+            "success": False,
+            "message": f"测试请求异常：{exc}",
+            "result_count": 0,
+            "first_snippet": None,
+        })
+
+    errors = [r for r in results if isinstance(r, dict) and "error" in r]
+    clean = [r for r in results if isinstance(r, dict) and "error" not in r]
+    if errors:
+        return ok({
+            "success": False,
+            "message": errors[0]["error"],
+            "result_count": 0,
+            "first_snippet": None,
+        })
+    if not clean:
+        return ok({
+            "success": False,
+            "message": "搜索未返回任何结果，请检查配置或更换查询词",
+            "result_count": 0,
+            "first_snippet": None,
+        })
+
+    first = clean[0]
     return ok({
         "success": True,
-        "message": f"搜索引擎「{se.name}」配置校验通过",
-        "result_count": se.max_results,
-        "first_snippet": f"模拟结果：{se.engine_type} @ {se.base_url}（max_results={se.max_results}）",
+        "message": f"搜索引擎「{se.name}」配置可用，返回 {len(clean)} 条结果",
+        "result_count": len(clean),
+        "first_snippet": f"{first.get('title', '')} — {first.get('snippet', '')}",
     })

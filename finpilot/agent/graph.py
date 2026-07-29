@@ -19,6 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from finpilot.llm.intent import classify_intent, extract_parameters
 
 from . import tools as _tools  # noqa: F401  导入即触发内置工具注册
+from . import web_tools as _web_tools  # noqa: F401  导入即触发 web_search/fetch_url 注册
 from .checkpoint import get_checkpointer
 from .react_nodes import (
     react_agent_node,

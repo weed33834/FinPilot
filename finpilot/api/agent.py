@@ -74,19 +74,42 @@ def health_check():
 # 智能体能力清单（MCP / Skill / Tool / Sandbox 等）
 # ---------------------------------------------------------------------------
 @router.get("/capabilities")
-def list_capabilities():
+def list_capabilities(
+    db: Session = Depends(get_db_session),
+    current_user: dict = Depends(get_current_user),
+):
     """返回当前启用的智能体能力列表，供前端动态展示能力面板。
 
     能力来源：
     - 内置工具（File / Web / SQL / Python 等）
     - 扩展路由模块（MCP Servers / Skills / Tools / Sandbox / Backtesting / Factor Mining）
     - 增强模块（Validation / Debate / Explainability / Risk）
+
+    联网搜索能力状态动态判定：仅当当前租户配置了启用的 SearchEngine 时才报 active，
+    否则报 inactive，避免向用户谎报可用能力。
     """
+    # 联网搜索：按租户查询是否配置了启用的 SearchEngine
+    web_status = "inactive"
+    try:
+        from finpilot.database.models import SearchEngine
+
+        tenant_id = tenant_of(current_user)
+        has_engine = (
+            db.query(SearchEngine)
+            .filter(SearchEngine.is_active.is_(True))
+            .filter(SearchEngine.tenant_id == tenant_id)
+            .first()
+        )
+        if has_engine:
+            web_status = "active"
+    except Exception:  # noqa: BLE001
+        web_status = "inactive"
+
     capabilities = [
         {"id": "file", "name": "文件操作", "type": "builtin", "status": "active",
          "description": "上传、解析、查询 PDF/Excel/CSV/DOCX 文件"},
-        {"id": "web", "name": "联网搜索", "type": "builtin", "status": "active",
-         "description": "搜索引擎查询与网页内容抓取"},
+        {"id": "web", "name": "联网搜索", "type": "builtin", "status": web_status,
+         "description": "搜索引擎查询与网页内容抓取（需管理员配置搜索引擎）"},
         {"id": "sql", "name": "SQL 查询", "type": "builtin", "status": "active",
          "description": "对上传的结构化数据执行 SQL 查询"},
         {"id": "python", "name": "Python 沙盒", "type": "builtin", "status": "active",
@@ -555,6 +578,13 @@ def chat_stream(
                 "react_action_input": "",
                 "confidence": 0.0,
                 "tenant_id": tenant_id,
+                # 前端开关接入 ReAct 运行时：
+                # - use_web=True → react_agent_node 暴露 web_search/fetch_url 工具
+                #   （False 时隐藏，避免无搜索配置时 LLM 误调产生噪声）
+                # - deep_think=True → react_agent_node 提升模型档位到 high
+                "use_web": bool(req.use_web),
+                "deep_think": bool(req.deep_think),
+                "enabled_tools": [],
             }
 
             agent = build_agent(
