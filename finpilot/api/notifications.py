@@ -59,9 +59,13 @@ def create_notification(
     """供其他业务模块调用的写入入口（如审批通过、报告生成完成时推送通知）。
 
     channel 取值：approval / report / document / agent / security / system
+
+    tenant_id 缺省时从 user_id 推导（与 deps.tenant_of 一致用 ``user_{id}``），
+    保证通知的租户归属与 list 端点的查询过滤匹配；此前缺省 ``"default"`` 会导致
+    列表查询按 ``tenant_of(current_user)`` 过滤时查不到通知。
     """
     n = Notification(
-        tenant_id=tenant_id or "default",
+        tenant_id=tenant_id or (str(user_id) if user_id else "default"),
         user_id=str(user_id),
         channel=channel,
         title=title,

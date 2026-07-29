@@ -15,7 +15,13 @@ import pytest
 
 # ── 在导入任何 finpilot 模块之前打补丁 ──
 def _patch_database():
-    """将 finpilot.database.connection 重定向到内存 SQLite。"""
+    """将 finpilot.database.connection 重定向到内存 SQLite。
+
+    关键：必须同步更新 ``finpilot.database`` 包级 re-export 的 engine/SessionLocal，
+    否则 ``from finpilot.database import SessionLocal``（deps.get_db_session 用此）
+    仍指向旧的文件 DB，导致测试查询到 ~/.finpilot/finpilot.db 的真实数据。
+    """
+    import finpilot.database as db_pkg
     import finpilot.database.connection as conn
 
     # 覆盖为内存数据库
@@ -35,6 +41,10 @@ def _patch_database():
     # 重建 SessionLocal
     from sqlalchemy.orm import sessionmaker
     conn.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=conn.engine)
+
+    # 同步包级 re-export，确保 ``from finpilot.database import SessionLocal`` 拿到内存版
+    db_pkg.engine = conn.engine
+    db_pkg.SessionLocal = conn.SessionLocal
 
 
 def _patch_auth_redis():
@@ -59,15 +69,37 @@ _patch_auth_redis()
 def client():
     """FastAPI TestClient — 每个测试函数独立的客户端实例。
 
-    每次创建时重建所有数据库表，保证测试隔离。
+    每次创建时先 drop 再 create 所有表，保证测试间数据彻底隔离
+    （内存 SQLite 引擎为模块级单例，create_all 不会清理旧数据）。
+    同时重置 session_store 的降级存储，避免会话跨测试残留。
     """
     from fastapi.testclient import TestClient
 
     from finpilot.api.router import app
     from finpilot.database import init_db
+    from finpilot.database.connection import engine
+    from finpilot.database.models import Base
 
-    # 重建数据库表（内存 SQLite，每次 fixture 全新）
+    # 先清空再重建，确保每个测试拿到干净库
+    Base.metadata.drop_all(bind=engine)
     init_db()
+
+    # 重置 session_store 降级存储（清空跨测试残留会话）
+    try:
+        from finpilot.core.session import session_store
+
+        if session_store._fallback is not None:
+            session_store._fallback = None
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 重置限流计数器：limiter 为模块级单例，memory:// 存储跨测试累积，
+    # 会导致第 4 个测试起 register（3/minute）被限速 429 → 用户未创建 → login 401
+    try:
+        from finpilot.api.rate_limit import limiter
+        limiter.reset()
+    except Exception:  # noqa: BLE001
+        pass
 
     with TestClient(app) as tc:
         yield tc
@@ -75,7 +107,11 @@ def client():
 
 @pytest.fixture(scope="function")
 def db_session():
-    """原始 SQLAlchemy 会话 — 用于直接操作数据库。"""
+    """原始 SQLAlchemy 会话 — 用于直接操作数据库（与 client 共享同一内存引擎）。
+
+    注意：不在此处 drop_all，否则会清掉同测试中 client fixture 已写入的数据。
+    仅 init_db（create_all 幂等）保证表存在。
+    """
     from finpilot.database import SessionLocal
     from finpilot.database import init_db
 

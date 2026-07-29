@@ -147,7 +147,7 @@ async def notifications_ws(ws: WebSocket) -> None:
     await manager.connect(user_id, ws)
 
     welcome = {
-        "type": "notification",
+        "type": "welcome",
         "data": {
             "channel": "system",
             "title": "连接成功",

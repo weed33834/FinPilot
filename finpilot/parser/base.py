@@ -68,7 +68,7 @@ class BaseParser(ABC):
 def get_parser(file_path: str) -> BaseParser:
     """工厂函数：按文件扩展名返回对应的解析器实例。
 
-    支持扩展名: .pdf .xlsx .xls .csv .docx .doc
+    支持扩展名: .pdf .xlsx .xls .csv .docx .doc .txt .md .text .log
     """
     ext = os.path.splitext(file_path)[1].lower().lstrip(".")
     # 懒加载各解析器，避免与 base 产生循环导入
@@ -88,4 +88,8 @@ def get_parser(file_path: str) -> BaseParser:
         from .docx_parser import DocxParser
 
         return DocxParser()
+    if ext in ("txt", "md", "text", "log"):
+        from .text_parser import TextParser
+
+        return TextParser()
     raise ParserError(f"不支持的文件格式: .{ext}")

@@ -15,7 +15,7 @@ import json
 import time
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -364,6 +364,7 @@ def _build_assistant_message_meta(result: dict[str, Any], started_at: float) -> 
 def chat(
     req: ChatRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
@@ -405,10 +406,20 @@ def chat(
             intent_question=req.question,  # 意图识别用原始问题，避免被注入上下文污染
             agent_config=agent_config,
         )
+    except HTTPException:
+        # 业务层主动抛出的 HTTPException（如 404/403）原样上抛，保持语义
+        success = False
+        raise
     except Exception as exc:  # noqa: BLE001
+        # LLM 不可用 / 工具执行失败等运行时异常：优雅降级为 502，
+        # 不向上抛通用 Exception（否则会触发 slowapi 中间件与全局异常处理器冲突，
+        # 报 "parameter response must be an instance of starlette.responses.Response"）。
         success = False
         error_msg = str(exc)
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="智能体服务暂不可用，请稍后重试或检查 LLM 供应商配置",
+        )
     finally:
         # best-effort 埋点：记录 agent_run 日志
         try:
@@ -471,6 +482,7 @@ def _sse(event_type: str, data: dict) -> str:
 def chat_stream(
     req: ChatStreamRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
