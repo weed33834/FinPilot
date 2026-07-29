@@ -116,7 +116,7 @@ def create_router() -> APIRouter:
     @api.get("/")
     def health_check() -> dict[str, str]:
         """健康检查端点"""
-        return {"status": "ok", "version": "2.0"}
+        return {"status": "ok", "version": "2.0.0"}
 
     # 兼容路由必须先于 reports_router 注册，避免 /reports/templates 被 /reports/{report_id} 抢先匹配
     try:
@@ -349,7 +349,7 @@ def _ensure_default_admin() -> None:
 # 模块级 FastAPI 应用实例（供 uvicorn 直接加载）
 setup_logging()
 
-app = FastAPI(title="FinPilot AI", version="1.0.0")
+app = FastAPI(title="FinPilot AI", version="2.0.0")
 configure_middleware(app)
 app.include_router(create_router())
 

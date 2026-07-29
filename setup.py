@@ -10,7 +10,7 @@ except:
 
 setup(
     name="finpilot-ai",
-    version="1.0.0",
+    version="2.0.0",
     include_package_data=True,
     author="badhope",
     author_email="badhope@noreply.gitcode.com",

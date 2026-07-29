@@ -268,7 +268,7 @@ const reportsGenerateCommand: SlashCommand = {
       const ticker = args.ticker
       if (!ticker) throw new Error('请提供股票代码 ticker')
       const body: Record<string, unknown> = { ticker }
-      if (args.company) body.company = args.company
+      if (args.company) body.company_name = args.company
       const data = unwrap<{ task_id?: string; status?: string }>(
         await api.post('/reports/generate', body),
       )

@@ -44,7 +44,8 @@
     "admin": "管理员",
     "finance_manager": "财务经理",
     "auditor": "审计员",
-    "viewer": "查看者"
+    "viewer": "查看者",
+    "researcher": "研究员"
   },
   "common": {
     "appName": "FinPilot",
@@ -189,5 +190,36 @@
     "resolvedAt": "处理时间",
     "comment": "审批备注",
     "context": "上下文"
+  },
+  "sandboxConfig": {
+    "title": "沙箱配置管理",
+    "subtitle": "管理 SQL 白名单、代码沙箱与文件上传等安全策略配置。",
+    "addConfig": "添加配置",
+    "loadFailed": "加载配置列表失败",
+    "empty": "暂无沙箱配置",
+    "emptyDesc": "点击「添加配置」创建第一条安全策略。",
+    "name": "名称",
+    "configType": "配置类型",
+    "description": "描述",
+    "status": "状态",
+    "priority": "优先级",
+    "actions": "操作",
+    "system": "系统",
+    "source": "来源",
+    "noActive": "暂无激活配置",
+    "createTitle": "新建配置",
+    "editTitle": "编辑配置",
+    "namePlaceholder": "如 生产环境 SQL 白名单",
+    "descriptionPlaceholder": "配置用途说明",
+    "config": "配置 (JSON)",
+    "configHint": "切换配置类型会按默认模板自动填充。",
+    "isActive": "启用该配置",
+    "createSuccess": "配置创建成功",
+    "updateSuccess": "配置已更新",
+    "deleteSuccess": "配置已删除",
+    "invalidJson": "配置 JSON 格式错误",
+    "deleteTitle": "确认删除配置",
+    "deleteConfirm": "确定要删除配置",
+    "deleteTip": "此操作不可恢复。"
   }
 }

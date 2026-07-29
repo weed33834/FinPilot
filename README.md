@@ -237,14 +237,16 @@ export ANTHROPIC_MODEL="claude-3-5-sonnet-20241022"
 uvicorn finpilot_equity.web_app.main:app --host 0.0.0.0 --port 8001
 ```
 
-首次启动会自动创建数据库并初始化默认管理员账号：
+首次启动时，若设置了环境变量 `FINPILOT_ADMIN_EMAIL` + `FINPILOT_ADMIN_PASSWORD`，会自动创建默认管理员账号；未设置则跳过自动创建（更安全，需手动注册或通过迁移脚本创建）。
 
-| 字段 | 值 |
-| :--- | :--- |
-| 用户名 | `admin@finpilot.ai` |
-| 密码 | `admin123` |
+| 字段 | 环境变量 | 默认 |
+| :--- | :--- | :--- |
+| 邮箱 | `FINPILOT_ADMIN_EMAIL` | `admin@finpilot.ai` |
+| 密码 | `FINPILOT_ADMIN_PASSWORD` | 未设置（不创建） |
 
-> ⚠️ 首次登录后请立即在「用户管理」中修改默认密码。
+```bash
+export FINPILOT_ADMIN_PASSWORD="your-strong-password"
+```
 
 ### 5. 启动前端
 
@@ -259,11 +261,11 @@ npm run dev
 ### 6. 容器化部署（可选）
 
 ```bash
-docker build -t finpilot-ai:1.0.0 .
+docker build -t finpilot-ai:2.0.0 .
 docker run -d \
   -p 8001:8001 \
   --env-file .env \
-  --name finpilot finpilot-ai:1.0.0
+  --name finpilot finpilot-ai:2.0.0
 ```
 
 详细部署指引见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。

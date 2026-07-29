@@ -28,6 +28,7 @@
     "apiKeys": "API Keys",
     "aiResources": "AI Resources",
     "llmProviders": "LLM Providers",
+    "modelConfigs": "Model Configs",
     "prompts": "Prompts",
     "promptDeep": "Prompt Advanced",
     "skills": "Skills",

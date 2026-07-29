@@ -44,7 +44,8 @@
     "admin": "Administrator",
     "finance_manager": "Finance Manager",
     "auditor": "Auditor",
-    "viewer": "Viewer"
+    "viewer": "Viewer",
+    "researcher": "Researcher"
   },
   "common": {
     "appName": "FinPilot",
@@ -189,5 +190,36 @@
     "resolvedAt": "Resolved At",
     "comment": "Comment",
     "context": "Context"
+  },
+  "sandboxConfig": {
+    "title": "Sandbox Configuration Management",
+    "subtitle": "Manage security policies such as SQL whitelists, code sandboxes, and file uploads.",
+    "addConfig": "Add Configuration",
+    "loadFailed": "Failed to load configuration list",
+    "empty": "No sandbox configurations",
+    "emptyDesc": "Click \"Add Configuration\" to create your first security policy.",
+    "name": "Name",
+    "configType": "Configuration Type",
+    "description": "Description",
+    "status": "Status",
+    "priority": "Priority",
+    "actions": "Actions",
+    "system": "System",
+    "source": "Source",
+    "noActive": "No active configurations",
+    "createTitle": "Create Configuration",
+    "editTitle": "Edit Configuration",
+    "namePlaceholder": "e.g. Production SQL Whitelist",
+    "descriptionPlaceholder": "Configuration purpose description",
+    "config": "Configuration (JSON)",
+    "configHint": "Switching configuration types will auto-fill with default templates.",
+    "isActive": "Enable this configuration",
+    "createSuccess": "Configuration created successfully",
+    "updateSuccess": "Configuration updated",
+    "deleteSuccess": "Configuration deleted",
+    "invalidJson": "Invalid JSON format",
+    "deleteTitle": "Confirm Delete",
+    "deleteConfirm": "Are you sure you want to delete the configuration",
+    "deleteTip": "This action cannot be undone."
   }
 }

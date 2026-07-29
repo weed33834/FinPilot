@@ -1,25 +1,45 @@
 # -*- coding: utf-8 -*-
-"""认证路由 - session cookie 认证 + 2FA + 登录限速（与前端 authStore 契约对齐）.
+"""认证路由 - session cookie 认证 + 2FA 挑战流 + 登录限速（与前端契约对齐）.
 
-前端契约（stores/authStore.ts）：
-- POST /auth/login    入参 {username, password, remember_me}
-                      返回 {code, message, data: {access_token, token_type, expires_in, requires_2fa}}
-- GET  /auth/me       返回 {code, message, data: {id, username, role}}
-- POST /auth/logout   返回 {code, message, data: null}
-- POST /auth/register 入参 {email, password, name}（旧契约，保留兼容）
+前端契约（stores/authStore.ts / pages/SecurityPage.tsx / types/twoFactor.ts）：
+- POST /auth/login           入参 {username, password, remember_me}
+                             返回 {code, message, data: {access_token, token_type, expires_in, requires_2fa}}
+                             若启用 2FA 且 Redis 可用：返回 {requires_2fa:true, challenge_token, challenge_expires_in}
+                             （此时不签发 session，前端走二次验证）
+- POST /auth/verify-2fa      入参 {challenge_token, totp_code?, backup_code?}
+                             校验通过后签发 session 并 set-cookie，返回 {access_token, ...}
+- GET  /auth/me              返回 {code, message, data: {id, username, role}}
+- POST /auth/logout          返回 {code, message, data: null}
+- POST /auth/register        入参 {email, password, name}（旧契约，保留兼容）
+- POST /auth/change-password 入参 {current_password, new_password}
+
+2FA 管理（SecurityPage）：
+- GET  /auth/2fa/status       → {enabled, setup_in_progress}
+- POST /auth/2fa/setup        → {secret, otpauth_uri, qr_svg}（qr_svg 为 SVG 字符串）
+- POST /auth/2fa/enable       入参 {totp_code, password} → {backup_codes: string[]}
+- POST /auth/2fa/disable      入参 {password} → ok
+- POST /auth/2fa/backup-codes 入参 {password} → {backup_codes: string[]}（重新生成）
 
 cookie 名 session_id，HttpOnly；access_token 字段值即为 session_id，
 前端不直接使用 access_token（withCredentials 自动带 cookie）。
+
+注：2FA 完整流程依赖 Redis（挑战令牌 / 备份码均存 Redis）。Redis 不可用时：
+- 登录：降级跳过二次验证（记录警告），避免把启用 2FA 的用户彻底锁死；
+- setup / enable / verify-2fa / backup-codes：返回 503。
 """
 from __future__ import annotations
 
+import hashlib
 import io
+import json
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import pyotp
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from qrcode.image.svg import SvgImage
 from sqlalchemy.orm import Session
 
 from finpilot.core.crypto import decrypt as crypto_decrypt, encrypt as crypto_encrypt
@@ -46,6 +66,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # 账号维度锁定：5 次失败 → 锁定 15 分钟
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCKOUT_MINUTES = 15
+
+# 2FA 挑战令牌 / setup 密钥 TTL（秒）
+CHALLENGE_TTL = 300
+TOTP_SETUP_TTL = 300
+TOTP_ISSUER = "FinPilot"
+BACKUP_CODE_COUNT = 8
 
 
 def _ok(data, message: str = "ok", code: int = 0):
@@ -111,6 +137,59 @@ async def _clear_login_failures(email: str) -> None:
     await r.delete(f"login_failures:{email}", f"login_lockout:{email}")
 
 
+# ============== 备份码工具（Redis 存储 SHA256 哈希） ==============
+
+
+def _generate_backup_codes() -> list[str]:
+    """生成 8 个 XXXX-XXXX 格式的备份码。"""
+    return [f"{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}" for _ in range(BACKUP_CODE_COUNT)]
+
+
+def _hash_backup_code(code: str) -> str:
+    return hashlib.sha256(code.strip().encode()).hexdigest()
+
+
+async def _save_backup_codes(r, user_id: int, codes: list[str]) -> None:
+    """以 SHA256 哈希列表形式持久化备份码（明文仅返回给用户一次）。"""
+    payload = json.dumps([_hash_backup_code(c) for c in codes])
+    await r.set(f"2fa_backup:{user_id}", payload)
+
+
+async def _consume_backup_code(r, user_id: int, code: str) -> bool:
+    """核销一个备份码（命中即从列表移除，单次有效）。"""
+    if not code:
+        return False
+    raw = await r.get(f"2fa_backup:{user_id}")
+    if not raw:
+        return False
+    try:
+        hashes = json.loads(raw)
+    except (ValueError, TypeError):
+        return False
+    target = _hash_backup_code(code)
+    if target not in hashes:
+        return False
+    hashes.remove(target)
+    if hashes:
+        await r.set(f"2fa_backup:{user_id}", json.dumps(hashes))
+    else:
+        await r.delete(f"2fa_backup:{user_id}")
+    return True
+
+
+def _set_session_cookie(response: Response, session_id: str, remember_me: bool) -> int:
+    """统一设置 session cookie，返回 max_age。"""
+    max_age = 30 * 24 * 60 * 60 if remember_me else 7 * 24 * 60 * 60
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=session_id,
+        httponly=True,
+        max_age=max_age,
+        samesite="lax",
+    )
+    return max_age
+
+
 # ============== 登录 / 注册 / 登出 / 当前用户 ==============
 
 
@@ -122,7 +201,11 @@ async def login(
     response: Response,
     db: Session = Depends(get_db_session),
 ):
-    """验证用户名/邮箱密码，设置 session cookie，返回 access_token（即 session_id）。
+    """验证用户名/邮箱密码。
+
+    - 未启用 2FA：直接签发 session；
+    - 启用 2FA 且 Redis 可用：返回 challenge_token，不签发 session，前端走 /auth/verify-2fa；
+    - 启用 2FA 但 Redis 不可用：降级直接签发 session（避免锁死用户），记录警告。
 
     限速：同一 IP 每分钟最多 5 次登录尝试。
     账号锁定：同一账号连续 5 次失败锁定 15 分钟。
@@ -145,20 +228,43 @@ async def login(
     # 登录成功，清除失败记录
     await _clear_login_failures(email)
 
+    # 2FA 挑战流：不签发 session，返回 challenge_token
+    if user.totp_enabled:
+        r = await _get_redis_or_none()
+        if r is None:
+            logger.warning("2FA 用户登录但 Redis 不可用，降级跳过二次验证", email=email)
+            session_id = await create_session(user.id, user.email, user.role, user.name)
+            max_age = _set_session_cookie(response, session_id, req.remember_me)
+            return _ok({
+                "access_token": session_id,
+                "token_type": "session",
+                "expires_in": max_age,
+                "requires_2fa": True,
+            }, "登录成功（2FA 已降级）")
+
+        challenge_token = secrets.token_urlsafe(32)
+        challenge_data = json.dumps({
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "name": user.name,
+            "remember_me": bool(req.remember_me),
+        })
+        await r.setex(f"2fa_challenge:{challenge_token}", CHALLENGE_TTL, challenge_data)
+        return _ok({
+            "requires_2fa": True,
+            "challenge_token": challenge_token,
+            "challenge_expires_in": CHALLENGE_TTL,
+        }, "需要二次验证")
+
+    # 正常登录：签发 session
     session_id = await create_session(user.id, user.email, user.role, user.name)
-    max_age = 30 * 24 * 60 * 60 if req.remember_me else 7 * 24 * 60 * 60
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=session_id,
-        httponly=True,
-        max_age=max_age,
-        samesite="lax",
-    )
+    max_age = _set_session_cookie(response, session_id, req.remember_me)
     return _ok({
         "access_token": session_id,
         "token_type": "session",
         "expires_in": max_age,
-        "requires_2fa": bool(user.totp_enabled),
+        "requires_2fa": False,
     }, "登录成功")
 
 
@@ -181,13 +287,7 @@ async def register(
         name=req.name,
     )
     session_id = await create_session(user.id, user.email, user.role, user.name)
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=session_id,
-        httponly=True,
-        max_age=7 * 24 * 60 * 60,
-        samesite="lax",
-    )
+    _set_session_cookie(response, session_id, remember_me=False)
     return _ok({
         "access_token": session_id,
         "token_type": "session",
@@ -219,8 +319,23 @@ async def logout(request: Request, response: Response):
 
 # ============== 2FA TOTP 实现 ==============
 
-TOTP_ISSUER = "FinPilot"
-TOTP_SETUP_TTL = 300  # 5 分钟
+
+class Verify2FARequest(BaseModel):
+    """登录二次验证请求体（前端 authStore.verify2fa 契约）。"""
+    challenge_token: str
+    totp_code: str | None = None
+    backup_code: str | None = None
+
+
+class Enable2FARequest(BaseModel):
+    """启用 2FA 请求体（前端 SecurityPage 契约）。"""
+    totp_code: str
+    password: str
+
+
+class PasswordRequest(BaseModel):
+    """需要密码确认的请求体（关闭 2FA / 重新生成备份码）。"""
+    password: str
 
 
 def _get_user_orm(current_user: dict, db: Session):
@@ -236,61 +351,156 @@ def _get_user_orm(current_user: dict, db: Session):
     return user
 
 
+@router.post("/verify-2fa")
+async def verify_2fa(
+    req: Verify2FARequest,
+    response: Response,
+    db: Session = Depends(get_db_session),
+):
+    """登录二次验证：校验 challenge_token + TOTP/备份码，通过后签发 session。
+
+    无需 get_current_user（用户尚未登录），凭 challenge_token 识别身份。
+    """
+    r = await _get_redis_or_none()
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="二次验证需要 Redis 服务，当前不可用",
+        )
+
+    raw = await r.get(f"2fa_challenge:{req.challenge_token}")
+    if not raw:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证会话已过期，请重新登录")
+    try:
+        info = json.loads(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证会话异常，请重新登录")
+
+    from finpilot.database.models import User
+
+    user = db.query(User).filter(User.id == info.get("user_id")).first()
+    if not user or not user.totp_enabled or not user.totp_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 未启用或状态异常")
+
+    verified = False
+    if req.totp_code:
+        totp = pyotp.TOTP(crypto_decrypt(user.totp_secret))
+        try:
+            verified = totp.verify(req.totp_code)
+        except Exception:  # noqa: BLE001
+            verified = False
+    if not verified and req.backup_code:
+        verified = await _consume_backup_code(r, user.id, req.backup_code)
+
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="验证码错误或已失效",
+        )
+
+    # 挑战令牌一次性，立即作废
+    await r.delete(f"2fa_challenge:{req.challenge_token}")
+
+    session_id = await create_session(user.id, user.email, user.role, user.name)
+    max_age = _set_session_cookie(response, session_id, bool(info.get("remember_me")))
+    return _ok({
+        "access_token": session_id,
+        "token_type": "session",
+        "expires_in": max_age,
+        "requires_2fa": False,
+    }, "登录成功")
+
+
+@router.get("/2fa/status")
+async def two_fa_status(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+):
+    """返回当前用户 2FA 状态（前端 TwoFAStatus 契约：enabled / setup_in_progress）。"""
+    user = _get_user_orm(current_user, db)
+    setup_in_progress = False
+    r = await _get_redis_or_none()
+    if r is not None:
+        setup_in_progress = bool(await r.exists(f"2fa_setup:{user.id}"))
+    return _ok({
+        "enabled": bool(user.totp_enabled),
+        "setup_in_progress": setup_in_progress,
+    })
+
+
 @router.post("/2fa/setup")
 async def two_fa_setup(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
-    """生成 TOTP secret，返回二维码 PNG。
+    """生成 TOTP secret，返回 SVG 二维码 + otpauth_uri + secret（前端 TwoFASetup 契约）。
 
-    secret 暂存 Redis（5 分钟过期），验证通过后才写入数据库。
-    Redis 不可用时返回 503。
+    secret 暂存 Redis（5 分钟过期），enable 验证通过后才写入数据库。
     """
     user = _get_user_orm(current_user, db)
     if user.totp_enabled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 已启用，请先禁用再重新设置")
 
-    secret = pyotp.random_base32()
     r = await _get_redis_or_none()
     if r is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="2FA 设置需要 Redis 服务，当前不可用",
         )
+
+    secret = pyotp.random_base32()
     await r.setex(f"2fa_setup:{user.id}", TOTP_SETUP_TTL, secret)
 
     totp = pyotp.TOTP(secret)
     uri = totp.provisioning_uri(name=user.email, issuer_name=TOTP_ISSUER)
 
-    img = qrcode.make(uri)
+    img = qrcode.make(uri, image_factory=SvgImage)
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
+    img.save(buf)
+    qr_svg = buf.getvalue().decode("utf-8")
 
-    return StreamingResponse(buf, media_type="image/png")
+    return _ok({
+        "secret": secret,
+        "otpauth_uri": uri,
+        "qr_svg": qr_svg,
+    })
 
 
-@router.post("/2fa/verify")
-async def two_fa_verify(
-    code: str = Query(..., description="TOTP 验证码"),
+@router.post("/2fa/enable")
+async def two_fa_enable(
+    req: Enable2FARequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
-    """验证 TOTP 码，通过后持久化 secret 并启用 2FA。"""
+    """启用 2FA：密码 + TOTP 双因子校验，通过后持久化 secret 并生成备份码。
+
+    返回前端 BackupCodesResponse 契约（备份码明文仅此一次返回）。
+    """
     user = _get_user_orm(current_user, db)
+    if user.totp_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 已启用")
 
     r = await _get_redis_or_none()
     if r is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="2FA 验证需要 Redis 服务，当前不可用",
+            detail="2FA 启用需要 Redis 服务，当前不可用",
         )
+
+    # 密码二次确认
+    ok, _ = verify_password(req.password, user.password_hash or "")
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码错误")
+
     secret = await r.get(f"2fa_setup:{user.id}")
     if not secret:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 设置已过期，请重新发起 setup")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA 设置已过期，请重新发起 setup",
+        )
 
     totp = pyotp.TOTP(secret)
-    if not totp.verify(code):
+    if not totp.verify(req.totp_code):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码错误")
 
     user.totp_secret = crypto_encrypt(secret)
@@ -299,7 +509,10 @@ async def two_fa_verify(
 
     await r.delete(f"2fa_setup:{user.id}")
 
-    return _ok({"totp_enabled": True}, "2FA 已启用")
+    # 生成一次性备份码
+    codes = _generate_backup_codes()
+    await _save_backup_codes(r, user.id, codes)
+    return _ok({"backup_codes": codes}, "2FA 已启用")
 
 
 @router.post("/2fa/disable")
@@ -346,50 +559,39 @@ async def two_fa_disable(
     user.totp_enabled = False
     db.commit()
 
+    # 清理残留备份码
+    r = await _get_redis_or_none()
+    if r is not None:
+        await r.delete(f"2fa_backup:{user.id}")
+
     return _ok({"totp_enabled": False}, "2FA 已禁用")
 
 
-@router.get("/2fa/status")
-async def two_fa_status(
+@router.post("/2fa/backup-codes")
+async def two_fa_backup_codes(
+    req: PasswordRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
-    """返回当前用户 2FA 状态。"""
+    """重新生成备份码（需密码确认）。旧备份码立即失效。"""
     user = _get_user_orm(current_user, db)
-    return _ok({
-        "totp_enabled": user.totp_enabled,
-    })
-
-
-# 兼容旧端点
-
-
-@router.post("/2fa/enable")
-async def two_fa_enable(
-    code: str = Query(..., description="TOTP 验证码"),
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db_session),
-):
-    """兼容端点：同 /auth/2fa/verify。"""
-    return await two_fa_verify(code=code, current_user=current_user, db=db)
-
-
-@router.post("/verify-2fa")
-async def verify_2fa(
-    code: str = Query(..., description="TOTP 验证码"),
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db_session),
-):
-    """兼容端点：验证 2FA 码（用于登录后二次验证）。"""
-    user = _get_user_orm(current_user, db)
-    if not user.totp_enabled or not user.totp_secret:
+    if not user.totp_enabled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 未启用")
 
-    totp = pyotp.TOTP(crypto_decrypt(user.totp_secret))
-    if not totp.verify(code):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码错误")
+    ok, _ = verify_password(req.password, user.password_hash or "")
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码错误")
 
-    return _ok({"verified": True}, "2FA 验证通过")
+    r = await _get_redis_or_none()
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="备份码服务需要 Redis，当前不可用",
+        )
+
+    codes = _generate_backup_codes()
+    await _save_backup_codes(r, user.id, codes)
+    return _ok({"backup_codes": codes}, "备份码已重新生成")
 
 
 # ============== 修改密码 ==============

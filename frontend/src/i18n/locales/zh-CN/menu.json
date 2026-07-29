@@ -28,6 +28,7 @@
     "apiKeys": "API 密钥",
     "aiResources": "AI 资源",
     "llmProviders": "模型供应商",
+    "modelConfigs": "模型配置",
     "prompts": "提示词管理",
     "promptDeep": "提示词进阶",
     "skills": "技能管理",

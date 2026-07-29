@@ -14,10 +14,7 @@ FinPilot equity 研报管线（保留兼容，前端不直接调用）：
 """
 from __future__ import annotations
 
-import subprocess
-import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -37,13 +34,6 @@ from finpilot.database.models import BalanceSheet, IncomeStatement, CashFlowStat
 from finpilot.core.permissions import Permission, require_permission
 
 router = APIRouter(prefix="/reports", tags=["reports"])
-
-# FinPilot equity 路径（基于本文件位置推算）
-_FINPILOT_ROOT = Path(__file__).resolve().parents[2]
-_CORE_DIR = _FINPILOT_ROOT / "finpilot_equity" / "core"
-_SRC_DIR = _CORE_DIR / "src"
-_OUTPUT_DIR = _CORE_DIR / "output"
-_CONFIG_DIR = _CORE_DIR / "config"
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +270,12 @@ def _generate_report_content(report_id: int, tenant_id: str) -> None:
             params = report.parameters or {}
             year = params.get("year")
             period = params.get("period", "annual")
+            ticker = params.get("ticker")
 
-            # 取最新一条财务报表作为数据源（按 tenant_id 隔离）
+            # 取最新一条财务报表作为数据源（按 tenant_id 隔离；equity 研报按 ticker 精确匹配）
             fin_q = db.query(FinancialReport).filter(FinancialReport.tenant_id == tenant_id)
+            if ticker:
+                fin_q = fin_q.filter(FinancialReport.ticker == ticker)
             if year:
                 fin_q = fin_q.filter(FinancialReport.period.like(f"{year}%"))
             fin_report = fin_q.order_by(FinancialReport.created_at.desc()).first()
@@ -479,91 +472,25 @@ def export_projection_pdf_endpoint(
 
 
 # ---------------------------------------------------------------------------
-# FinPilot equity 研报管线（保留兼容）
+# Equity 研报生成管线（统一走主库 Report 表 + 已有的 _generate_report_content）
+#
+# 历史实现通过子进程调用 finpilot_equity/core/src 下的 generate_financial_analysis.py
+# 与 create_equity_report.py 生成研报，但该 core 目录在仓库中并不存在，导致整条管线
+# 一执行即崩溃。现已统一到主库 Report 表：/generate 创建 Report 记录并复用已有的后台
+# 生成管线（聚合 FinancialReport 数据 + LLM 摘要），/equity/{task_id} 直接读 Report。
+# task_id 即 Report.id（字符串化），保持前端 /reports status <task_id> 契约不变。
 # ---------------------------------------------------------------------------
 
 
-def _fp_db():
-    """获取 FinPilot equity 数据库会话"""
-    from finpilot_equity.web_app.database.connection import SessionLocal as FinPilotSessionLocal
-
-    return FinPilotSessionLocal()
-
-
-def _run_report_pipeline(task_id: str, ticker: str, company_name: str, peers: list[str]) -> None:
-    """后台执行 FinPilot equity 研报生成管线（子进程调用 core 脚本）"""
-    from finpilot_equity.web_app.database.crud import update_report_request
-
-    def _set_status(st: str, err: str | None = None) -> None:
-        db = _fp_db()
-        try:
-            update_report_request(db, task_id, st, err)
-        finally:
-            db.close()
-
-    _set_status("running")
-
-    python_exe = sys.executable
-    config_file = _CONFIG_DIR / "config.ini"
-    if not config_file.exists():
-        config_file = _CONFIG_DIR / "config.ini.example"
-    config_arg = ["--config-file", str(config_file)] if config_file.exists() else []
-
-    analysis_dir = _OUTPUT_DIR / ticker / "analysis"
-    report_dir = _OUTPUT_DIR / ticker / "report"
-    analysis_dir.mkdir(parents=True, exist_ok=True)
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    cmd_analysis = [
-        python_exe, str(_SRC_DIR / "generate_financial_analysis.py"),
-        "--company-ticker", ticker,
-        "--company-name", company_name,
-        "--years-limit", "5",
-        "--output-dir", str(analysis_dir),
-        "--generate-text-sections",
-    ] + config_arg
-    if peers:
-        cmd_analysis += ["--peer-tickers"] + peers
-
-    r1 = subprocess.run(
-        cmd_analysis, cwd=str(_SRC_DIR), capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
-    )
-    if r1.returncode != 0:
-        _set_status("failed", f"财务分析失败: {(r1.stderr or '')[-500:]}")
-        return
-
-    cmd_report = [
-        python_exe, str(_SRC_DIR / "create_equity_report.py"),
-        "--company-ticker", ticker,
-        "--company-name", company_name,
-        "--analysis-csv", str(analysis_dir / "financial_metrics_and_forecasts.csv"),
-        "--ratios-csv", str(analysis_dir / "ratios_raw_data.csv"),
-        "--tagline-file", str(analysis_dir / "tagline.txt"),
-        "--company-overview-file", str(analysis_dir / "company_overview.txt"),
-        "--investment-overview-file", str(analysis_dir / "investment_overview.txt"),
-        "--valuation-overview-file", str(analysis_dir / "valuation_overview.txt"),
-        "--risks-file", str(analysis_dir / "risks.txt"),
-        "--competitor-analysis-file", str(analysis_dir / "competitor_analysis.txt"),
-        "--major-takeaways-file", str(analysis_dir / "major_takeaways.txt"),
-        "--output-dir", str(report_dir),
-        "--enable-text-regeneration",
-    ] + config_arg
-    if peers:
-        cmd_report += [
-            "--peer-ebitda-csv", str(analysis_dir / "peer_ebitda_comparison.csv"),
-            "--peer-ev-ebitda-csv", str(analysis_dir / "peer_ev_ebitda_comparison.csv"),
-        ]
-
-    r2 = subprocess.run(
-        cmd_report, cwd=str(_SRC_DIR), capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
-    )
-    if r2.returncode != 0:
-        _set_status("failed", f"研报生成失败: {(r2.stderr or '')[-500:]}")
-        return
-
-    _set_status("completed")
+# Report.status → equity 任务状态映射
+_EQUITY_STATUS_MAP: dict[str, str] = {
+    "processing": "running",
+    "reviewing": "completed",
+    "approved": "completed",
+    "rejected": "completed",
+    "failed": "failed",
+    "draft": "pending",
+}
 
 
 @router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
@@ -571,58 +498,67 @@ def generate_equity_report(
     req: ReportRequestSchema,
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
 ):
-    """触发 FinPilot equity 研报生成（异步），返回 task_id"""
-    import uuid
-
-    from finpilot_equity.web_app.database import crud as fp_crud
-
-    task_id = str(uuid.uuid4())
-    db = _fp_db()
-    try:
-        fp_crud.create_report_request(
-            db,
-            user_id=current_user["user_id"],
-            task_id=task_id,
-            ticker=req.ticker,
-            company_name=req.company_name,
-            peers=",".join(req.peer_tickers) if req.peer_tickers else None,
-        )
-    finally:
-        db.close()
-
-    background_tasks.add_task(
-        _run_report_pipeline, task_id, req.ticker, req.company_name, req.peer_tickers
+    """触发研报异步生成（基于已有财务数据 + LLM 摘要），返回 task_id（即 Report.id）."""
+    tenant_id = tenant_of(current_user)
+    company = req.company_name or req.ticker
+    title = f"{company}（{req.ticker}）研报"
+    parameters: dict[str, Any] = {
+        "ticker": req.ticker,
+        "company_name": req.company_name,
+        "peer_tickers": req.peer_tickers or [],
+    }
+    report = ReportORM(
+        tenant_id=tenant_id,
+        created_by=current_user.get("user_id"),
+        title=title,
+        report_type="equity",
+        parameters=parameters,
+        status="processing",
     )
-    return {"task_id": task_id, "status": "pending"}
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    # 复用已有的后台生成管线（按 ticker 聚合财务数据 + LLM 摘要）
+    background_tasks.add_task(
+        _generate_report_content,
+        report_id=report.id,
+        tenant_id=tenant_id,
+    )
+    return {"task_id": str(report.id), "status": "pending"}
 
 
 @router.get("/equity/{task_id}")
 def get_equity_report(
     task_id: str,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
 ):
-    """获取 FinPilot equity 研报详情"""
-    from finpilot_equity.web_app.database.models import ReportRequest
-
-    db = _fp_db()
+    """获取研报任务状态（task_id 即 Report.id）."""
+    tenant_id = tenant_of(current_user)
     try:
-        report = (
-            db.query(ReportRequest)
-            .filter(ReportRequest.task_id == task_id)
-            .first()
-        )
-    finally:
-        db.close()
+        rid = int(task_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="研报不存在") from exc
+    report = (
+        db.query(ReportORM)
+        .filter(ReportORM.id == rid, ReportORM.tenant_id == tenant_id)
+        .first()
+    )
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="研报不存在")
+    params = report.parameters or {}
     return {
-        "task_id": report.task_id,
-        "ticker": report.ticker,
-        "company_name": report.company_name,
-        "status": report.status,
+        "task_id": str(report.id),
+        "ticker": params.get("ticker"),
+        "company_name": params.get("company_name"),
+        "title": report.title,
+        "status": _EQUITY_STATUS_MAP.get(report.status, report.status),
+        "summary": report.summary,
         "created_at": report.created_at.isoformat() if report.created_at else None,
-        "completed_at": report.completed_at.isoformat() if report.completed_at else None,
+        "updated_at": report.updated_at.isoformat() if report.updated_at else None,
         "error_message": report.error_message,
     }
 
@@ -631,41 +567,38 @@ def get_equity_report(
 def get_equity_report_html(
     task_id: str,
     current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
 ):
-    """获取 FinPilot equity 研报 HTML 内容"""
-    from finpilot_equity.web_app.database.models import ReportRequest
+    """以 HTML 形式返回研报内容."""
+    import html as html_lib
 
-    db = _fp_db()
+    tenant_id = tenant_of(current_user)
     try:
-        report = (
-            db.query(ReportRequest)
-            .filter(ReportRequest.task_id == task_id)
-            .first()
-        )
-    finally:
-        db.close()
+        rid = int(task_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="研报不存在") from exc
+    report = (
+        db.query(ReportORM)
+        .filter(ReportORM.id == rid, ReportORM.tenant_id == tenant_id)
+        .first()
+    )
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="研报不存在")
 
-    report_dir = _OUTPUT_DIR / report.ticker / "report"
-    html_path = _find_html(report_dir)
-    if html_path is None:
-        flat = _OUTPUT_DIR / f"{report.ticker}_Equity_Research_Report.html"
-        if flat.exists():
-            html_path = flat
-    if html_path is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="研报 HTML 尚未生成")
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8", errors="replace"))
-
-
-def _find_html(directory: Path) -> Path | None:
-    """在目录中查找 HTML 文件，优先返回含 Professional 的"""
-    if not directory.exists():
-        return None
-    htmls = sorted(directory.glob("*.html"))
-    if not htmls:
-        return None
-    for h in htmls:
-        if "Professional" in h.name:
-            return h
-    return htmls[0]
+    parts = [f"<h1>{html_lib.escape(report.title)}</h1>"]
+    if report.summary:
+        parts.append(f"<p><strong>摘要：</strong>{html_lib.escape(report.summary)}</p>")
+    content = report.content or {}
+    sections = content.get("sections") or []
+    if sections:
+        parts.append("<h2>关键指标</h2><ul>")
+        for s in sections:
+            name = html_lib.escape(str(s.get("name", "")))
+            value = s.get("value", "N/A")
+            parts.append(f"<li>{name}：{value}</li>")
+        parts.append("</ul>")
+    if report.error_message:
+        parts.append(
+            f"<p style='color:#b91c1c'>{html_lib.escape(report.error_message)}</p>"
+        )
+    return HTMLResponse(content="\n".join(parts))

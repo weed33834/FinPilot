@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api/': {
-        target: 'http://localhost:8010',
+        target: 'http://localhost:8001',
         changeOrigin: true,
       },
     },
@@ -41,19 +41,10 @@ export default defineConfig({
             ) {
               return 'charts'
             }
-            if (
-              id.includes('/dompurify/') ||
-              id.includes('/marked/') ||
-              id.includes('/react-markdown/') ||
-              id.includes('/highlight.js/')
-            ) {
+            if (id.includes('/dompurify/')) {
               return 'renderer'
             }
-            if (
-              id.includes('/axios/') ||
-              id.includes('/sockjs/') ||
-              id.includes('/@stomp/')
-            ) {
+            if (id.includes('/axios/')) {
               return 'network'
             }
             if (id.includes('/@sentry/')) {

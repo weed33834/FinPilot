@@ -165,11 +165,9 @@ class FinancialReport(Base, TenantMixin):
 
 
 class Report(Base, TenantMixin):
-    """研报表 — 用户通过前端 ReportsPage 创建的财务分析报告.
+    """研报表 — 用户通过前端 ReportsPage 或斜杠命令 /reports generate 创建的财务分析报告.
 
-    与 FinPilot equity 的 ReportRequest（研报生成管线）不同，本表存储的是
-    基于已有财务数据的即时分析报告，字段与前端 ``types/report.ts`` 中的
-    ``Report`` 接口对齐。
+    字段与前端 ``types/report.ts`` 中的 ``Report`` 接口对齐。
     """
     __tablename__ = "reports"
 
