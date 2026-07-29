@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from finpilot.api.deps import require_scope, get_current_user, get_db_session
 from finpilot.api.schemas import (
+    ToolCreate,
     ToolResponse,
     ToolTestRequest,
     ToolUpdate,
@@ -116,6 +117,59 @@ def list_tool_types(
 ) -> dict[str, Any]:
     """获取工具类型枚举及说明."""
     return {"code": 0, "message": "ok", "data": TOOL_TYPE_ENUMS}
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_tool(
+    body: ToolCreate,
+    current_user: dict = Depends(require_scope("tools:admin")),
+    db: Session = Depends(get_db_session),
+) -> dict[str, Any]:
+    """创建自定义工具.
+
+    前端 createTool 调用 POST /tools，此前后端缺失该端点导致 405。
+    新建工具默认 is_builtin=False、is_active=True，api_key 经 encode_api_key 编码。
+    """
+    from finpilot.database.crud import encode_api_key
+
+    tenant_id = str(current_user.get("user_id", "default"))
+
+    # 同名工具校验（同租户内 name 唯一）
+    existing = (
+        db.query(Tool)
+        .filter(Tool.tenant_id == tenant_id, Tool.name == body.name)
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"工具名称 '{body.name}' 已存在",
+        )
+
+    # 校验 type 合法
+    valid_types = {t["value"] for t in TOOL_TYPE_ENUMS}
+    if body.type not in valid_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"非法的工具类型：{body.type}（支持：{', '.join(sorted(valid_types))}）",
+        )
+
+    t = Tool(
+        tenant_id=tenant_id,
+        name=body.name,
+        display_name=body.display_name or body.name,
+        description=body.description,
+        type=body.type,
+        is_builtin=False,
+        is_active=True,
+        config=body.config or {},
+        api_key=encode_api_key(body.api_key) if body.api_key else None,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    _reload_runtime_tools(tenant_id, db)
+    return {"code": 0, "message": "ok", "data": _model_to_response(t)}
 
 
 # ============================================================
@@ -245,11 +299,20 @@ def tools_circuit_breakers(
 @router.get("/audit")
 def tools_audit(
     tool_name: str = Query(default="", description="按工具名筛选"),
+    start_time: str = Query(default="", description="起始时间 ISO8601，如 2026-01-01T00:00:00"),
+    end_time: str = Query(default="", description="结束时间 ISO8601"),
     limit: int = Query(default=200, ge=1, le=1000),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """查询工具执行审计轨迹（基于 RuntimeLog category='tool_call'）."""
+    """查询工具执行审计轨迹（基于 RuntimeLog category='tool_call'）.
+
+    支持 tool_name 筛选 + 时间范围筛选（start_time/end_time，ISO8601）。
+    前端 toolMonitoring.ts 的 getAuditTrail 传 start_time/end_time，
+    此前后端未声明这两个参数导致时间筛选静默失效。
+    """
+    from datetime import datetime as _dt
+
     from finpilot.database.models import RuntimeLog
 
     tenant_id = str(current_user.get("user_id", "default"))
@@ -259,6 +322,17 @@ def tools_audit(
     )
     if tool_name:
         q = q.filter(RuntimeLog.source == f"tool.{tool_name}")
+    # 时间范围筛选
+    if start_time:
+        try:
+            q = q.filter(RuntimeLog.created_at >= _dt.fromisoformat(start_time))
+        except ValueError:
+            pass
+    if end_time:
+        try:
+            q = q.filter(RuntimeLog.created_at <= _dt.fromisoformat(end_time))
+        except ValueError:
+            pass
 
     logs = q.order_by(RuntimeLog.created_at.desc()).limit(limit).all()
 

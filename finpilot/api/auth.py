@@ -303,18 +303,41 @@ async def two_fa_verify(
 
 @router.post("/2fa/disable")
 async def two_fa_disable(
-    code: str = Query(..., description="当前 TOTP 验证码"),
+    payload: dict | None = None,
+    code: str | None = Query(None, description="当前 TOTP 验证码（query 参数，向后兼容）"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
-    """关闭 2FA，需验证当前 TOTP 码。"""
+    """关闭 2FA.
+
+    前端契约（SecurityPage.tsx）以 JSON body 传 ``{ password }``；
+    旧契约以 query 参数传 ``?code=``（TOTP 验证码）。
+
+    为兼容两种调用方式：
+    - 若 body 含 ``password``：用密码验证身份后关闭 2FA；
+    - 若 body 含 ``code`` 或 query 传 ``code``：用 TOTP 验证码验证后关闭 2FA。
+    """
     user = _get_user_orm(current_user, db)
     if not user.totp_enabled or not user.totp_secret:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 未启用")
+        raise HTTPException(status_code=400, detail="2FA 未启用")
 
-    totp = pyotp.TOTP(user.totp_secret)
-    if not totp.verify(code):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="验证码错误")
+    body = payload or {}
+    password = (body.get("password") or "").strip()
+    totp_code = (body.get("code") or code or "").strip()
+
+    # 二选一验证：密码 或 TOTP 码
+    if password:
+        if not verify_password(password, user.password_hash or ""):
+            raise HTTPException(status_code=400, detail="密码错误")
+    elif totp_code:
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(totp_code):
+            raise HTTPException(status_code=400, detail="验证码错误")
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="需提供 password（body）或 code（query/body）进行身份验证",
+        )
 
     user.totp_secret = None
     user.totp_enabled = False

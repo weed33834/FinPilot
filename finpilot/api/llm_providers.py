@@ -60,7 +60,8 @@ def _provider_dict(p: LlmProvider) -> dict:
         "is_active": p.is_active,
         "has_api_key": bool(p.api_key),
         "created_at": p.created_at.isoformat() if p.created_at else None,
-        "updated_at": None,
+        # 板块D补丁已为 LlmProvider 加 updated_at 列，读取真实值
+        "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         "last_tested_at": None,
         "last_test_ok": None,
         "last_test_message": None,
@@ -76,8 +77,11 @@ def _model_dict(m: LlmModel) -> dict:
         "display_name": m.display_name or m.model_name,
         "tier": m.tier,
         "is_active": m.is_active,
+        # LlmModel 无独立时间戳列，沿用 provider 的时间戳（best-effort）
         "created_at": None,
         "updated_at": None,
+        # 板块D：返回持久化的 parameters（temperature/max_tokens/top_p）
+        "parameters": m.parameters or None,
     }
 
 

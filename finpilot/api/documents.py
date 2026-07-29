@@ -14,7 +14,7 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from finpilot.database import crud
@@ -23,9 +23,28 @@ from finpilot.parser import ParserError, get_parser
 from finpilot.rag import RagService
 
 from .deps import get_current_user, get_db_session
-from .schemas import DocumentResponse
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def _ok(data, message: str = "success") -> dict:
+    """统一 {code, message, data} 包装，与前端 ApiResponse<T> 对齐。"""
+    return {"code": 0, "message": message, "data": data}
+
+
+def _doc_to_dict(doc) -> dict:
+    """Document ORM → 前端 Document 字段（与 DocumentResponse 对齐）。"""
+    return {
+        "id": str(doc.id),
+        "filename": doc.filename,
+        "file_type": doc.file_type,
+        "file_size": doc.file_size,
+        "status": doc.status,
+        "uploaded_by": str(doc.uploaded_by) if doc.uploaded_by is not None else None,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
+        "tenant_id": doc.tenant_id,
+    }
 
 # 上传文件保存目录
 UPLOAD_DIR = Path.home() / ".finpilot" / "uploads"
@@ -140,21 +159,42 @@ def _persist_tables(
     return accounts_count
 
 
-@router.get("", response_model=list[DocumentResponse])
+@router.get("")
 def list_documents(
-    skip: int = 0,
-    limit: int = 50,
+    page: int = Query(1, ge=1, description="页码，从 1 开始"),
+    page_size: int = Query(50, ge=1, le=500, description="每页条数"),
+    status: str | None = Query(None, description="按状态筛选: pending/parsing/indexed/failed"),
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """列出当前用户的文档（分页）"""
-    docs = crud.list_documents(
-        db, tenant_id=_tenant_of(current_user), skip=skip, limit=limit
+    """列出当前用户的文档（分页）.
+
+    前端契约（documents.ts）：``ApiResponse<PaginatedData<Document>>``，
+    即 ``{code, message, data: {items, total, page, page_size}}``。
+    此前返回裸数组 + skip/limit 参数，导致前端 ``resp.data.data.items`` 为 undefined。
+    """
+    tenant_id = _tenant_of(current_user)
+    # crud.list_documents 不支持 status 过滤，这里在查询层补上
+    from finpilot.database.models import Document
+    q = db.query(Document).filter(Document.tenant_id == tenant_id)
+    if status:
+        q = q.filter(Document.status == status)
+    total = q.count()
+    docs = (
+        q.order_by(Document.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
     )
-    return docs
+    return _ok({
+        "items": [_doc_to_dict(d) for d in docs],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    })
 
 
-@router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db_session),
@@ -319,20 +359,20 @@ async def upload_document(
         )
     except Exception:  # noqa: BLE001
         pass
-    return doc
+    return _ok(_doc_to_dict(doc), "上传成功")
 
 
-@router.get("/{document_id}", response_model=DocumentResponse)
+@router.get("/{document_id}")
 def get_document(
     document_id: int,
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """获取文档详情"""
+    """获取文档详情."""
     doc = crud.get_document(db, document_id)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
-    return doc
+    return _ok(_doc_to_dict(doc))
 
 
 @router.delete("/{document_id}")
@@ -341,7 +381,7 @@ def delete_document(
     db: Session = Depends(get_db_session),
     current_user: dict = Depends(get_current_user),
 ):
-    """删除文档（同时删除物理文件）"""
+    """删除文档（同时删除物理文件）."""
     doc = crud.get_document(db, document_id)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
@@ -353,4 +393,4 @@ def delete_document(
         pass
     db.delete(doc)
     db.commit()
-    return {"message": "已删除"}
+    return _ok(None, "已删除")

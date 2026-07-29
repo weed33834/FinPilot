@@ -29,8 +29,8 @@ def _row_dict(row: AuditLog) -> dict:
 
     前端 types/audit.ts 期望字段：
       { id, timestamp, tenant_id, user_id, action, resource, result, ip, reason }
-    后端 AuditLog ORM 字段：action / tenant_id / user_id / status / detail / meta_json / created_at
-    缺失字段以 None 占位（resource/ip/reason 在 ORM 中无对应列，统一返回 None）。
+    后端 AuditLog ORM 已补齐 resource / ip_address / target_object_type / target_object_id
+    （迁移 e1f2a3b4c5d6），此处读取真实值而非硬编码 None。
     """
     return {
         "id": str(row.id),
@@ -38,9 +38,9 @@ def _row_dict(row: AuditLog) -> dict:
         "tenant_id": row.tenant_id or "",
         "user_id": str(row.user_id) if row.user_id is not None else None,
         "action": row.action or "",
-        "resource": None,
+        "resource": getattr(row, "resource", None),
         "result": row.status or None,
-        "ip": None,
+        "ip": getattr(row, "ip_address", None),
         "reason": row.detail or None,
     }
 

@@ -1425,3 +1425,29 @@ class SystemSetting(Base, TenantMixin):
 
     def __repr__(self) -> str:
         return f"<SystemSetting(key='{self.key}')>"
+
+
+class Notification(Base, TenantMixin):
+    """站内通知表 — 对应前端 NotificationBell 组件与 types/notification.ts.
+
+    channel 用于前端图标映射（approval/report/document/agent/security/system），
+    is_read 标记是否已读，created_at 用于相对时间展示。
+    """
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notifications_tenant_user_read", "tenant_id", "user_id", "is_read"),
+        Index("ix_notifications_tenant_user_created", "tenant_id", "user_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # 接收通知的用户 ID（字符串以兼容 user_{id} 形式）
+    user_id: Mapped[str] = mapped_column(String(100), index=True)
+    # 通知渠道/分类：approval / report / document / agent / security / system
+    channel: Mapped[str] = mapped_column(String(32), default="system")
+    title: Mapped[str] = mapped_column(String(255))
+    content: Mapped[Optional[str]] = mapped_column(Text)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<Notification(id={self.id}, channel='{self.channel}', is_read={self.is_read})>"

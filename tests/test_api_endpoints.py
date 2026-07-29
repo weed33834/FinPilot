@@ -31,6 +31,10 @@ PROTECTED_ENDPOINTS = [
     ("GET", "/api/v1/approvals/"),
     # 审计日志
     ("GET", "/api/v1/audit/logs"),
+    # 站内通知（第二轮修复新增）
+    ("GET", "/api/v1/notifications/"),
+    # 工具创建（第二轮修复新增 POST /tools）
+    ("POST", "/api/v1/tools/"),
 ]
 
 

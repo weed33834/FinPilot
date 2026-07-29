@@ -88,6 +88,8 @@ _EXTENSION_ROUTERS: list[tuple[str, str]] = [
     (".eval", "router"),
     (".prompt_ab_tests", "router"),
     (".prompt_few_shot", "router"),
+    # 站内通知（前端 NotificationBell 组件）
+    (".notifications", "router"),
 ]
 
 

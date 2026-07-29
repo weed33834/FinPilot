@@ -30,11 +30,13 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# 板块D：为已有表补列的幂等补丁。
+# 板块D + 迁移 e1f2a3b4c5d6 + c2f3a4b5c6d7：为已有表补列的幂等补丁。
 # create_all 只建缺失的表，不会给已存在的表加列；这里用 ALTER TABLE 兜底，
-# 让老库升级时也能拿到 agent_configs / llm_models / llm_providers / search_engines 的新列。
+# 让老库升级时也能拿到所有迁移引入的新列。
+# 注意：类型变更（如 String→Integer）无法通过 ADD COLUMN 解决，需 alembic batch 重建表。
 # 每个条目: (表名, 列名, SQLite DDL 片段)
 _SCHEMA_PATCH_COLUMNS: list[tuple[str, str, str]] = [
+    # === 迁移 d3a4b5c6d7e8（板块D）===
     # AgentConfig: agent_type / prompt_id / max_iterations / temperature
     ("agent_configs", "agent_type", "VARCHAR(32) DEFAULT 'react' NOT NULL"),
     ("agent_configs", "prompt_id", "INTEGER"),
@@ -48,6 +50,39 @@ _SCHEMA_PATCH_COLUMNS: list[tuple[str, str, str]] = [
     ("search_engines", "tenant_id", "VARCHAR(100)"),
     ("search_engines", "extra_params", "JSON"),
     ("search_engines", "priority", "INTEGER DEFAULT 0 NOT NULL"),
+    # === 迁移 e1f2a3b4c5d6（repair_causal_chain）===
+    # api_keys: scopes
+    ("api_keys", "scopes", "TEXT"),
+    # financial_reports: document_id / tenant_id
+    ("financial_reports", "document_id", "INTEGER"),
+    ("financial_reports", "tenant_id", "VARCHAR(100)"),
+    # reports: document_id / data_connection_id
+    # 注意：reports.template_id 的 String→Integer 类型变更无法通过 ADD COLUMN 处理，
+    # 需 alembic batch_alter_table；这里仅补缺失列。
+    ("reports", "document_id", "INTEGER"),
+    ("reports", "data_connection_id", "INTEGER"),
+    # audit_logs: target_object_type / target_object_id / resource / ip_address
+    ("audit_logs", "target_object_type", "VARCHAR(32)"),
+    ("audit_logs", "target_object_id", "VARCHAR(64)"),
+    ("audit_logs", "resource", "VARCHAR(255)"),
+    ("audit_logs", "ip_address", "VARCHAR(64)"),
+    # conversations: agent_config_id
+    ("conversations", "agent_config_id", "INTEGER"),
+    # messages: model_name / tokens_in / tokens_out / latency_ms / tool_calls
+    ("messages", "model_name", "VARCHAR(200)"),
+    ("messages", "tokens_in", "INTEGER"),
+    ("messages", "tokens_out", "INTEGER"),
+    ("messages", "latency_ms", "INTEGER"),
+    ("messages", "tool_calls", "TEXT"),
+    # === 迁移 c2f3a4b5c6d7（section_c_frontend_routes）===
+    # api_keys 扩展：tenant_id / key_prefix / first_used_at / usage_count / expires_at / rotated_from / updated_at
+    ("api_keys", "tenant_id", "VARCHAR(100)"),
+    ("api_keys", "key_prefix", "VARCHAR(32)"),
+    ("api_keys", "first_used_at", "DATETIME"),
+    ("api_keys", "usage_count", "INTEGER DEFAULT 0"),
+    ("api_keys", "expires_at", "DATETIME"),
+    ("api_keys", "rotated_from", "INTEGER"),
+    ("api_keys", "updated_at", "DATETIME"),
 ]
 
 
