@@ -4700,6 +4700,12 @@ input[type="radio"]:active {
   color: var(--color-primary-ink);
 }
 
+.notification-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .notification-list {
   flex: 1;
   overflow-y: auto;

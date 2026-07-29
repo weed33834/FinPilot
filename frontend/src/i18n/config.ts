@@ -10,6 +10,13 @@ import enMenu from './locales/en/menu.json'
 import enAuth from './locales/en/auth.json'
 import enDashboard from './locales/en/dashboard.json'
 
+// brand / footer 文案内联在 auth.json 中（登录页专用），通过命名空间映射复用，
+// 避免为少量登录页文案单独建立文件。
+const zhCNBrand = zhCNAuth.brand
+const zhCNFooter = zhCNAuth.footer
+const enBrand = enAuth.brand
+const enFooter = enAuth.footer
+
 export const SUPPORTED_LANGUAGES = [
   { code: 'zh-CN', label: '中文' },
   { code: 'en', label: 'English' },
@@ -38,18 +45,22 @@ i18n
         menu: zhCNMenu,
         auth: zhCNAuth,
         dashboard: zhCNDashboard,
+        brand: zhCNBrand,
+        footer: zhCNFooter,
       },
       en: {
         common: enCommon,
         menu: enMenu,
         auth: enAuth,
         dashboard: enDashboard,
+        brand: enBrand,
+        footer: enFooter,
       },
     },
     lng: getInitialLanguage(),
     fallbackLng: 'zh-CN',
     supportedLngs: ['zh-CN', 'en'],
-    ns: ['common', 'menu', 'auth', 'dashboard'],
+    ns: ['common', 'menu', 'auth', 'dashboard', 'brand', 'footer'],
     defaultNS: 'common',
     interpolation: {
       escapeValue: false,

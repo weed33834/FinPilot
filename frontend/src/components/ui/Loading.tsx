@@ -1,21 +1,26 @@
+import { useTranslation } from 'react-i18next'
+
 interface LoadingProps {
   text?: string
 }
 
 // 行内小加载，用于按钮、局部刷新
-export default function Loading({ text = '加载中' }: LoadingProps) {
+export default function Loading({ text }: LoadingProps) {
+  const { t } = useTranslation()
+  const label = text ?? t('common:status.loading')
   return (
     <div className="loading" role="status" aria-live="polite">
       <span className="spinner" aria-hidden="true" />
-      <span>{text}</span>
+      <span>{label}</span>
     </div>
   )
 }
 
 // 卡片骨架，匹配 Dashboard 等多卡片页
 export function PageSkeleton() {
+  const { t } = useTranslation()
   return (
-    <div role="status" aria-live="polite" aria-label="加载中">
+    <div role="status" aria-live="polite" aria-label={t('common:status.loading')}>
       <div className="skeleton-stat-grid">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="skeleton skeleton-stat" />
@@ -37,8 +42,9 @@ interface TableSkeletonProps {
 }
 
 export function TableSkeleton({ rows = 5, cols = 4 }: TableSkeletonProps) {
+  const { t } = useTranslation()
   return (
-    <div className="table-wrapper" role="status" aria-live="polite" aria-label="加载中">
+    <div className="table-wrapper" role="status" aria-live="polite" aria-label={t('common:status.loading')}>
       <table>
         <thead>
           <tr>
@@ -71,8 +77,9 @@ interface ListSkeletonProps {
 }
 
 export function ListSkeleton({ items = 6 }: ListSkeletonProps) {
+  const { t } = useTranslation()
   return (
-    <div role="status" aria-live="polite" aria-label="加载中">
+    <div role="status" aria-live="polite" aria-label={t('common:status.loading')}>
       {Array.from({ length: items }).map((_, i) => (
         <div key={i} className="card" style={{ padding: 'var(--space-3)' }}>
           <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
@@ -90,8 +97,9 @@ export function ListSkeleton({ items = 6 }: ListSkeletonProps) {
 
 // 详情页骨架
 export function DetailSkeleton() {
+  const { t } = useTranslation()
   return (
-    <div role="status" aria-live="polite" aria-label="加载中">
+    <div role="status" aria-live="polite" aria-label={t('common:status.loading')}>
       <div className="skeleton" style={{ width: '30%', height: 28, marginBottom: 'var(--space-4)' }} />
       <div className="card" style={{ padding: 'var(--space-4)' }}>
         {Array.from({ length: 5 }).map((_, i) => (

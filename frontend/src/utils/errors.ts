@@ -1,4 +1,5 @@
 import axios from 'axios'
+import i18n from '../i18n/config.ts'
 
 /**
  * 自定义 fetch 错误：携带 HTTP 状态码、URL、方法、响应体文本。
@@ -19,7 +20,7 @@ export class FetchError extends Error {
     bodyText?: string
     code?: string
   }) {
-    super(args.message || 'fetch 请求失败')
+    super(args.message || i18n.t('common:errors.fetchFailed'))
     this.name = 'FetchError'
     this.status = args.status ?? 0
     this.url = args.url || ''
@@ -27,6 +28,11 @@ export class FetchError extends Error {
     this.bodyText = args.bodyText || ''
     this.code = args.code
   }
+}
+
+/** i18n 文案快捷读取（统一从 common:errors 命名空间取，缺失时回退到 key） */
+function te(key: string): string {
+  return i18n.t(`common:errors.${key}`)
 }
 
 /**
@@ -40,8 +46,11 @@ export class FetchError extends Error {
  * 设计目标：
  * - 用户能一眼看到「是哪个接口」「什么状态码」「后端说为什么」
  * - 不再是「操作失败，请稍后重试」这种 0 信息量的兜底
+ *
+ * 文案走 i18n（common:errors.*），跟随界面语言切换。
  */
-export function getErrorMessage(err: unknown, fallback = '操作失败，请稍后重试'): string {
+export function getErrorMessage(err: unknown, fallback?: string): string {
+  const fb = fallback || te('fallback')
   if (axios.isAxiosError(err)) {
     return _formatAxiosError(err)
   }
@@ -49,18 +58,18 @@ export function getErrorMessage(err: unknown, fallback = '操作失败，请稍�
     return _formatFetchError(err)
   }
   if (err instanceof DOMException && err.name === 'AbortError') {
-    return '[abort] 请求已取消'
+    return `[abort] ${te('abort')}`
   }
   // 浏览器原生的 fetch 网络错误（无法连接）是 TypeError
   if (err instanceof TypeError && /fetch|network|Failed to fetch/i.test(err.message)) {
-    return `[network] 无法连接到后端服务 — ${err.message}（后端可能未启动 / 已崩溃 / CORS 拒绝）`
+    return `[network] ${te('networkUnavailable')} — ${err.message}（${te('networkHint')}）`
   }
   if (err instanceof Error) {
     // 兜底：原生 Error 仅暴露 message，但仍是可读信息
-    return err.message || fallback
+    return err.message || fb
   }
   if (typeof err === 'string') return err
-  return fallback
+  return fb
 }
 
 /**
@@ -74,12 +83,12 @@ function _formatFetchError(err: FetchError): string {
   // 无 status —— 网络层错误
   if (!err.status) {
     if (err.code === 'ECONNABORTED' || /timeout|aborted/i.test(err.message)) {
-      return `[network] 请求超时 — 后端未在规定时间内响应（LLM 推理过慢 / 后端阻塞）`
+      return `[network] ${te('timeout')} — ${te('timeoutHint')}`
     }
     if (err.code === 'ERR_NETWORK' || /Failed to fetch|NetworkError/i.test(err.message)) {
-      return `[network] 网络连接失败 — 无法连接到后端服务（可能未启动 / CORS 拒绝 / 服务已挂）`
+      return `[network] ${te('networkFailed')} — ${te('networkFailedHint')}`
     }
-    return `[network] ${err.message || '未知网络错误'}`
+    return `[network] ${err.message || te('unknownNetwork')}`
   }
 
   const status = err.status
@@ -99,7 +108,7 @@ function _formatFetchError(err: FetchError): string {
         })
         .filter(Boolean)
         .join('；')
-      return `${tag} 422 参数校验失败 — ${fieldErrs || '请检查请求体'}`
+      return `${tag} 422 ${te('validationFailed')} — ${fieldErrs || te('validationHint')}`
     }
   } catch {
     // 响应体不是 JSON，直接用文本
@@ -143,7 +152,7 @@ function _formatAxiosError(err: import('axios').AxiosError): string {
         })
         .filter(Boolean)
         .join('；')
-      return `${tag} 422 参数校验失败 — ${fieldErrs || '请检查请求体'}`
+      return `${tag} 422 ${te('validationFailed')} — ${fieldErrs || te('validationHint')}`
     }
 
     if (detail) {
@@ -156,24 +165,24 @@ function _formatAxiosError(err: import('axios').AxiosError): string {
   const code = err.code || ''
   if (code === 'ECONNABORTED') {
     const timeout = err.config?.timeout ? `${Math.round(err.config.timeout / 1000)}s` : ''
-    return `[network] 请求超时${timeout ? `（${timeout}）` : ''} — 后端未在规定时间内响应，可能是 LLM 推理过慢或后端阻塞`
+    return `[network] ${te('timeout')}${timeout ? `（${timeout}）` : ''} — ${te('timeoutHint')}`
   }
   if (code === 'ERR_NETWORK') {
-    return `[network] 网络连接失败 — 无法连接到后端服务（可能未启动 / CORS 拒绝 / 服务已挂）`
+    return `[network] ${te('networkFailed')} — ${te('networkFailedHint')}`
   }
   if (code === 'ECONNREFUSED') {
-    return `[network] 连接被拒绝 — 后端服务未在监听该端口`
+    return `[network] ${te('refused')} — ${te('refusedHint')}`
   }
   if (code === 'ENOTFOUND') {
-    return `[network] 域名解析失败 — 无法解析后端地址`
+    return `[network] ${te('dnsFailed')} — ${te('dnsFailedHint')}`
   }
   if (code === 'ECONNRESET') {
-    return `[network] 连接被重置 — 后端可能崩溃或被代理截断`
+    return `[network] ${te('reset')} — ${te('resetHint')}`
   }
   if (code) {
-    return `[network] ${code} — ${err.message || '网络异常'}`
+    return `[network] ${code} — ${err.message || te('networkException')}`
   }
-  return `[network] ${err.message || '未知网络错误'}`
+  return `[network] ${err.message || te('unknownNetwork')}`
 }
 
 /**
@@ -206,24 +215,13 @@ function _extractBackendDetail(data: unknown): string {
   return ''
 }
 
-/** 给 HTTP 状态码加一句中文标签，让用户立刻知道是什么类型错误 */
+/** 给 HTTP 状态码加一句标签，让用户立刻知道是什么类型错误（文案走 i18n） */
 function _statusLabel(status: number): string {
-  if (status === 400) return '请求参数错误'
-  if (status === 401) return '未登录或会话已过期'
-  if (status === 403) return '没有权限执行此操作'
-  if (status === 404) return '路由不存在或后端未实现'
-  if (status === 405) return '请求方法不被允许'
-  if (status === 409) return '资源冲突'
-  if (status === 413) return '请求体过大'
-  if (status === 422) return '参数校验失败'
-  if (status === 429) return '请求过于频繁'
-  if (status === 500) return '服务器内部错误'
-  if (status === 501) return '功能尚未实现'
-  if (status === 502) return '网关错误'
-  if (status === 503) return '服务不可用'
-  if (status === 504) return '网关超时'
-  if (status >= 500) return '服务器错误'
-  if (status >= 400) return '请求错误'
+  const key = `common:errors.httpStatus.${status}`
+  const translated = i18n.t(key)
+  if (translated && translated !== key) return translated
+  if (status >= 500) return te('httpStatus.5xx')
+  if (status >= 400) return te('httpStatus.4xx')
   return ''
 }
 
@@ -257,14 +255,8 @@ export function getErrorLevel(err: unknown): ErrorLevel {
 }
 
 /**
- * 返回错误的简短类型标签（用于错误条上的小标签）。
+ * 返回错误的简短类型标签（用于错误条上的小标签，文案走 i18n）。
  */
 export function getErrorLevelLabel(level: ErrorLevel): string {
-  switch (level) {
-    case 'network': return '网络'
-    case 'auth': return '权限'
-    case 'client': return '请求'
-    case 'server': return '服务'
-    default: return '错误'
-  }
+  return te(`level.${level}`)
 }

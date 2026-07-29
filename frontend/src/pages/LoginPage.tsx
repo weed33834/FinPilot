@@ -18,7 +18,7 @@ type LoginForm = z.infer<typeof loginSchema>
 type Step = 'credentials' | 'twofa'
 
 export default function LoginPage() {
-  const { t } = useTranslation('auth')
+  const { t } = useTranslation(['auth', 'brand', 'footer'])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -110,30 +110,30 @@ export default function LoginPage() {
             <div className="login-brand-logo">FP</div>
             <div>
               <div className="login-brand-name">FinPilot</div>
-              <div className="login-brand-tagline">FINANCIAL ANALYSIS</div>
+              <div className="login-brand-tagline">{t('brand:tagline')}</div>
             </div>
           </div>
-          <h2 className="login-brand-headline">企业级财务智能分析平台</h2>
+          <h2 className="login-brand-headline">{t('brand:headline')}</h2>
           <ul className="login-brand-features">
             <li>
               <span className="login-brand-bullet" />
               <div>
-                <strong>智能查询</strong>
-                <span>自然语言转 SQL，秒级响应</span>
+                <strong>{t('brand:featureSmartQueryTitle')}</strong>
+                <span>{t('brand:featureSmartQueryDesc')}</span>
               </div>
             </li>
             <li>
               <span className="login-brand-bullet" />
               <div>
-                <strong>多维分析</strong>
-                <span>KPI 看板、趋势对比、钻取洞察</span>
+                <strong>{t('brand:featureMultiAnalysisTitle')}</strong>
+                <span>{t('brand:featureMultiAnalysisDesc')}</span>
               </div>
             </li>
             <li>
               <span className="login-brand-bullet" />
               <div>
-                <strong>合规安全</strong>
-                <span>审计日志、ABAC 策略、API 密钥管控</span>
+                <strong>{t('brand:featureComplianceTitle')}</strong>
+                <span>{t('brand:featureComplianceDesc')}</span>
               </div>
             </li>
           </ul>
@@ -165,7 +165,7 @@ export default function LoginPage() {
                       {...register('username')}
                       autoComplete="username"
                       autoFocus
-                      placeholder="请输入用户名"
+                      placeholder={t('auth:login.usernamePlaceholder')}
                       aria-invalid={errors.username ? 'true' : 'false'}
                     />
                   </div>
@@ -190,14 +190,14 @@ export default function LoginPage() {
                       type={showPassword ? 'text' : 'password'}
                       {...register('password')}
                       autoComplete="current-password"
-                      placeholder="请输入密码"
+                      placeholder={t('auth:login.passwordPlaceholder')}
                       aria-invalid={errors.password ? 'true' : 'false'}
                     />
                     <button
                       type="button"
                       className="login-toggle-pwd"
                       onClick={() => setShowPassword((s) => !s)}
-                      aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                      aria-label={showPassword ? t('auth:login.hidePassword') : t('auth:login.showPassword')}
                       tabIndex={-1}
                     >
                       {showPassword ? (
@@ -225,7 +225,7 @@ export default function LoginPage() {
                     <span>{t('login.rememberMe')}</span>
                   </label>
                   <a href="#forgot" className="login-forgot-link" onClick={(e) => e.preventDefault()}>
-                    忘记密码？
+                    {t('auth:login.forgotPassword')}
                   </a>
                 </div>
 
@@ -244,7 +244,7 @@ export default function LoginPage() {
                   {loading ? (
                     <>
                       <span className="login-spinner" aria-hidden="true" />
-                      <span>{t('login.submitting') || '登录中...'}</span>
+                      <span>{t('login.submitting')}</span>
                     </>
                   ) : (
                     t('login.submit')
@@ -345,10 +345,10 @@ export default function LoginPage() {
           )}
 
           <footer className="login-card-footer">
-            <span>登录即表示同意</span>
-            <a href="#terms" onClick={(e) => e.preventDefault()}>服务条款</a>
-            <span>与</span>
-            <a href="#privacy" onClick={(e) => e.preventDefault()}>隐私政策</a>
+            <span>{t('footer:agreeTerms')}</span>
+            <a href="#terms" onClick={(e) => e.preventDefault()}>{t('footer:terms')}</a>
+            <span>{t('footer:and')}</span>
+            <a href="#privacy" onClick={(e) => e.preventDefault()}>{t('footer:privacy')}</a>
           </footer>
         </div>
       </main>

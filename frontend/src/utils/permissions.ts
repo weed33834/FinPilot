@@ -16,23 +16,6 @@ export type RoleKey = 'admin' | 'finance_manager' | 'auditor' | 'viewer' | 'rese
 
 export const ALL_ROLES: RoleKey[] = ['admin', 'finance_manager', 'auditor', 'viewer', 'researcher']
 
-export const ROLE_LABELS: Record<RoleKey, string> = {
-  admin: '管理员',
-  finance_manager: '财务经理',
-  auditor: '审计员',
-  viewer: '查看者',
-  researcher: '研究员',
-}
-
-/** 角色中文简介，用于个人中心展示 */
-export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
-  admin: '拥有全部权限，可管理系统配置与所有功能模块',
-  finance_manager: '管理财务报告、报告模板与订阅，可使用量化研究工具',
-  auditor: '负责报告审批、人工审批与审计监控，可只读访问财务数据',
-  viewer: '只读访问工作台与财务数据',
-  researcher: '专注量化研究，可使用因子挖掘、策略回测与工作流编辑器',
-}
-
 /**
  * 判断角色是否具备某权限。
  * - admin 自动通过所有检查

@@ -144,7 +144,7 @@ export default function DashboardPage() {
                   <ICONS.approvals size={20} />
                 </div>
                 <div className={`stat-trend ${pendingCount ? 'up' : 'flat'}`}>
-                  {pendingCount ? 'NEW' : '—'}
+                  {pendingCount ? t('common:badge.new') : '—'}
                 </div>
               </div>
               <div className="stat-value">{pendingCount}</div>
@@ -171,7 +171,7 @@ export default function DashboardPage() {
                 <div className="stat-icon agent">
                   <ICONS.agent size={20} />
                 </div>
-                <div className="stat-trend up">AI</div>
+                <div className="stat-trend up">{t('common:badge.ai')}</div>
               </div>
               <div className="stat-value stat-value-text">{t('dashboard:stats.enter')}</div>
               <div className="stat-label">{t('dashboard:stats.agentQueries')}</div>

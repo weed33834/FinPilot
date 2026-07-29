@@ -58,5 +58,16 @@
     "language": "语言",
     "expandGroup": "展开分组",
     "collapseGroup": "折叠分组"
+  },
+  "shortcuts": {
+    "groupNavigation": "导航",
+    "groupInterface": "界面",
+    "openAgent": "打开智能对话",
+    "toggleSidebar": "切换侧边栏",
+    "gotoDashboard": "跳转数据看板",
+    "gotoDocuments": "跳转文档管理",
+    "gotoReports": "跳转财务报告",
+    "showHelp": "显示/隐藏快捷键帮助",
+    "closeDialog": "关闭弹窗"
   }
 }

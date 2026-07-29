@@ -30,6 +30,11 @@ export default class ErrorBoundary extends Component<Props, State> {
     window.location.reload()
   }
 
+  // 重置错误状态，让子树重新渲染（适用于临时性渲染错误，避免整页刷新丢失路由状态）
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null })
+  }
+
   render() {
     if (this.state.hasError) {
       const summary = this.state.error?.message || i18n.t('common:errorBoundary.unknownError')
@@ -41,7 +46,15 @@ export default class ErrorBoundary extends Component<Props, State> {
             <div className="alert alert-error mb-4" role="alert">
               {summary}
             </div>
-            <button type="button" className="login-submit" onClick={this.handleReload}>
+            <button type="button" className="login-submit" onClick={this.handleRetry}>
+              {i18n.t('common:errorBoundary.retry')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', marginTop: '0.5rem' }}
+              onClick={this.handleReload}
+            >
               {i18n.t('common:errorBoundary.refreshPage')}
             </button>
             <Link

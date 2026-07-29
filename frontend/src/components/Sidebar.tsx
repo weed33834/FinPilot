@@ -7,11 +7,9 @@ import NotificationBell from './NotificationBell.tsx'
 import { ICONS } from './ui/Icons.tsx'
 import {
   NAV_SECTIONS,
-  NAV_FALLBACK_LABELS,
   filterNavByRole,
   type NavItem,
 } from '../utils/navigation.ts'
-import { ROLE_LABELS, type RoleKey } from '../utils/permissions.ts'
 
 interface SidebarProps {
   open: boolean
@@ -20,7 +18,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
-  const { t } = useTranslation(['common', 'menu'])
+  const { t } = useTranslation(['common', 'menu', 'auth'])
   const { role, username, logout } = useAuth()
   const location = useLocation()
 
@@ -30,11 +28,12 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
   // 已展开的分组路径集合（仅对带 children 的项生效）
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  // 解析 i18n 标签，缺失时回退到 NAV_FALLBACK_LABELS
+  // 解析 i18n 标签：命中则用翻译；缺失时回退到 key 末段（可读标识），避免显示原始 key 路径
   const labelText = (key: string): string => {
     const translated = t(key)
     if (translated && translated !== key) return translated
-    return NAV_FALLBACK_LABELS[key] ?? key
+    const tail = key.split('.').pop() ?? key
+    return tail
   }
 
   // 路由切换后：自动展开包含当前路径的分组 + 关闭移动端抽屉
@@ -67,7 +66,7 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
     })
   }
 
-  const roleLabel = role ? ROLE_LABELS[role as RoleKey] ?? t(`common:role.${role}`) : ''
+  const roleLabel = role ? t(`common:role.${role}`) : ''
   const initial = (username || '?').slice(0, 1).toUpperCase()
 
   return (
@@ -86,7 +85,7 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
           <img src="/logo.svg" alt="FinPilot" className="sidebar-brand-logo" />
           <div className="sidebar-brand-text">
             <h2>{t('common:common.appName')}</h2>
-            <p>FINANCIAL ANALYSIS</p>
+            <p>{t('auth:brand.tagline')}</p>
           </div>
         </Link>
 
@@ -147,6 +146,7 @@ interface SidebarNodeProps {
 }
 
 function SidebarNode({ item, isActive, isExpanded, onToggle, labelText, onClose }: SidebarNodeProps) {
+  const { t } = useTranslation('common')
   const Icon = ICONS[item.icon]
   const hasChildren = !!item.children && item.children.length > 0
   const active = isActive(item.path)
@@ -205,7 +205,7 @@ function SidebarNode({ item, isActive, isExpanded, onToggle, labelText, onClose 
       <span>{labelText(item.labelKey)}</span>
       {item.badge && (
         <span className={`sidebar-tag sidebar-tag-${item.badge}`}>
-          {item.badge === 'new' ? 'NEW' : 'BETA'}
+          {item.badge === 'new' ? t('common:badge.new') : t('common:badge.beta')}
         </span>
       )}
     </Link>

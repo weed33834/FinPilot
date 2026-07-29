@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client.ts'
 import { ICONS } from './ui/Icons.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
+import { toast } from './ui/Toaster.tsx'
 import type { Notification } from '../types/notification.ts'
 
 function formatRelative(iso: string, t: (k: string, opts?: Record<string, unknown>) => string): string {
@@ -98,12 +99,31 @@ export default function NotificationBell() {
   }
 
   const markRead = async (id: string) => {
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
+    // 乐观更新：先把该条置为已读，失败则回滚，避免 UI 与后端不一致
+    const prev = items
+    setItems((cur) => cur.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
     try {
       await api.post(`/notifications/${id}/read`)
-    } catch {
-      // 静默失败
+    } catch (err) {
+      // 回滚该条状态，保持与后端一致
+      setItems(prev)
+      toast.error(getErrorMessage(err, t('common:notifications.markReadFailed')))
     }
+  }
+
+  const markAllRead = async () => {
+    if (unreadCount === 0) return
+    // 乐观更新：全部置为已读，失败回滚
+    const prev = items
+    setItems((cur) => cur.map((n) => (n.is_read ? n : { ...n, is_read: true })))
+    try {
+      await api.post('/notifications/read-all')
+    } catch (err) {
+      setItems(prev)
+      toast.error(getErrorMessage(err, t('common:notifications.markAllReadFailed')))
+      return
+    }
+    toast.success(t('common:notifications.markAllReadDone'))
   }
 
   const unreadCount = items.filter((n) => !n.is_read).length
@@ -120,7 +140,10 @@ export default function NotificationBell() {
       >
         <ICONS.bell size={18} />
         {unreadCount > 0 && (
-          <span className="notification-bell-dot" aria-label={`${unreadCount} 未读`}>
+          <span
+            className="notification-bell-dot"
+            aria-label={t('common:notifications.unreadLabel', { count: unreadCount })}
+          >
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -134,15 +157,28 @@ export default function NotificationBell() {
         >
           <div className="notification-header">
             <span>{t('common:notifications.title')}</span>
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => void fetchNotifications()}
-              disabled={loading}
-              aria-label={t('common:notifications.refresh')}
-            >
-              {loading ? `${t('common:notifications.refreshing')}…` : t('common:notifications.refresh')}
-            </button>
+            <div className="notification-header-actions">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void markAllRead()}
+                  disabled={loading}
+                  aria-label={t('common:notifications.markAllRead')}
+                >
+                  {t('common:notifications.markAllRead')}
+                </button>
+              )}
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void fetchNotifications()}
+                disabled={loading}
+                aria-label={t('common:notifications.refresh')}
+              >
+                {loading ? `${t('common:notifications.refreshing')}…` : t('common:notifications.refresh')}
+              </button>
+            </div>
           </div>
           <div className="notification-list">
             {loading && items.length === 0 ? (

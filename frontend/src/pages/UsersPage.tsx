@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslation } from 'react-i18next'
 import Modal from '../components/ui/Modal.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
 import Loading from '../components/ui/Loading.tsx'
@@ -15,25 +16,37 @@ import { useAuth } from '../context/AuthContext.tsx'
 import { toast } from '../components/ui/Toaster.tsx'
 import type { User } from '../types/user.ts'
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: '管理员',
-  finance_manager: '财务经理',
-  auditor: '审计员',
-  viewer: '查看者',
-}
+// 角色选项（与 zod enum 对齐）。标签走 i18n common:role.* 动态翻译。
+const ROLE_OPTIONS = ['admin', 'finance_manager', 'auditor', 'viewer'] as const
 
-const userSchema = z.object({
-  username: z.string().min(1, '请输入用户名'),
-  email: z.string().email('邮箱格式不正确').or(z.literal('')).optional(),
-  password: z.string().min(8, '密码至少 8 位').or(z.literal('')),
-  role: z.enum(['admin', 'finance_manager', 'auditor', 'viewer']),
+type UserForm = z.infer<typeof userSchemaShape>
+
+// zod schema 形状（message 占位 key，渲染前在组件内用 t() 重建带本地化消息的 schema）
+const userSchemaShape = z.object({
+  username: z.string().min(1, 'users:errUsernameRequired'),
+  email: z.string().email('users:errEmailInvalid').or(z.literal('')).optional(),
+  password: z.string().min(8, 'users:errPasswordMin').or(z.literal('')),
+  role: z.enum(ROLE_OPTIONS),
   is_active: z.enum(['Y', 'N']),
 })
 
-type UserForm = z.infer<typeof userSchema>
-
 export default function UsersPage() {
+  const { t } = useTranslation('common')
+  const roleLabel = (role: string) => t(`role.${role}`, { defaultValue: role })
   const { userId, username: currentUsername } = useAuth()
+
+  // 组件内用 i18n 文案重建 schema（消息本地化）
+  const userSchema = useMemo(
+    () =>
+      z.object({
+        username: z.string().min(1, t('users:errUsernameRequired')),
+        email: z.string().email(t('users:errEmailInvalid')).or(z.literal('')).optional(),
+        password: z.string().min(8, t('users:errPasswordMin')).or(z.literal('')),
+        role: z.enum(ROLE_OPTIONS),
+        is_active: z.enum(['Y', 'N']),
+      }),
+    [t],
+  )
 
   const {
     items: users,
@@ -46,13 +59,13 @@ export default function UsersPage() {
     setError,
   } = useCrudResource<User>({
     baseUrl: '/users',
-    fetchErrorMessage: '加载用户列表失败',
-    createErrorMessage: '保存用户失败',
-    updateErrorMessage: '保存用户失败',
-    deleteErrorMessage: '删除用户失败',
-    createSuccessMessage: '用户创建成功',
-    updateSuccessMessage: '用户信息已更新',
-    deleteSuccessMessage: '用户已删除',
+    fetchErrorMessage: t('users:loadFailed'),
+    createErrorMessage: t('users:saveFailed'),
+    updateErrorMessage: t('users:saveFailed'),
+    deleteErrorMessage: t('users:deleteFailed'),
+    createSuccessMessage: t('users:createSuccess'),
+    updateSuccessMessage: t('users:updateSuccess'),
+    deleteSuccessMessage: t('users:deleteSuccess'),
   })
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -135,12 +148,12 @@ export default function UsersPage() {
   const handleDelete = async (user: User) => {
     // 自删保护：不能删除自己
     if (userId && user.id === userId) {
-      toast.warning('无法删除当前登录账号', '请使用其他管理员账号来删除此用户。')
+      toast.warning(t('users:cannotDeleteSelf'), t('users:cannotDeleteSelfTip'))
       setDeleteTarget(null)
       return
     }
     if (currentUsername && user.username === currentUsername) {
-      toast.warning('无法删除当前登录账号')
+      toast.warning(t('users:cannotDeleteSelf'))
       setDeleteTarget(null)
       return
     }
@@ -151,7 +164,7 @@ export default function UsersPage() {
   const handleResetPassword = async () => {
     if (!resetTarget) return
     if (resetPassword.length < 8) {
-      setError('密码至少 8 位')
+      setError(t('users:passwordMinLength'))
       return
     }
     setResetSubmitting(true)
@@ -160,11 +173,14 @@ export default function UsersPage() {
       await api.post(`/users/${resetTarget.id}/reset-password`, {
         password: resetPassword,
       })
-      toast.success('密码已重置', `用户「${resetTarget.username}」的密码已更新。`)
+      toast.success(
+        t('users:passwordReset'),
+        t('users:passwordResetDesc', { username: resetTarget.username }),
+      )
       setResetTarget(null)
       setResetPassword('')
     } catch (err) {
-      const msg = getErrorMessage(err, '重置密码失败')
+      const msg = getErrorMessage(err, t('users:resetFailed'))
       setError(msg)
       toast.error(msg)
     } finally {
@@ -178,8 +194,8 @@ export default function UsersPage() {
   return (
     <div className="container">
       <div className="page-header">
-        <h1>用户管理</h1>
-        <button type="button" onClick={openCreate}>新建用户</button>
+        <h1>{t('users:title')}</h1>
+        <button type="button" onClick={openCreate}>{t('users:create')}</button>
       </div>
 
       {error && (
@@ -189,20 +205,20 @@ export default function UsersPage() {
       )}
 
       {loading ? (
-        <Loading text="加载用户中..." />
+        <Loading text={t('users:loading')} />
       ) : users.length === 0 ? (
-        <EmptyState title="暂无用户" description="点击「新建用户」创建第一个用户。" />
+        <EmptyState title={t('users:emptyTitle')} description={t('users:emptyDesc')} />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>用户名</th>
-                <th>邮箱</th>
-                <th>角色</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th>操作</th>
+                <th>{t('users:colUsername')}</th>
+                <th>{t('users:colEmail')}</th>
+                <th>{t('users:colRole')}</th>
+                <th>{t('users:colStatus')}</th>
+                <th>{t('users:colCreated')}</th>
+                <th>{t('users:colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -210,12 +226,12 @@ export default function UsersPage() {
                 <tr key={user.id}>
                   <td>{user.username}</td>
                   <td>{user.email || <span className="text-muted">—</span>}</td>
-                  <td>{ROLE_LABELS[user.role] || user.role}</td>
+                  <td>{roleLabel(user.role)}</td>
                   <td>
                     {user.is_active === 'Y' ? (
-                      <span className="badge success">启用</span>
+                      <span className="badge success">{t('users:statusActive')}</span>
                     ) : (
-                      <span className="badge rejected">禁用</span>
+                      <span className="badge rejected">{t('users:statusInactive')}</span>
                     )}
                   </td>
                   <td>
@@ -224,7 +240,7 @@ export default function UsersPage() {
                   <td>
                     <div className="action-group">
                       <button type="button" className="secondary" onClick={() => openEdit(user)}>
-                        编辑
+                        {t('users:edit')}
                       </button>
                       <button
                         type="button"
@@ -234,10 +250,10 @@ export default function UsersPage() {
                           setResetPassword('')
                         }}
                       >
-                        重置密码
+                        {t('users:resetPassword')}
                       </button>
                       <button type="button" className="danger" onClick={() => setDeleteTarget(user)}>
-                        删除
+                        {t('users:delete')}
                       </button>
                     </div>
                   </td>
@@ -250,7 +266,7 @@ export default function UsersPage() {
 
       {modalOpen && (
         <Modal
-          title={editing ? '编辑用户' : '新建用户'}
+          title={editing ? t('users:editTitle') : t('users:createTitle')}
           onClose={() => {
             setError('')
             setModalOpen(false)
@@ -265,38 +281,38 @@ export default function UsersPage() {
                   setModalOpen(false)
                 }}
               >
-                取消
+                {t('users:cancel')}
               </button>
               <button type="button" onClick={handleSubmit(onSubmit)} disabled={!!actingId}>
-                {actingId ? '保存中...' : '保存'}
+                {actingId ? t('users:saving') : t('users:save')}
               </button>
             </>
           }
         >
           {error && <div className="alert alert-error mb-3">{error}</div>}
           <div className="form-group">
-            <label htmlFor="user-username">用户名</label>
+            <label htmlFor="user-username">{t('users:username')}</label>
             <input
               id="user-username"
               {...register('username')}
               disabled={!!editing}
-              placeholder="登录用户名"
+              placeholder={t('users:usernamePlaceholder')}
             />
             {renderFieldError('username')}
           </div>
           <div className="form-group">
-            <label htmlFor="user-email">邮箱</label>
+            <label htmlFor="user-email">{t('users:email')}</label>
             <input
               id="user-email"
               type="email"
               {...register('email')}
-              placeholder="可选"
+              placeholder={t('users:emailPlaceholder')}
             />
             {renderFieldError('email')}
           </div>
           <div className="form-group">
             <label htmlFor="user-password">
-              {editing ? '新密码（留空保持不变）' : '密码'}
+              {editing ? t('users:passwordEditLabel') : t('users:password')}
             </label>
             <input
               id="user-password"
@@ -304,27 +320,27 @@ export default function UsersPage() {
               {...register('password', {
                 onChange: (e) => setPasswordValue(e.target.value),
               })}
-              placeholder={editing ? '留空则不修改' : '至少 8 位'}
+              placeholder={editing ? t('users:passwordEditPlaceholder') : t('users:passwordPlaceholder')}
               aria-invalid={!!formErrors.password}
             />
             {renderFieldError('password')}
             <PasswordStrength password={passwordValue} />
           </div>
           <div className="form-group">
-            <label htmlFor="user-role">角色</label>
+            <label htmlFor="user-role">{t('users:role')}</label>
             <select id="user-role" {...register('role')}>
-              {Object.entries(ROLE_LABELS).map(([value, label]) => (
+              {ROLE_OPTIONS.map((value) => (
                 <option key={value} value={value}>
-                  {label}
+                  {roleLabel(value)}
                 </option>
               ))}
             </select>
           </div>
           <div className="form-group">
-            <label htmlFor="user-active">状态</label>
+            <label htmlFor="user-active">{t('users:status')}</label>
             <select id="user-active" {...register('is_active')}>
-              <option value="Y">启用</option>
-              <option value="N">禁用</option>
+              <option value="Y">{t('users:statusActive')}</option>
+              <option value="N">{t('users:statusInactive')}</option>
             </select>
           </div>
         </Modal>
@@ -332,7 +348,7 @@ export default function UsersPage() {
 
       {resetTarget && (
         <Modal
-          title={`重置密码 - ${resetTarget.username}`}
+          title={t('users:resetTitle', { username: resetTarget.username })}
           onClose={() => {
             setError('')
             setResetTarget(null)
@@ -347,27 +363,27 @@ export default function UsersPage() {
                   setResetTarget(null)
                 }}
               >
-                取消
+                {t('users:cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleResetPassword}
                 disabled={resetSubmitting || resetPassword.length < 8}
               >
-                {resetSubmitting ? '重置中...' : '确认重置'}
+                {resetSubmitting ? t('users:resetting') : t('users:confirmReset')}
               </button>
             </>
           }
         >
           {error && <div className="alert alert-error mb-3">{error}</div>}
           <div className="form-group">
-            <label htmlFor="reset-password-input">新密码</label>
+            <label htmlFor="reset-password-input">{t('users:newPassword')}</label>
             <input
               id="reset-password-input"
               type="password"
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
-              placeholder="至少 8 位"
+              placeholder={t('users:passwordPlaceholder')}
             />
             <PasswordStrength password={resetPassword} />
           </div>
@@ -376,19 +392,19 @@ export default function UsersPage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="确认删除用户"
+        title={t('users:deleteTitle')}
         message={
           deleteTarget ? (
             <>
-              确定要删除用户「<strong>{deleteTarget.username}</strong>」吗？
+              {t('users:deleteMessage', { username: deleteTarget.username })}
               <br />
               <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>
-                此操作不可恢复，该用户的所有数据将被永久清除。
+                {t('users:deleteTip')}
               </span>
             </>
           ) : null
         }
-        confirmText="确认删除"
+        confirmText={t('users:confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteTarget) {

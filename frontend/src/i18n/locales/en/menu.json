@@ -58,5 +58,16 @@
     "language": "Language",
     "expandGroup": "Expand group",
     "collapseGroup": "Collapse group"
+  },
+  "shortcuts": {
+    "groupNavigation": "Navigation",
+    "groupInterface": "Interface",
+    "openAgent": "Open agent chat",
+    "toggleSidebar": "Toggle sidebar",
+    "gotoDashboard": "Go to dashboard",
+    "gotoDocuments": "Go to documents",
+    "gotoReports": "Go to reports",
+    "showHelp": "Show/hide shortcuts help",
+    "closeDialog": "Close dialog"
   }
 }
