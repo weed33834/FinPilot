@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { listPrompts, type PromptTemplateItem } from '../../api/prompts.ts'
 import {
   createABTest,
@@ -20,6 +21,7 @@ import {
   type PromptVersionItem,
 } from '../../api/promptDeep.ts'
 import Modal from '../../components/ui/Modal.tsx'
+import EmptyState from '../../components/ui/EmptyState.tsx'
 import { ICONS } from '../../components/ui/Icons.tsx'
 
 type Tab = 'versions' | 'ab' | 'fewshot'
@@ -53,6 +55,7 @@ function DiffView({ diff }: { diff: string }) {
 /* ------------------------------------------------------------------ */
 
 function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
+  const { t } = useTranslation('adminPromptDeep')
   const [templateId, setTemplateId] = useState('')
   const [versions, setVersions] = useState<PromptVersionItem[]>([])
   const [loading, setLoading] = useState(false)
@@ -72,11 +75,11 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       const res = await listVersions(templateId)
       setVersions(res.data.data ?? [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(e instanceof Error ? e.message : t('errors.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [templateId])
+  }, [templateId, t])
 
   useEffect(() => {
     void load()
@@ -86,16 +89,16 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
     setError(null)
     try {
       const res = await diffVersion(templateId, v)
-      setDiff(res.data.data.diff || '（无差异）')
+      setDiff(res.data.data.diff || t('versions.noDiff'))
       setDiffVersionNum(v)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '获取差异失败')
+      setError(e instanceof Error ? e.message : t('versions.diffFailed'))
     }
   }
 
   const handleRollback = async () => {
     if (diffVersionNum == null) return
-    if (!window.confirm(`确认回滚到版本 v${diffVersionNum}？当前内容将被覆盖。`)) return
+    if (!window.confirm(t('versions.rollbackConfirm', { version: diffVersionNum }))) return
     setRolling(true)
     try {
       await rollbackVersion(templateId, diffVersionNum)
@@ -103,7 +106,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       setDiffVersionNum(null)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '回滚失败')
+      setError(e instanceof Error ? e.message : t('versions.rollbackFailed'))
     } finally {
       setRolling(false)
     }
@@ -111,7 +114,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
   const handleCreate = async () => {
     if (!newContent.trim()) {
-      setError('内容不能为空')
+      setError(t('versions.contentRequired'))
       return
     }
     try {
@@ -121,7 +124,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       setNewDesc('')
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '创建版本失败')
+      setError(e instanceof Error ? e.message : t('versions.createFailed'))
     }
   }
 
@@ -133,7 +136,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
           value={templateId}
           onChange={(e) => setTemplateId(e.target.value)}
         >
-          <option value="">选择提示词模板</option>
+          <option value="">{t('versions.selectTemplate')}</option>
           {prompts.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -145,33 +148,53 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
           onClick={() => setCreateOpen(true)}
           disabled={!templateId}
         >
-          新建版本
+          {t('versions.createVersion')}
         </button>
       </div>
 
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div
+          className="admin-error"
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button className="admin-action-btn" onClick={() => void load()}>
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
 
       {!templateId ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#9aa' }}>请先选择提示词模板</div>
+        <EmptyState
+          icon="templates"
+          title={t('versions.pleaseSelectTemplate')}
+          description={t('versions.pleaseSelectTemplateDesc')}
+        />
       ) : loading ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#9aa' }}>加载中…</div>
+        <div style={{ padding: 32, textAlign: 'center', color: '#9aa' }}>{t('actions.loading')}</div>
       ) : (
         <div className="admin-table-wrapper">
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: 80 }}>版本</th>
-                <th>变更说明</th>
-                <th style={{ width: 90 }}>状态</th>
-                <th style={{ width: 170 }}>创建时间</th>
-                <th style={{ width: 120 }}>操作</th>
+                <th style={{ width: 80 }}>{t('versions.colVersion')}</th>
+                <th>{t('versions.colChangeDesc')}</th>
+                <th style={{ width: 90 }}>{t('table.status')}</th>
+                <th style={{ width: 170 }}>{t('table.createdAt')}</th>
+                <th style={{ width: 120 }}>{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {versions.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                    暂无版本
+                    {t('versions.empty')}
                   </td>
                 </tr>
               ) : (
@@ -181,9 +204,9 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
                     <td>{v.change_description || '-'}</td>
                     <td>
                       {v.is_active ? (
-                        <span className="badge success">当前</span>
+                        <span className="badge success">{t('versions.badgeCurrent')}</span>
                       ) : (
-                        <span className="badge">历史</span>
+                        <span className="badge">{t('versions.badgeHistory')}</span>
                       )}
                     </td>
                     <td style={{ fontSize: '0.72rem', color: '#9aa' }}>
@@ -194,7 +217,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
                         className="admin-action-btn"
                         onClick={() => void handleDiff(v.version)}
                       >
-                        查看差异
+                        {t('versions.viewDiff')}
                       </button>
                     </td>
                   </tr>
@@ -207,7 +230,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
       {diff !== null && diffVersionNum !== null && (
         <Modal
-          title={`版本差异 — v${diffVersionNum} ↔ 当前`}
+          title={t('versions.diffTitle', { version: diffVersionNum })}
           onClose={() => {
             setDiff(null)
             setDiffVersionNum(null)
@@ -219,7 +242,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
                 onClick={() => void handleRollback()}
                 disabled={rolling}
               >
-                {rolling ? '回滚中…' : '回滚到此版本'}
+                {rolling ? t('versions.rolling') : t('versions.rollback')}
               </button>
               <button
                 className="btn btn-secondary"
@@ -228,7 +251,7 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
                   setDiffVersionNum(null)
                 }}
               >
-                关闭
+                {t('actions.close')}
               </button>
             </>
           }
@@ -239,30 +262,30 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
       {createOpen && (
         <Modal
-          title="新建版本"
+          title={t('versions.createModalTitle')}
           onClose={() => setCreateOpen(false)}
           footer={
             <>
               <button className="btn btn-primary" onClick={() => void handleCreate()}>
-                创建
+                {t('actions.create')}
               </button>
               <button className="btn btn-secondary" onClick={() => setCreateOpen(false)}>
-                取消
+                {t('actions.cancel')}
               </button>
             </>
           }
         >
           <div className="admin-form-row">
-            <label className="admin-form-label">变更说明</label>
+            <label className="admin-form-label">{t('versions.fieldChangeDesc')}</label>
             <input
               className="admin-form-input"
               value={newDesc}
               onChange={(e) => setNewDesc(e.target.value)}
-              placeholder="简要描述本次变更"
+              placeholder={t('versions.fieldChangeDescPlaceholder')}
             />
           </div>
           <div className="admin-form-row">
-            <label className="admin-form-label">版本内容</label>
+            <label className="admin-form-label">{t('versions.fieldContent')}</label>
             <textarea
               className="admin-form-textarea"
               value={newContent}
@@ -280,14 +303,8 @@ function VersionsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 /*  A/B 测试                                                            */
 /* ------------------------------------------------------------------ */
 
-const AB_STATUS_LABEL: Record<string, string> = {
-  draft: '草稿',
-  running: '运行中',
-  completed: '已完成',
-  stopped: '已停止',
-}
-
 function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
+  const { t } = useTranslation('adminPromptDeep')
   const [tests, setTests] = useState<ABTestItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -308,11 +325,11 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       const res = await listABTests({ page: 1, page_size: 100 })
       setTests(res.data.data.items ?? [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(e instanceof Error ? e.message : t('errors.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -320,11 +337,11 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
   const handleCreate = async () => {
     if (!name.trim() || !promptKey.trim() || !variantA || !variantB) {
-      setError('请填写名称、prompt_key 并选择两个变体')
+      setError(t('ab.validationFill'))
       return
     }
     if (variantA === variantB) {
-      setError('变体 A 与变体 B 不能相同')
+      setError(t('ab.validationSameVariant'))
       return
     }
     try {
@@ -343,94 +360,113 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       setSplitB(50)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '创建失败')
+      setError(e instanceof Error ? e.message : t('ab.createFailed'))
     }
   }
 
-  const handleToggle = async (t: ABTestItem) => {
+  const handleToggle = async (tst: ABTestItem) => {
     try {
-      if (t.status === 'running') {
-        await stopABTest(t.id)
+      if (tst.status === 'running') {
+        await stopABTest(tst.id)
       } else {
-        await startABTest(t.id)
+        await startABTest(tst.id)
       }
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '操作失败')
+      setError(e instanceof Error ? e.message : t('ab.toggleFailed'))
     }
   }
 
-  const handleResults = async (t: ABTestItem) => {
+  const handleResults = async (tst: ABTestItem) => {
     try {
-      const res = await getABTestResults(t.id)
+      const res = await getABTestResults(tst.id)
       setResults(res.data.data ?? {})
     } catch (e) {
-      setError(e instanceof Error ? e.message : '获取结果失败')
+      setError(e instanceof Error ? e.message : t('ab.resultsFailed'))
     }
   }
+
+  const statusLabel = (status: string) =>
+    t(`ab.status.${status}`, { defaultValue: status })
 
   return (
     <div>
       <div className="admin-toolbar-left" style={{ marginBottom: 14, justifyContent: 'space-between' }}>
         <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
-          新建 A/B 测试
+          {t('ab.create')}
         </button>
         <button className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
           <ICONS.refresh size={14} />
-          刷新
+          {t('actions.refresh')}
         </button>
       </div>
 
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div
+          className="admin-error"
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button className="admin-action-btn" onClick={() => void load()}>
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
 
       <div className="admin-table-wrapper">
         <table className="admin-table">
           <thead>
             <tr>
-              <th>名称</th>
-              <th style={{ width: 140 }}>prompt_key</th>
-              <th style={{ width: 90 }}>状态</th>
-              <th style={{ width: 90 }}>B 流量</th>
-              <th style={{ width: 160 }}>创建时间</th>
-              <th style={{ width: 170 }}>操作</th>
+              <th>{t('ab.colName')}</th>
+              <th style={{ width: 140 }}>{t('ab.colPromptKey')}</th>
+              <th style={{ width: 90 }}>{t('table.status')}</th>
+              <th style={{ width: 90 }}>{t('ab.colTrafficB')}</th>
+              <th style={{ width: 160 }}>{t('table.createdAt')}</th>
+              <th style={{ width: 170 }}>{t('table.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {tests.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                  暂无 A/B 测试
+                  {t('ab.empty')}
                 </td>
               </tr>
             ) : (
-              tests.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.name}</td>
+              tests.map((tst) => (
+                <tr key={tst.id}>
+                  <td>{tst.name}</td>
                   <td className="admin-table-mono" style={{ fontSize: '0.74rem' }}>
-                    {t.prompt_key}
+                    {tst.prompt_key}
                   </td>
                   <td>
-                    <span className={`badge ${t.status === 'running' ? 'processing' : ''}`}>
-                      {AB_STATUS_LABEL[t.status] || t.status}
+                    <span className={`badge ${tst.status === 'running' ? 'processing' : ''}`}>
+                      {statusLabel(tst.status)}
                     </span>
                   </td>
-                  <td>{t.traffic_split_b}%</td>
+                  <td>{tst.traffic_split_b}%</td>
                   <td style={{ fontSize: '0.72rem', color: '#9aa' }}>
-                    {t.created_at ? new Date(String(t.created_at)).toLocaleString() : '-'}
+                    {tst.created_at ? new Date(String(tst.created_at)).toLocaleString() : '-'}
                   </td>
                   <td>
                     <div className="admin-actions">
                       <button
                         className="admin-action-btn"
-                        onClick={() => void handleToggle(t)}
+                        onClick={() => void handleToggle(tst)}
                       >
-                        {t.status === 'running' ? '停止' : '启动'}
+                        {tst.status === 'running' ? t('ab.actionStop') : t('ab.actionStart')}
                       </button>
                       <button
                         className="admin-action-btn"
-                        onClick={() => void handleResults(t)}
+                        onClick={() => void handleResults(tst)}
                       >
-                        结果
+                        {t('ab.actionResults')}
                       </button>
                     </div>
                   </td>
@@ -443,21 +479,21 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
       {createOpen && (
         <Modal
-          title="新建 A/B 测试"
+          title={t('ab.createModalTitle')}
           onClose={() => setCreateOpen(false)}
           footer={
             <>
               <button className="btn btn-primary" onClick={() => void handleCreate()}>
-                创建
+                {t('actions.create')}
               </button>
               <button className="btn btn-secondary" onClick={() => setCreateOpen(false)}>
-                取消
+                {t('actions.cancel')}
               </button>
             </>
           }
         >
           <div className="admin-form-row">
-            <label className="admin-form-label">测试名称</label>
+            <label className="admin-form-label">{t('ab.fieldName')}</label>
             <input
               className="admin-form-input"
               value={name}
@@ -465,12 +501,12 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
             />
           </div>
           <div className="admin-form-row">
-            <label className="admin-form-label">prompt_key</label>
+            <label className="admin-form-label">{t('ab.fieldPromptKey')}</label>
             <input
               className="admin-form-input"
               value={promptKey}
               onChange={(e) => setPromptKey(e.target.value)}
-              placeholder="如：report_summary"
+              placeholder={t('ab.fieldPromptKeyPlaceholder')}
               list="prompt-key-list"
             />
             <datalist id="prompt-key-list">
@@ -480,13 +516,13 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
             </datalist>
           </div>
           <div className="admin-form-row">
-            <label className="admin-form-label">变体 A（模板）</label>
+            <label className="admin-form-label">{t('ab.fieldVariantA')}</label>
             <select
               className="admin-form-select"
               value={variantA}
               onChange={(e) => setVariantA(e.target.value)}
             >
-              <option value="">选择变体 A</option>
+              <option value="">{t('ab.selectVariantA')}</option>
               {prompts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -495,13 +531,13 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
             </select>
           </div>
           <div className="admin-form-row">
-            <label className="admin-form-label">变体 B（模板）</label>
+            <label className="admin-form-label">{t('ab.fieldVariantB')}</label>
             <select
               className="admin-form-select"
               value={variantB}
               onChange={(e) => setVariantB(e.target.value)}
             >
-              <option value="">选择变体 B</option>
+              <option value="">{t('ab.selectVariantB')}</option>
               {prompts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -510,7 +546,7 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
             </select>
           </div>
           <div className="admin-form-row">
-            <label className="admin-form-label">变体 B 流量占比（%）— {splitB}</label>
+            <label className="admin-form-label">{t('ab.fieldTrafficB', { value: splitB })}</label>
             <input
               type="range"
               min={0}
@@ -524,7 +560,7 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       )}
 
       {results !== null && (
-        <Modal title="A/B 测试结果" onClose={() => setResults(null)}>
+        <Modal title={t('ab.resultsModalTitle')} onClose={() => setResults(null)}>
           <ResultsView data={results} />
         </Modal>
       )}
@@ -533,15 +569,16 @@ function ABTestsTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 }
 
 function ResultsView({ data }: { data: Record<string, unknown> }) {
+  const { t } = useTranslation('adminPromptDeep')
   const entries = Object.entries(data)
   if (entries.length === 0) {
-    return <div style={{ color: '#9aa' }}>暂无结果数据</div>
+    return <div style={{ color: '#9aa' }}>{t('ab.resultsEmpty')}</div>
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {entries.map(([key, val]) => (
         <div key={key} className="admin-card" style={{ padding: 14 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>变体 {key}</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{t('ab.resultsVariant', { key })}</div>
           {val && typeof val === 'object' ? (
             <table className="admin-table" style={{ fontSize: '0.78rem' }}>
               <tbody>
@@ -567,6 +604,7 @@ function ResultsView({ data }: { data: Record<string, unknown> }) {
 /* ------------------------------------------------------------------ */
 
 function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
+  const { t } = useTranslation('adminPromptDeep')
   const [promptKey, setPromptKey] = useState('')
   const [examples, setExamples] = useState<FewShotExample[]>([])
   const [loading, setLoading] = useState(false)
@@ -593,11 +631,11 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       const res = await listFewShot(promptKey)
       setExamples(res.data.data ?? [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(e instanceof Error ? e.message : t('errors.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [promptKey])
+  }, [promptKey, t])
 
   useEffect(() => {
     void load()
@@ -627,7 +665,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
   const handleSave = async () => {
     if (!fInput.trim() || !fOutput.trim()) {
-      setError('输入和输出均不能为空')
+      setError(t('fewshot.validationRequired'))
       return
     }
     try {
@@ -654,17 +692,17 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       setEditOpen(false)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '保存失败')
+      setError(e instanceof Error ? e.message : t('fewshot.saveFailed'))
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('确认删除该示例？')) return
+    if (!window.confirm(t('fewshot.deleteConfirm'))) return
     try {
       await deleteFewShot(id)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '删除失败')
+      setError(e instanceof Error ? e.message : t('fewshot.deleteFailed'))
     }
   }
 
@@ -677,7 +715,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
       await reorderFewShot(promptKey, reordered.map((e) => e.id))
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '排序失败')
+      setError(e instanceof Error ? e.message : t('fewshot.reorderFailed'))
     }
   }
 
@@ -688,7 +726,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
           className="admin-search-input"
           value={promptKey}
           onChange={(e) => setPromptKey(e.target.value)}
-          placeholder="输入 prompt_key 后回车加载…"
+          placeholder={t('fewshot.searchPlaceholder')}
           list="fewshot-key-list"
           onKeyDown={(e) => {
             if (e.key === 'Enter') void load()
@@ -703,37 +741,57 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
         <span style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn-secondary" onClick={() => void load()} disabled={loading || !promptKey}>
             <ICONS.refresh size={14} />
-            刷新
+            {t('actions.refresh')}
           </button>
           <button className="btn btn-primary" onClick={openCreate} disabled={!promptKey}>
-            新建示例
+            {t('fewshot.create')}
           </button>
         </span>
       </div>
 
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div
+          className="admin-error"
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button className="admin-action-btn" onClick={() => void load()}>
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
 
       {!promptKey ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#9aa' }}>请输入 prompt_key</div>
+        <EmptyState
+          icon="search"
+          title={t('fewshot.pleaseInputKey')}
+          description={t('fewshot.pleaseInputKeyDesc')}
+        />
       ) : (
         <div className="admin-table-wrapper">
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: 60 }}>排序</th>
-                <th>输入</th>
-                <th>输出</th>
-                <th style={{ width: 100 }}>分类</th>
-                <th style={{ width: 70 }}>质量</th>
-                <th style={{ width: 70 }}>启用</th>
-                <th style={{ width: 150 }}>操作</th>
+                <th style={{ width: 60 }}>{t('fewshot.colOrder')}</th>
+                <th>{t('fewshot.colInput')}</th>
+                <th>{t('fewshot.colOutput')}</th>
+                <th style={{ width: 100 }}>{t('fewshot.colCategory')}</th>
+                <th style={{ width: 70 }}>{t('fewshot.colQuality')}</th>
+                <th style={{ width: 70 }}>{t('fewshot.colActive')}</th>
+                <th style={{ width: 150 }}>{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {examples.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                    {loading ? '加载中…' : '暂无示例'}
+                    {loading ? t('actions.loading') : t('fewshot.empty')}
                   </td>
                 </tr>
               ) : (
@@ -769,21 +827,21 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
                     <td>{ex.quality_score ?? '-'}</td>
                     <td>
                       {ex.is_active ? (
-                        <span className="badge success">启用</span>
+                        <span className="badge success">{t('fewshot.badgeActive')}</span>
                       ) : (
-                        <span className="badge">停用</span>
+                        <span className="badge">{t('fewshot.badgeInactive')}</span>
                       )}
                     </td>
                     <td>
                       <div className="admin-actions">
                         <button className="admin-action-btn" onClick={() => openEdit(ex)}>
-                          编辑
+                          {t('actions.edit')}
                         </button>
                         <button
                           className="admin-action-btn"
                           onClick={() => void handleDelete(ex.id)}
                         >
-                          删除
+                          {t('actions.delete')}
                         </button>
                       </div>
                     </td>
@@ -797,21 +855,21 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 
       {editOpen && (
         <Modal
-          title={editing ? '编辑 Few-shot 示例' : '新建 Few-shot 示例'}
+          title={editing ? t('fewshot.editModalTitle') : t('fewshot.createModalTitle')}
           onClose={() => setEditOpen(false)}
           footer={
             <>
               <button className="btn btn-primary" onClick={() => void handleSave()}>
-                保存
+                {t('actions.save')}
               </button>
               <button className="btn btn-secondary" onClick={() => setEditOpen(false)}>
-                取消
+                {t('actions.cancel')}
               </button>
             </>
           }
         >
           <div className="admin-form-row">
-            <label className="admin-form-label">输入 (input)</label>
+            <label className="admin-form-label">{t('fewshot.fieldInput')}</label>
             <textarea
               className="admin-form-textarea"
               value={fInput}
@@ -820,7 +878,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
             />
           </div>
           <div className="admin-form-row">
-            <label className="admin-form-label">输出 (output)</label>
+            <label className="admin-form-label">{t('fewshot.fieldOutput')}</label>
             <textarea
               className="admin-form-textarea"
               value={fOutput}
@@ -830,7 +888,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <div className="admin-form-row" style={{ flex: 1 }}>
-              <label className="admin-form-label">分类</label>
+              <label className="admin-form-label">{t('fewshot.fieldCategory')}</label>
               <input
                 className="admin-form-input"
                 value={fCategory}
@@ -838,7 +896,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
               />
             </div>
             <div className="admin-form-row" style={{ flex: 1 }}>
-              <label className="admin-form-label">质量分 (0-10)</label>
+              <label className="admin-form-label">{t('fewshot.fieldQuality')}</label>
               <input
                 type="number"
                 className="admin-form-input"
@@ -849,7 +907,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
               />
             </div>
             <div className="admin-form-row" style={{ flex: 1 }}>
-              <label className="admin-form-label">显示顺序</label>
+              <label className="admin-form-label">{t('fewshot.fieldOrder')}</label>
               <input
                 type="number"
                 className="admin-form-input"
@@ -865,7 +923,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
                 checked={fActive}
                 onChange={(e) => setFActive(e.target.checked)}
               />
-              启用此示例
+              {t('fewshot.fieldActive')}
             </label>
           </div>
         </Modal>
@@ -879,6 +937,7 @@ function FewShotTab({ prompts }: { prompts: PromptTemplateItem[] }) {
 /* ------------------------------------------------------------------ */
 
 export default function PromptDeepManagement() {
+  const { t } = useTranslation('adminPromptDeep')
   const [tab, setTab] = useState<Tab>('versions')
   const [prompts, setPrompts] = useState<PromptTemplateItem[]>([])
 
@@ -891,8 +950,8 @@ export default function PromptDeepManagement() {
   return (
     <div>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">提示词进阶管理</h1>
-        <p className="admin-page-desc">版本历史 / A/B 测试 / Few-shot 示例</p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('subtitle')}</p>
       </div>
 
       <div className="tabs">
@@ -900,19 +959,19 @@ export default function PromptDeepManagement() {
           className={`tab-item${tab === 'versions' ? ' active' : ''}`}
           onClick={() => setTab('versions')}
         >
-          版本历史
+          {t('tabs.versions')}
         </button>
         <button
           className={`tab-item${tab === 'ab' ? ' active' : ''}`}
           onClick={() => setTab('ab')}
         >
-          A/B 测试
+          {t('tabs.ab')}
         </button>
         <button
           className={`tab-item${tab === 'fewshot' ? ' active' : ''}`}
           onClick={() => setTab('fewshot')}
         >
-          Few-shot 示例
+          {t('tabs.fewshot')}
         </button>
       </div>
 

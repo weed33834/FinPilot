@@ -1,0 +1,153 @@
+{
+  "title": "Sandbox Configuration Management",
+  "subtitle": "Manage security policy configurations such as SQL allowlists, code sandboxes, and file uploads.",
+  "actions": {
+    "addConfig": "Add Configuration",
+    "healthCheck": "Health Check",
+    "healthCheckTitle": "Run print('ok') to verify sandbox availability",
+    "refresh": "Refresh",
+    "edit": "Edit",
+    "delete": "Delete",
+    "enable": "Enable",
+    "disable": "Disable",
+    "start": "Start",
+    "startTitle": "Mark sandbox instance as running",
+    "stop": "Stop",
+    "stopTitle": "Stop sandbox instance",
+    "restart": "Restart",
+    "restartTitle": "Restart sandbox instance",
+    "testExec": "Test Execute",
+    "testExecTitle": "Execute a snippet of Python code under this sandbox configuration and persist the result",
+    "history": "History",
+    "historyTitle": "View execution history",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close"
+  },
+  "filters": {
+    "all": "All"
+  },
+  "configTypes": {
+    "sql_whitelist": "SQL Allowlist",
+    "code_sandbox": "Code Sandbox",
+    "file_upload": "File Upload"
+  },
+  "table": {
+    "name": "Name",
+    "configType": "Config Type",
+    "description": "Description",
+    "status": "Status",
+    "priority": "Priority",
+    "actions": "Actions"
+  },
+  "badge": {
+    "system": "System"
+  },
+  "status": {
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "loading": "Loading...",
+    "saving": "Saving..."
+  },
+  "empty": {
+    "title": "No sandbox configurations",
+    "description": "Click \"Add Configuration\" to create your first security policy."
+  },
+  "errors": {
+    "loadFailed": "Failed to load configuration list",
+    "retry": "Retry"
+  },
+  "form": {
+    "createTitle": "New Configuration",
+    "editTitle": "Edit Configuration",
+    "configType": "Config Type",
+    "name": "Name",
+    "namePlaceholder": "e.g. Production SQL Allowlist",
+    "description": "Description",
+    "descriptionPlaceholder": "Purpose of this configuration",
+    "config": "Configuration (JSON)",
+    "configHint": "Switching the config type will auto-fill from the default template.",
+    "priority": "Priority",
+    "isActive": "Enable this configuration",
+    "invalidJson": "Invalid configuration JSON format"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete Configuration",
+    "deleteConfirm": "Are you sure you want to delete configuration \"<strong>{{name}}</strong>\"?",
+    "deleteTip": "This action cannot be undone.",
+    "delete": "Delete",
+    "cancel": "Cancel"
+  },
+  "toast": {
+    "createSuccess": "Configuration created",
+    "updateSuccess": "Configuration updated",
+    "deleteSuccess": "Configuration deleted",
+    "toggleSuccess": "Operation succeeded",
+    "operationFailed": "Operation failed",
+    "createFailed": "Create failed",
+    "updateFailed": "Update failed",
+    "deleteFailed": "Delete failed",
+    "toggleFailed": "Operation failed",
+    "instanceStarted": "Sandbox instance started",
+    "instanceStopped": "Sandbox instance stopped",
+    "instanceRestarted": "Sandbox instance restarted",
+    "instanceFailed": "Instance operation failed"
+  },
+  "exec": {
+    "title": "Test Execution — {{name}}",
+    "runCode": "Run Code",
+    "executing": "Executing...",
+    "codeLabel": "Python Code",
+    "codeHint": "Supports allowlisted modules (math/json/datetime/numpy/pandas, etc.). Results are persisted to execution history.",
+    "codeRequired": "Please enter the code to execute",
+    "execSuccess": "Execution succeeded",
+    "execCompletedWithErrors": "Execution completed (with errors)",
+    "execFailed": "Execution failed",
+    "statusLabel": "Status: ",
+    "success": "Success",
+    "failed": "Failed",
+    "exitCode": "Exit code: {{code}}",
+    "duration": "Duration: {{ms}}ms"
+  },
+  "history": {
+    "title": "Execution History — {{name}}",
+    "loading": "Loading history...",
+    "loadFailed": "Failed to load execution history",
+    "empty": "No execution records",
+    "emptyDesc": "Click \"Test Execute\" to generate the first record",
+    "colId": "ID",
+    "colStatus": "Status",
+    "colExitCode": "Exit Code",
+    "colDuration": "Duration",
+    "colSource": "Trigger Source",
+    "colTime": "Time",
+    "colCodeSummary": "Code Summary",
+    "success": "Success",
+    "failed": "Failed"
+  },
+  "health": {
+    "title": "Sandbox Health Status",
+    "refreshTitle": "Re-run health check",
+    "checking": "Checking...",
+    "checkingHint": "Running print('ok') to verify sandbox availability...",
+    "checkFailed": "Health check failed: ",
+    "unknownError": "Unknown error",
+    "status": "Status",
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "mode": "Execution Mode",
+    "dockerImage": "Docker Image",
+    "dockerAvailable": "Docker Available",
+    "latency": "Latency",
+    "checkedAt": "Checked At",
+    "errorLabel": "Error"
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No"
+  },
+  "active": {
+    "noActive": "No active configuration",
+    "source": "Source"
+  }
+}

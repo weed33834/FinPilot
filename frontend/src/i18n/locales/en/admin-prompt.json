@@ -1,0 +1,136 @@
+{
+  "title": "Prompt Management",
+  "description": "Manage AI prompt templates with variable placeholders, category filters, and render testing.",
+  "toolbar": {
+    "searchPlaceholder": "Search template name...",
+    "allCategories": "All Categories",
+    "allStatus": "All Status",
+    "statusActive": "Enabled",
+    "statusInactive": "Disabled",
+    "aiGenerate": "AI Generate",
+    "aiGenerateTitle": "Use AI to generate a prompt template from a natural-language requirement",
+    "import": "Import",
+    "importTitle": "Bulk import prompts from a JSON file",
+    "export": "Export",
+    "exportTitle": "Export all prompts under the current filter as JSON",
+    "create": "New Template"
+  },
+  "table": {
+    "name": "Name",
+    "category": "Category",
+    "varCount": "Variables",
+    "status": "Status",
+    "updatedAt": "Updated At",
+    "actions": "Actions",
+    "systemTag": "System"
+  },
+  "toggle": {
+    "activeTitle": "Enabled, click to disable",
+    "inactiveTitle": "Disabled, click to enable"
+  },
+  "actions": {
+    "renderTest": "Test Render",
+    "duplicate": "Duplicate",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "pagination": {
+    "prev": "Prev",
+    "next": "Next",
+    "info": "{{page}} / {{totalPages}} ({{total}} total)"
+  },
+  "empty": {
+    "noPrompts": "No prompt templates"
+  },
+  "messages": {
+    "loadFailed": "Failed to load template list",
+    "mutationFailed": "Operation failed",
+    "deleteFailed": "Delete failed",
+    "renderFailed": "Render failed",
+    "exportFailed": "Export failed",
+    "importFailed": "Import failed: please ensure the file is valid JSON",
+    "importEmpty": "No importable prompts found in the file",
+    "importSuccess": "Import complete: {{created}} succeeded, {{failed}} failed",
+    "aiDescRequired": "Please enter a requirement description of at least 2 characters",
+    "aiGenerateFailed": "AI generation failed, please check the default LLM provider configuration"
+  },
+  "form": {
+    "editTitle": "Edit Prompt Template",
+    "createTitle": "New Prompt Template",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "saving": "Saving...",
+    "name": "Template Name",
+    "namePlaceholder": "e.g. Financial Analysis Report Template",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe the template purpose",
+    "category": "Category",
+    "systemPrompt": "System Prompt",
+    "systemPromptPlaceholder": "Enter System Prompt, supports {variable} placeholders",
+    "userTemplate": "User Prompt Template (optional)",
+    "userTemplatePlaceholder": "User prompt template...",
+    "variables": "Variables",
+    "varPlaceholder": "Type a variable name and press Enter to add",
+    "addVar": "Add",
+    "validation": {
+      "nameRequired": "Please enter a template name",
+      "categoryRequired": "Please select a category",
+      "contentRequired": "Please enter the System Prompt"
+    }
+  },
+  "render": {
+    "title": "Test Render — {{name}}",
+    "varsTitle": "Variable Input",
+    "varPlaceholder": "Enter value for {{varName}}",
+    "noVars": "This template has no variables.",
+    "rendering": "Rendering...",
+    "render": "Render",
+    "resultTitle": "Render Result"
+  },
+  "delete": {
+    "title": "Confirm Delete",
+    "message": "Are you sure you want to delete this prompt template? This action cannot be undone.",
+    "cancel": "Cancel",
+    "deleting": "Deleting...",
+    "confirm": "Confirm Delete"
+  },
+  "ai": {
+    "title": "AI Auto-Generate Prompt",
+    "close": "Close",
+    "generating": "Generating... (about 10-20 seconds)",
+    "generate": "Call AI to Generate",
+    "fillForm": "Fill into Form to Continue Editing",
+    "hint": "Describe your requirement in natural language and AI will call the default LLM to generate a structured prompt template (with variable placeholders). You can fill it into the form for further editing after generation.",
+    "descLabel": "Requirement Description *",
+    "descPlaceholder": "e.g. Generate a prompt for financial report analysis; takes a company name and financial data, outputs a structured financial summary and risk assessment",
+    "categoryLabel": "Target Category",
+    "toneLabel": "Tone",
+    "languageLabel": "Output Language",
+    "previewTitle": "Generation Result Preview",
+    "previewName": "Name: ",
+    "previewDescription": "Description: ",
+    "previewVariables": "Variables: ",
+    "previewSystemPrompt": "System Prompt: "
+  },
+  "categories": {
+    "general": "General",
+    "chat": "Chat",
+    "analysis": "Analysis",
+    "report": "Report",
+    "sql_generation": "SQL Generation",
+    "audit": "Audit",
+    "query": "Query",
+    "custom": "Custom",
+    "default": "Default"
+  },
+  "tones": {
+    "professional": "Professional",
+    "concise": "Concise",
+    "friendly": "Friendly"
+  },
+  "languages": {
+    "zh": "Chinese",
+    "en": "English"
+  }
+}

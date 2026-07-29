@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import Modal from '../../components/ui/Modal.tsx'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
@@ -42,16 +44,17 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 // --------------- Form Schema ---------------
 
-const promptFormSchema = z.object({
-  name: z.string().min(1, '请输入模板名称'),
-  description: z.string().optional(),
-  template_type: z.string().min(1, '请选择分类'),
-  content: z.string().min(1, '请输入 System Prompt'),
-  user_template: z.string().optional(),
-  variables: z.array(z.string()).default([]),
-})
+const makePromptFormSchema = (t: TFunction) =>
+  z.object({
+    name: z.string().min(1, t('form.validation.nameRequired')),
+    description: z.string().optional(),
+    template_type: z.string().min(1, t('form.validation.categoryRequired')),
+    content: z.string().min(1, t('form.validation.contentRequired')),
+    user_template: z.string().optional(),
+    variables: z.array(z.string()).default([]),
+  })
 
-type PromptFormValues = z.infer<typeof promptFormSchema>
+type PromptFormValues = z.infer<ReturnType<typeof makePromptFormSchema>>
 
 interface PromptFormData {
   name: string
@@ -74,6 +77,7 @@ const EMPTY_FORM: PromptFormData = {
 // --------------- Component ---------------
 
 export default function PromptManagement() {
+  const { t } = useTranslation('adminPrompt')
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -111,6 +115,9 @@ export default function PromptManagement() {
   const [aiError, setAiError] = useState('')
   const [importBusy, setImportBusy] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+  const [importSuccess, setImportSuccess] = useState(false)
+
+  const promptFormSchema = useMemo(() => makePromptFormSchema(t), [t])
 
   const form = useForm<PromptFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -250,7 +257,7 @@ export default function PromptManagement() {
       })
       setRenderResult(res.data.data.rendered)
     } catch {
-      setRenderResult('渲染失败')
+      setRenderResult(t('messages.renderFailed'))
     } finally {
       setRendering(false)
     }
@@ -276,7 +283,7 @@ export default function PromptManagement() {
 
   const handleAIGenerate = async () => {
     if (aiDescription.trim().length < 2) {
-      setAiError('请输入至少 2 个字符的需求描述')
+      setAiError(t('messages.aiDescRequired'))
       return
     }
     setAiGenerating(true)
@@ -297,7 +304,7 @@ export default function PromptManagement() {
         variables: d.variables,
       })
     } catch (err) {
-      setAiError(getErrorMessage(err, 'AI 生成失败，请检查默认 LLM 供应商配置'))
+      setAiError(getErrorMessage(err, t('messages.aiGenerateFailed')))
     } finally {
       setAiGenerating(false)
     }
@@ -337,7 +344,8 @@ export default function PromptManagement() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err) {
-      setImportMessage(getErrorMessage(err, '导出失败'))
+      setImportSuccess(false)
+      setImportMessage(getErrorMessage(err, t('messages.exportFailed')))
     }
   }
 
@@ -345,32 +353,35 @@ export default function PromptManagement() {
   const handleImportFile = async (file: File) => {
     setImportBusy(true)
     setImportMessage('')
+    setImportSuccess(false)
     try {
       const text = await file.text()
       const parsed = JSON.parse(text) as { items?: PromptExportItem[] } | PromptExportItem[]
       const items: PromptExportItem[] = Array.isArray(parsed) ? parsed : parsed.items || []
       if (items.length === 0) {
-        setImportMessage('文件中未找到可导入的提示词')
+        setImportMessage(t('messages.importEmpty'))
         return
       }
       const res = await importPrompts(items)
       const d = res.data.data
+      setImportSuccess(true)
       setImportMessage(
-        `导入完成：成功 ${d.created_count} 条，失败 ${d.failed_count} 条`,
+        t('messages.importSuccess', { created: d.created_count, failed: d.failed_count }),
       )
       queryClient.invalidateQueries({ queryKey: ['prompts'] })
       queryClient.invalidateQueries({ queryKey: ['prompt-categories'] })
     } catch (err) {
-      setImportMessage(getErrorMessage(err, '导入失败：请确认文件为合法 JSON'))
+      setImportSuccess(false)
+      setImportMessage(getErrorMessage(err, t('messages.importFailed')))
     } finally {
       setImportBusy(false)
     }
   }
 
-  const submitLabel = editingId ? '保存' : '创建'
+  const submitLabel = editingId ? t('form.save') : t('form.create')
   const mutError =
     createMut.error || updateMut.error
-      ? getErrorMessage(createMut.error || updateMut.error, '操作失败')
+      ? getErrorMessage(createMut.error || updateMut.error, t('messages.mutationFailed'))
       : ''
 
   useEffect(() => {
@@ -380,8 +391,8 @@ export default function PromptManagement() {
   return (
     <div className="admin-prompt-management">
       <div className="admin-page-header">
-        <h1 className="admin-page-title">提示词管理</h1>
-        <p className="admin-page-desc">管理 AI 提示词模板，支持变量占位符、分类筛选和渲染测试。</p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('description')}</p>
       </div>
 
       {/* Toolbar */}
@@ -391,7 +402,7 @@ export default function PromptManagement() {
             <ICONS.search size={14} />
             <input
               type="text"
-              placeholder="搜索模板名称..."
+              placeholder={t('toolbar.searchPlaceholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="admin-search-input"
@@ -402,10 +413,10 @@ export default function PromptManagement() {
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="admin-filter-select"
           >
-            <option value="">全部分类</option>
+            <option value="">{t('toolbar.allCategories')}</option>
             {categories.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {t(`categories.${c}`, { defaultValue: c })}
               </option>
             ))}
           </select>
@@ -414,25 +425,25 @@ export default function PromptManagement() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="admin-filter-select"
           >
-            <option value="">全部状态</option>
-            <option value="active">已启用</option>
-            <option value="inactive">已禁用</option>
+            <option value="">{t('toolbar.allStatus')}</option>
+            <option value="active">{t('toolbar.statusActive')}</option>
+            <option value="inactive">{t('toolbar.statusInactive')}</option>
           </select>
         </div>
         <div className="admin-toolbar-right">
           <button
             className="btn btn-secondary"
             onClick={openAIGenerate}
-            title="使用 AI 根据自然语言需求生成提示词模板"
+            title={t('toolbar.aiGenerateTitle')}
           >
-            <ICONS.agent size={14} /> AI 生成
+            <ICONS.agent size={14} /> {t('toolbar.aiGenerate')}
           </button>
           <label
             className="btn btn-secondary"
             style={{ cursor: importBusy ? 'wait' : 'pointer' }}
-            title="从 JSON 文件批量导入提示词"
+            title={t('toolbar.importTitle')}
           >
-            <ICONS.documents size={14} /> 导入
+            <ICONS.documents size={14} /> {t('toolbar.import')}
             <input
               type="file"
               accept="application/json,.json"
@@ -448,12 +459,12 @@ export default function PromptManagement() {
           <button
             className="btn btn-secondary"
             onClick={handleExport}
-            title="导出当前筛选范围下的全部提示词为 JSON"
+            title={t('toolbar.exportTitle')}
           >
-            <ICONS.reports size={14} /> 导出
+            <ICONS.reports size={14} /> {t('toolbar.export')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>
-            <ICONS.dashboard size={14} /> 新建模板
+            <ICONS.dashboard size={14} /> {t('toolbar.create')}
           </button>
         </div>
       </div>
@@ -463,7 +474,7 @@ export default function PromptManagement() {
           className="admin-error"
           style={{
             marginBottom: 12,
-            color: importMessage.startsWith('导入完成') ? '#10b981' : undefined,
+            color: importSuccess ? '#10b981' : undefined,
           }}
         >
           {importMessage}
@@ -474,21 +485,21 @@ export default function PromptManagement() {
       {isLoading ? (
         <Loading />
       ) : isError ? (
-        <div className="admin-error">{getErrorMessage(error, '加载模板列表失败')}</div>
+        <div className="admin-error">{getErrorMessage(error, t('messages.loadFailed'))}</div>
       ) : items.length === 0 ? (
-        <EmptyState title="暂无提示词模板" />
+        <EmptyState title={t('empty.noPrompts')} />
       ) : (
         <>
           <div className="admin-table-wrapper">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>名称</th>
-                  <th>分类</th>
-                  <th style={{ width: 100, textAlign: 'center' }}>变量数</th>
-                  <th style={{ width: 80, textAlign: 'center' }}>状态</th>
-                  <th style={{ width: 160 }}>更新时间</th>
-                  <th style={{ width: 220, textAlign: 'right' }}>操作</th>
+                  <th>{t('table.name')}</th>
+                  <th>{t('table.category')}</th>
+                  <th style={{ width: 100, textAlign: 'center' }}>{t('table.varCount')}</th>
+                  <th style={{ width: 80, textAlign: 'center' }}>{t('table.status')}</th>
+                  <th style={{ width: 160 }}>{t('table.updatedAt')}</th>
+                  <th style={{ width: 220, textAlign: 'right' }}>{t('table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -497,7 +508,7 @@ export default function PromptManagement() {
                     <td className="admin-table-name">
                       <span className="admin-model-display">{item.name}</span>
                       {item.is_system && (
-                        <span className="admin-system-tag">系统</span>
+                        <span className="admin-system-tag">{t('table.systemTag')}</span>
                       )}
                     </td>
                     <td>
@@ -508,7 +519,7 @@ export default function PromptManagement() {
                             CATEGORY_COLORS[item.template_type] || '#6b7280',
                         }}
                       >
-                        {item.template_type}
+                        {t(`categories.${item.template_type}`, { defaultValue: item.template_type })}
                       </span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -518,7 +529,7 @@ export default function PromptManagement() {
                       <button
                         className={`admin-toggle ${item.is_active ? 'active' : ''}`}
                         onClick={() => toggleMut.mutate(item.id)}
-                        title={item.is_active ? '已启用，点击禁用' : '已禁用，点击启用'}
+                        title={item.is_active ? t('toggle.activeTitle') : t('toggle.inactiveTitle')}
                       >
                         <span className="admin-toggle-knob" />
                       </button>
@@ -530,21 +541,21 @@ export default function PromptManagement() {
                       <div className="admin-actions">
                         <button
                           className="admin-action-btn"
-                          title="测试渲染"
+                          title={t('actions.renderTest')}
                           onClick={() => openRenderDialog(item)}
                         >
                           <ICONS.send size={14} />
                         </button>
                         <button
                           className="admin-action-btn"
-                          title="复制"
+                          title={t('actions.duplicate')}
                           onClick={() => duplicateMut.mutate(item.id)}
                         >
                           <ICONS.copy size={14} />
                         </button>
                         <button
                           className="admin-action-btn"
-                          title="编辑"
+                          title={t('actions.edit')}
                           onClick={() => openEdit(item)}
                         >
                           <ICONS.settings size={14} />
@@ -552,7 +563,7 @@ export default function PromptManagement() {
                         {!item.is_system && (
                           <button
                             className="admin-action-btn danger"
-                            title="删除"
+                            title={t('actions.delete')}
                             onClick={() => setDeleteConfirm(item.id)}
                           >
                             <ICONS.close size={14} />
@@ -569,13 +580,13 @@ export default function PromptManagement() {
           {totalPages > 1 && (
             <div className="admin-pagination">
               <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                上一页
+                {t('pagination.prev')}
               </button>
               <span>
-                {page} / {totalPages}（共 {total} 条）
+                {t('pagination.info', { page, totalPages, total })}
               </span>
               <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                下一页
+                {t('pagination.next')}
               </button>
             </div>
           )}
@@ -585,19 +596,19 @@ export default function PromptManagement() {
       {/* Create/Edit Dialog */}
       {formOpen && (
         <Modal
-          title={editingId ? '编辑提示词模板' : '新建提示词模板'}
+          title={editingId ? t('form.editTitle') : t('form.createTitle')}
           onClose={() => setFormOpen(false)}
           footer={
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setFormOpen(false)}>
-                取消
+                {t('form.cancel')}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={form.handleSubmit(onSubmit)}
                 disabled={createMut.isPending || updateMut.isPending}
               >
-                {createMut.isPending || updateMut.isPending ? '保存中...' : submitLabel}
+                {createMut.isPending || updateMut.isPending ? t('form.saving') : submitLabel}
               </button>
             </div>
           }
@@ -606,60 +617,60 @@ export default function PromptManagement() {
             {mutError && <div className="admin-form-error">{mutError}</div>}
 
             <div className="admin-form-row">
-              <label className="admin-form-label">模板名称</label>
-              <input className="admin-form-input" {...form.register('name')} placeholder="如 财务分析报告模板" />
+              <label className="admin-form-label">{t('form.name')}</label>
+              <input className="admin-form-input" {...form.register('name')} placeholder={t('form.namePlaceholder')} />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">描述</label>
-              <input className="admin-form-input" {...form.register('description')} placeholder="模板用途说明" />
+              <label className="admin-form-label">{t('form.description')}</label>
+              <input className="admin-form-input" {...form.register('description')} placeholder={t('form.descriptionPlaceholder')} />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">分类</label>
+              <label className="admin-form-label">{t('form.category')}</label>
               <select className="admin-form-select" {...form.register('template_type')}>
                 {categories.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {t(`categories.${c}`, { defaultValue: c })}
                   </option>
                 ))}
                 {categories.length === 0 && (
                   <>
-                    <option value="chat">chat</option>
-                    <option value="analysis">analysis</option>
-                    <option value="report">report</option>
-                    <option value="sql_generation">sql_generation</option>
-                    <option value="audit">audit</option>
-                    <option value="general">general</option>
+                    <option value="chat">{t('categories.chat', { defaultValue: 'chat' })}</option>
+                    <option value="analysis">{t('categories.analysis', { defaultValue: 'analysis' })}</option>
+                    <option value="report">{t('categories.report', { defaultValue: 'report' })}</option>
+                    <option value="sql_generation">{t('categories.sql_generation', { defaultValue: 'sql_generation' })}</option>
+                    <option value="audit">{t('categories.audit', { defaultValue: 'audit' })}</option>
+                    <option value="general">{t('categories.general', { defaultValue: 'general' })}</option>
                   </>
                 )}
               </select>
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">System Prompt</label>
+              <label className="admin-form-label">{t('form.systemPrompt')}</label>
               <textarea
                 className="admin-form-textarea"
                 rows={6}
                 {...form.register('content')}
-                placeholder="输入 System Prompt，支持 {variable} 占位符"
+                placeholder={t('form.systemPromptPlaceholder')}
                 style={{ fontFamily: 'monospace', fontSize: 13 }}
               />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">User Prompt Template（可选）</label>
+              <label className="admin-form-label">{t('form.userTemplate')}</label>
               <textarea
                 className="admin-form-textarea"
                 rows={8}
                 {...form.register('user_template')}
-                placeholder="User prompt 模板..."
+                placeholder={t('form.userTemplatePlaceholder')}
                 style={{ fontFamily: 'monospace', fontSize: 13 }}
               />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">变量</label>
+              <label className="admin-form-label">{t('form.variables')}</label>
               <div className="admin-tag-input-wrapper">
                 <div className="admin-tags">
                   {variables.map((v, i) => (
@@ -681,7 +692,7 @@ export default function PromptManagement() {
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleTagKeyDown}
-                    placeholder="输入变量名后按 Enter 添加"
+                    placeholder={t('form.varPlaceholder')}
                   />
                   <button
                     type="button"
@@ -689,7 +700,7 @@ export default function PromptManagement() {
                     onClick={handleAddVariable}
                     style={{ whiteSpace: 'nowrap' }}
                   >
-                    添加
+                    {t('form.addVar')}
                   </button>
                 </div>
               </div>
@@ -701,12 +712,12 @@ export default function PromptManagement() {
       {/* Render Test Dialog */}
       {renderOpen && renderTarget && (
         <Modal
-          title={`测试渲染 — ${renderTarget.name}`}
+          title={t('render.title', { name: renderTarget.name })}
           onClose={() => setRenderOpen(false)}
         >
           <div className="admin-render-body">
             <div className="admin-render-vars">
-              <h4>变量输入</h4>
+              <h4>{t('render.varsTitle')}</h4>
               {(renderTarget.variables || []).map((v) => (
                 <div key={v} className="admin-form-row">
                   <label className="admin-form-label">{`{${v}}`}</label>
@@ -716,24 +727,24 @@ export default function PromptManagement() {
                     onChange={(e) =>
                       setRenderVars((prev) => ({ ...prev, [v]: e.target.value }))
                     }
-                    placeholder={`输入 ${v} 的值`}
+                    placeholder={t('render.varPlaceholder', { varName: v })}
                   />
                 </div>
               ))}
               {(renderTarget.variables || []).length === 0 && (
-                <p className="admin-form-hint">此模板没有变量。</p>
+                <p className="admin-form-hint">{t('render.noVars')}</p>
               )}
             </div>
 
             <div className="admin-render-actions">
               <button className="btn btn-primary" onClick={handleRender} disabled={rendering}>
-                {rendering ? '渲染中...' : '渲染'}
+                {rendering ? t('render.rendering') : t('render.render')}
               </button>
             </div>
 
             {renderResult !== null && (
               <div className="admin-render-result">
-                <h4>渲染结果</h4>
+                <h4>{t('render.resultTitle')}</h4>
                 <pre className="admin-render-output">{renderResult}</pre>
               </div>
             )}
@@ -743,23 +754,23 @@ export default function PromptManagement() {
 
       {/* Delete Confirm Dialog */}
       {deleteConfirm && (
-        <Modal title="确认删除" onClose={() => setDeleteConfirm(null)}>
-          <p style={{ marginBottom: 16 }}>确定要删除此提示词模板吗？此操作不可撤销。</p>
+        <Modal title={t('delete.title')} onClose={() => setDeleteConfirm(null)}>
+          <p style={{ marginBottom: 16 }}>{t('delete.message')}</p>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>
-              取消
+              {t('delete.cancel')}
             </button>
             <button
               className="btn btn-danger"
               onClick={() => deleteMut.mutate(deleteConfirm)}
               disabled={deleteMut.isPending}
             >
-              {deleteMut.isPending ? '删除中...' : '确认删除'}
+              {deleteMut.isPending ? t('delete.deleting') : t('delete.confirm')}
             </button>
           </div>
           {deleteMut.error && (
             <div className="admin-form-error" style={{ marginTop: 8 }}>
-              {getErrorMessage(deleteMut.error, '删除失败')}
+              {getErrorMessage(deleteMut.error, t('messages.deleteFailed'))}
             </div>
           )}
         </Modal>
@@ -768,12 +779,12 @@ export default function PromptManagement() {
       {/* AI 自动生成提示词 Dialog */}
       {aiOpen && (
         <Modal
-          title="AI 自动生成提示词"
+          title={t('ai.title')}
           onClose={() => setAiOpen(false)}
           footer={
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setAiOpen(false)}>
-                关闭
+                {t('ai.close')}
               </button>
               {!aiResult ? (
                 <button
@@ -781,11 +792,11 @@ export default function PromptManagement() {
                   onClick={handleAIGenerate}
                   disabled={aiGenerating || aiDescription.trim().length < 2}
                 >
-                  {aiGenerating ? '生成中...(约 10-20 秒)' : '调用 AI 生成'}
+                  {aiGenerating ? t('ai.generating') : t('ai.generate')}
                 </button>
               ) : (
                 <button className="btn btn-primary" onClick={handleAISaveAndEdit}>
-                  填入表单继续编辑
+                  {t('ai.fillForm')}
                 </button>
               )}
             </div>
@@ -796,16 +807,15 @@ export default function PromptManagement() {
               className="text-muted"
               style={{ fontSize: 12, marginBottom: 12 }}
             >
-              用自然语言描述需求，AI 将调用默认 LLM 生成结构化提示词模板（含变量占位符）。
-              生成后可直接填入表单继续编辑。
+              {t('ai.hint')}
             </p>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">需求描述 *</label>
+              <label className="admin-form-label">{t('ai.descLabel')}</label>
               <textarea
                 className="admin-form-input"
                 rows={3}
-                placeholder="例如：生成一个用于财报分析的提示词，输入公司名和财报数据，输出结构化的财务摘要和风险评估"
+                placeholder={t('ai.descPlaceholder')}
                 value={aiDescription}
                 onChange={(e) => setAiDescription(e.target.value)}
               />
@@ -816,24 +826,24 @@ export default function PromptManagement() {
               style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}
             >
               <div>
-                <label className="admin-form-label">目标分类</label>
+                <label className="admin-form-label">{t('ai.categoryLabel')}</label>
                 <select
                   className="admin-form-input"
                   value={aiCategory}
                   onChange={(e) => setAiCategory(e.target.value)}
                 >
-                  <option value="general">通用</option>
-                  <option value="chat">对话</option>
-                  <option value="analysis">分析</option>
-                  <option value="report">报告</option>
-                  <option value="sql_generation">SQL 生成</option>
-                  <option value="audit">审计</option>
-                  <option value="query">查询</option>
-                  <option value="custom">自定义</option>
+                  <option value="general">{t('categories.general')}</option>
+                  <option value="chat">{t('categories.chat')}</option>
+                  <option value="analysis">{t('categories.analysis')}</option>
+                  <option value="report">{t('categories.report')}</option>
+                  <option value="sql_generation">{t('categories.sql_generation')}</option>
+                  <option value="audit">{t('categories.audit')}</option>
+                  <option value="query">{t('categories.query')}</option>
+                  <option value="custom">{t('categories.custom')}</option>
                 </select>
               </div>
               <div>
-                <label className="admin-form-label">风格</label>
+                <label className="admin-form-label">{t('ai.toneLabel')}</label>
                 <select
                   className="admin-form-input"
                   value={aiTone}
@@ -841,20 +851,20 @@ export default function PromptManagement() {
                     setAiTone(e.target.value as 'professional' | 'concise' | 'friendly')
                   }
                 >
-                  <option value="professional">专业</option>
-                  <option value="concise">简洁</option>
-                  <option value="friendly">友好</option>
+                  <option value="professional">{t('tones.professional')}</option>
+                  <option value="concise">{t('tones.concise')}</option>
+                  <option value="friendly">{t('tones.friendly')}</option>
                 </select>
               </div>
               <div>
-                <label className="admin-form-label">输出语言</label>
+                <label className="admin-form-label">{t('ai.languageLabel')}</label>
                 <select
                   className="admin-form-input"
                   value={aiLanguage}
                   onChange={(e) => setAiLanguage(e.target.value as 'zh' | 'en')}
                 >
-                  <option value="zh">中文</option>
-                  <option value="en">英文</option>
+                  <option value="zh">{t('languages.zh')}</option>
+                  <option value="en">{t('languages.en')}</option>
                 </select>
               </div>
             </div>
@@ -875,20 +885,20 @@ export default function PromptManagement() {
                   background: 'var(--color-surface-raised)',
                 }}
               >
-                <h4 style={{ margin: '0 0 8px' }}>生成结果预览</h4>
+                <h4 style={{ margin: '0 0 8px' }}>{t('ai.previewTitle')}</h4>
                 <div style={{ marginBottom: 6 }}>
-                  <strong>名称：</strong>
+                  <strong>{t('ai.previewName')}</strong>
                   {aiResult.name}
                 </div>
                 {aiResult.description && (
                   <div style={{ marginBottom: 6 }}>
-                    <strong>描述：</strong>
+                    <strong>{t('ai.previewDescription')}</strong>
                     {aiResult.description}
                   </div>
                 )}
                 {aiResult.variables.length > 0 && (
                   <div style={{ marginBottom: 6 }}>
-                    <strong>变量：</strong>
+                    <strong>{t('ai.previewVariables')}</strong>
                     {aiResult.variables.map((v) => (
                       <span
                         key={v}
@@ -909,7 +919,7 @@ export default function PromptManagement() {
                   </div>
                 )}
                 <div>
-                  <strong>System Prompt：</strong>
+                  <strong>{t('ai.previewSystemPrompt')}</strong>
                   <pre
                     style={{
                       whiteSpace: 'pre-wrap',

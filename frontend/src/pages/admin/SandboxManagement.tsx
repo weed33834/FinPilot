@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import Modal from '../../components/ui/Modal.tsx'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
@@ -32,16 +32,8 @@ import {
 
 // --------------- Constants ---------------
 
-/** 顶部筛选 Tab 与展示文案。value 与后端 config_type 对应。 */
-const CONFIG_TYPE_TABS: { value: string; label: string }[] = [
-  { value: 'sql_whitelist', label: 'SQL 白名单' },
-  { value: 'code_sandbox', label: '代码沙箱' },
-  { value: 'file_upload', label: '文件上传' },
-]
-
-const TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  CONFIG_TYPE_TABS.map((t) => [t.value, t.label]),
-)
+/** 顶部筛选 Tab 的 config_type 取值（label 走 i18n）。value 与后端 config_type 对应。 */
+const CONFIG_TYPE_VALUES = ['sql_whitelist', 'code_sandbox', 'file_upload'] as const
 
 // 命令式确认弹窗默认输入类型，与 ConfirmOptions 一致。
 const SANDBOX_QUERY_KEY = ['sandbox-configs'] as const
@@ -78,7 +70,7 @@ function safeStringify(value: unknown): string {
 // --------------- Component ---------------
 
 export default function SandboxManagement() {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation('adminSandbox')
   const queryClient = useQueryClient()
 
   const [activeType, setActiveType] = useState('')
@@ -104,7 +96,7 @@ export default function SandboxManagement() {
   const [historyLoading, setHistoryLoading] = useState(false)
 
   // ---- Queries ----
-  const { data: configsResp, isLoading, isError, error } = useQuery({
+  const { data: configsResp, isLoading, isError, error, refetch } = useQuery({
     queryKey: [...SANDBOX_QUERY_KEY, 'list', activeType],
     queryFn: () =>
       listSandboxConfigs(activeType ? { config_type: activeType } : undefined),
@@ -117,30 +109,30 @@ export default function SandboxManagement() {
   })
   const configTypes: ConfigTypeItem[] = typesResp?.data?.data ?? []
 
-  // 选择器选项：优先使用后端返回的类型，未加载时回退到固定 Tab。
+  // 选择器选项：优先使用后端返回的类型，未加载时回退到固定取值。label 走 i18n。
   const typeOptions = useMemo<{ value: string; label: string; description: string }[]>(
     () =>
       configTypes.length > 0
         ? configTypes.map((c) => ({
             value: c.value,
-            label: c.label,
+            label: t(`configTypes.${c.value}`, { defaultValue: c.label }),
             description: c.description,
           }))
-        : CONFIG_TYPE_TABS.map((t) => ({
-            value: t.value,
-            label: t.label,
+        : CONFIG_TYPE_VALUES.map((v) => ({
+            value: v,
+            label: t(`configTypes.${v}`),
             description: '',
           })),
-    [configTypes],
+    [configTypes, t],
   )
 
   const defaultConfigForType = (type: string): Record<string, unknown> =>
     configTypes.find((c) => c.value === type)?.default_config ?? {}
 
-  const typeLabel = (value: string): string =>
-    TYPE_LABELS[value] ||
-    configTypes.find((c) => c.value === value)?.label ||
-    value
+  const typeLabel = (value: string): string => {
+    const fromBackend = configTypes.find((c) => c.value === value)?.label
+    return t(`configTypes.${value}`, { defaultValue: fromBackend || value })
+  }
 
   // ---- Mutations ----
   const invalidateAll = () =>
@@ -149,44 +141,44 @@ export default function SandboxManagement() {
   const createMut = useMutation({
     mutationFn: (payload: SandboxConfigCreatePayload) => createSandboxConfig(payload),
     onSuccess: () => {
-      toast.success(t('sandboxConfig.createSuccess', '配置创建成功'))
+      toast.success(t('toast.createSuccess'))
       invalidateAll()
       setFormOpen(false)
     },
     onError: (err: unknown) =>
-      toast.error(t('status.failed', '操作失败'), getErrorMessage(err, '创建失败')),
+      toast.error(t('toast.operationFailed'), getErrorMessage(err, t('toast.createFailed'))),
   })
 
   const updateMut = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: SandboxConfigUpdatePayload }) =>
       updateSandboxConfig(id, payload),
     onSuccess: () => {
-      toast.success(t('sandboxConfig.updateSuccess', '配置已更新'))
+      toast.success(t('toast.updateSuccess'))
       invalidateAll()
       setFormOpen(false)
     },
     onError: (err: unknown) =>
-      toast.error(t('status.failed', '操作失败'), getErrorMessage(err, '更新失败')),
+      toast.error(t('toast.operationFailed'), getErrorMessage(err, t('toast.updateFailed'))),
   })
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteSandboxConfig(id),
     onSuccess: () => {
-      toast.success(t('sandboxConfig.deleteSuccess', '配置已删除'))
+      toast.success(t('toast.deleteSuccess'))
       invalidateAll()
     },
     onError: (err: unknown) =>
-      toast.error(t('status.failed', '操作失败'), getErrorMessage(err, '删除失败')),
+      toast.error(t('toast.operationFailed'), getErrorMessage(err, t('toast.deleteFailed'))),
   })
 
   const toggleMut = useMutation({
     mutationFn: (id: string) => toggleSandboxConfig(id),
     onSuccess: () => {
-      toast.success(t('status.success', '操作成功'))
+      toast.success(t('toast.toggleSuccess'))
       invalidateAll()
     },
     onError: (err: unknown) =>
-      toast.error(t('status.failed', '操作失败'), getErrorMessage(err, '操作失败')),
+      toast.error(t('toast.operationFailed'), getErrorMessage(err, t('toast.toggleFailed'))),
   })
 
   // Phase 7：实例生命周期
@@ -197,12 +189,16 @@ export default function SandboxManagement() {
       return restartSandboxInstance(id)
     },
     onSuccess: (_data, vars) => {
-      const labels = { start: '已启动', stop: '已停止', restart: '已重启' }
-      toast.success(`沙箱实例${labels[vars.action]}`)
+      const keyMap = {
+        start: 'toast.instanceStarted',
+        stop: 'toast.instanceStopped',
+        restart: 'toast.instanceRestarted',
+      } as const
+      toast.success(t(keyMap[vars.action]))
       queryClient.invalidateQueries({ queryKey: [...SANDBOX_QUERY_KEY, 'instances'] })
     },
     onError: (err: unknown) =>
-      toast.error(t('status.failed', '操作失败'), getErrorMessage(err, '实例操作失败')),
+      toast.error(t('toast.operationFailed'), getErrorMessage(err, t('toast.instanceFailed'))),
   })
 
   // ---- Handlers ----
@@ -251,7 +247,7 @@ export default function SandboxManagement() {
         throw new Error('invalid config')
       }
     } catch {
-      toast.error(t('sandboxConfig.invalidJson', '配置 JSON 格式错误'))
+      toast.error(t('form.invalidJson'))
       return
     }
 
@@ -280,19 +276,23 @@ export default function SandboxManagement() {
 
   const handleDelete = async (item: SandboxConfigItem) => {
     const ok = await confirm({
-      title: t('sandboxConfig.deleteTitle', '确认删除配置'),
+      title: t('confirm.deleteTitle'),
       message: (
         <>
-          {t('sandboxConfig.deleteConfirm', '确定要删除配置')}「
-          <strong>{item.name}</strong>」？
+          <Trans
+            i18nKey="confirm.deleteConfirm"
+            ns="adminSandbox"
+            values={{ name: item.name }}
+            components={{ strong: <strong /> }}
+          />
           <br />
           <span className="text-muted text-sm">
-            {t('sandboxConfig.deleteTip', '此操作不可恢复。')}
+            {t('confirm.deleteTip')}
           </span>
         </>
       ),
-      confirmText: t('actions.delete', '删除'),
-      cancelText: t('actions.cancel', '取消'),
+      confirmText: t('confirm.delete'),
+      cancelText: t('confirm.cancel'),
       variant: 'danger',
     })
     if (ok) deleteMut.mutate(item.id)
@@ -308,7 +308,7 @@ export default function SandboxManagement() {
   const handleExec = async () => {
     if (!execTarget) return
     if (!execCode.trim()) {
-      toast.error('请输入要执行的代码')
+      toast.error(t('exec.codeRequired'))
       return
     }
     setExecBusy(true)
@@ -323,9 +323,9 @@ export default function SandboxManagement() {
         exit_code: d.exit_code,
         duration_ms: d.duration_ms,
       })
-      toast.success(d.success ? '执行成功' : '执行完成（含错误）')
+      toast.success(d.success ? t('exec.execSuccess') : t('exec.execCompletedWithErrors'))
     } catch (err) {
-      toast.error(getErrorMessage(err, '执行失败'))
+      toast.error(getErrorMessage(err, t('exec.execFailed')))
     } finally {
       setExecBusy(false)
     }
@@ -340,7 +340,7 @@ export default function SandboxManagement() {
       const res = await listSandboxExecutions(item.id, { page: 1, page_size: 50 })
       setHistoryItems(res.data.data.items)
     } catch (err) {
-      toast.error(getErrorMessage(err, '加载执行历史失败'))
+      toast.error(getErrorMessage(err, t('history.loadFailed')))
     } finally {
       setHistoryLoading(false)
     }
@@ -353,8 +353,8 @@ export default function SandboxManagement() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1>{t('sandboxConfig.title', '沙箱配置管理')}</h1>
-          <p>{t('sandboxConfig.subtitle', '管理 SQL 白名单、代码沙箱与文件上传等安全策略配置。')}</p>
+          <h1>{t('title')}</h1>
+          <p>{t('subtitle')}</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -363,12 +363,12 @@ export default function SandboxManagement() {
             onClick={() => {
               queryClient.invalidateQueries({ queryKey: [...SANDBOX_QUERY_KEY, 'health'] })
             }}
-            title="执行 print('ok') 验证沙箱可用性"
+            title={t('actions.healthCheckTitle')}
           >
-            <ICONS.security size={16} /> 健康检查
+            <ICONS.security size={16} /> {t('actions.healthCheck')}
           </button>
           <button type="button" className="btn btn-primary" onClick={openCreate}>
-            <ICONS.templates size={16} /> {t('sandboxConfig.addConfig', '添加配置')}
+            <ICONS.templates size={16} /> {t('actions.addConfig')}
           </button>
         </div>
       </div>
@@ -385,50 +385,62 @@ export default function SandboxManagement() {
           marginBottom: 16,
         }}
       >
-        {CONFIG_TYPE_TABS.map((tab) => (
-          <ActiveConfigPreview key={tab.value} configType={tab.value} label={tab.label} />
+        {CONFIG_TYPE_VALUES.map((value) => (
+          <ActiveConfigPreview
+            key={value}
+            configType={value}
+            label={t(`configTypes.${value}`)}
+          />
         ))}
       </div>
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <FilterTab active={activeType === ''} onClick={() => setActiveType('')}>
-          {t('common.all', '全部')}
+          {t('filters.all')}
         </FilterTab>
-        {CONFIG_TYPE_TABS.map((tab) => (
+        {CONFIG_TYPE_VALUES.map((value) => (
           <FilterTab
-            key={tab.value}
-            active={activeType === tab.value}
-            onClick={() => setActiveType(tab.value)}
+            key={value}
+            active={activeType === value}
+            onClick={() => setActiveType(value)}
           >
-            {tab.label}
+            {t(`configTypes.${value}`)}
           </FilterTab>
         ))}
       </div>
 
       {/* Table */}
       {isLoading ? (
-        <Loading text={t('status.loading', '加载中...')} />
+        <Loading text={t('status.loading')} />
       ) : isError ? (
         <div className="alert alert-error">
-          {getErrorMessage(error, t('sandboxConfig.loadFailed', '加载配置列表失败'))}
+          <div>{getErrorMessage(error, t('errors.loadFailed'))}</div>
+          <button
+            type="button"
+            className="btn btn-sm btn-secondary"
+            onClick={() => refetch()}
+            style={{ marginTop: 8 }}
+          >
+            <ICONS.refresh size={14} /> {t('errors.retry')}
+          </button>
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          title={t('sandboxConfig.empty', '暂无沙箱配置')}
-          description={t('sandboxConfig.emptyDesc', '点击「添加配置」创建第一条安全策略。')}
+          title={t('empty.title')}
+          description={t('empty.description')}
         />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>{t('sandboxConfig.name', '名称')}</th>
-                <th>{t('sandboxConfig.configType', '配置类型')}</th>
-                <th>{t('sandboxConfig.description', '描述')}</th>
-                <th>{t('sandboxConfig.status', '状态')}</th>
-                <th style={{ textAlign: 'center' }}>{t('sandboxConfig.priority', '优先级')}</th>
-                <th style={{ textAlign: 'right' }}>{t('sandboxConfig.actions', '操作')}</th>
+                <th>{t('table.name')}</th>
+                <th>{t('table.configType')}</th>
+                <th>{t('table.description')}</th>
+                <th>{t('table.status')}</th>
+                <th style={{ textAlign: 'center' }}>{t('table.priority')}</th>
+                <th style={{ textAlign: 'right' }}>{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -438,7 +450,7 @@ export default function SandboxManagement() {
                     {item.name}
                     {item.is_system && (
                       <span className="badge" style={{ marginLeft: 8 }}>
-                        {t('sandboxConfig.system', '系统')}
+                        {t('badge.system')}
                       </span>
                     )}
                   </td>
@@ -449,11 +461,11 @@ export default function SandboxManagement() {
                   <td>
                     {item.is_active ? (
                       <span className="badge success">
-                        {t('actions.enable', '启用')}
+                        {t('status.enabled')}
                       </span>
                     ) : (
                       <span className="badge rejected">
-                        {t('actions.disable', '禁用')}
+                        {t('status.disabled')}
                       </span>
                     )}
                   </td>
@@ -467,21 +479,21 @@ export default function SandboxManagement() {
                         disabled={toggleMut.isPending}
                         title={
                           item.is_active
-                            ? t('actions.disable', '禁用')
-                            : t('actions.enable', '启用')
+                            ? t('actions.disable')
+                            : t('actions.enable')
                         }
                       >
                         {item.is_active
-                          ? t('actions.disable', '禁用')
-                          : t('actions.enable', '启用')}
+                          ? t('actions.disable')
+                          : t('actions.enable')}
                       </button>
                       <button
                         type="button"
                         className="btn btn-sm btn-secondary"
                         onClick={() => openEdit(item)}
-                        title={t('actions.edit', '编辑')}
+                        title={t('actions.edit')}
                       >
-                        <ICONS.settings size={14} /> {t('actions.edit', '编辑')}
+                        <ICONS.settings size={14} /> {t('actions.edit')}
                       </button>
                       {item.config_type === 'code_sandbox' && (
                         <>
@@ -490,43 +502,43 @@ export default function SandboxManagement() {
                             className="btn btn-sm btn-success"
                             onClick={() => instanceMut.mutate({ action: 'start', id: item.id })}
                             disabled={instanceMut.isPending}
-                            title="标记沙箱实例为运行中"
+                            title={t('actions.startTitle')}
                           >
-                            启动
+                            {t('actions.start')}
                           </button>
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
                             onClick={() => instanceMut.mutate({ action: 'stop', id: item.id })}
                             disabled={instanceMut.isPending}
-                            title="停止沙箱实例"
+                            title={t('actions.stopTitle')}
                           >
-                            停止
+                            {t('actions.stop')}
                           </button>
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
                             onClick={() => instanceMut.mutate({ action: 'restart', id: item.id })}
                             disabled={instanceMut.isPending}
-                            title="重启沙箱实例"
+                            title={t('actions.restartTitle')}
                           >
-                            重启
+                            {t('actions.restart')}
                           </button>
                           <button
                             type="button"
                             className="btn btn-sm btn-primary"
                             onClick={() => openExec(item)}
-                            title="在该沙箱配置下执行一段 Python 代码并持久化结果"
+                            title={t('actions.testExecTitle')}
                           >
-                            <ICONS.send size={14} /> 测试执行
+                            <ICONS.send size={14} /> {t('actions.testExec')}
                           </button>
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
                             onClick={() => openHistory(item)}
-                            title="查看历史执行记录"
+                            title={t('actions.historyTitle')}
                           >
-                            <ICONS.reports size={14} /> 历史
+                            <ICONS.reports size={14} /> {t('actions.history')}
                           </button>
                         </>
                       )}
@@ -536,9 +548,9 @@ export default function SandboxManagement() {
                           className="btn btn-sm btn-danger"
                           onClick={() => handleDelete(item)}
                           disabled={deleteMut.isPending}
-                          title={t('actions.delete', '删除')}
+                          title={t('actions.delete')}
                         >
-                          <ICONS.close size={14} /> {t('actions.delete', '删除')}
+                          <ICONS.close size={14} /> {t('actions.delete')}
                         </button>
                       )}
                     </div>
@@ -555,8 +567,8 @@ export default function SandboxManagement() {
         <Modal
           title={
             editing
-              ? t('sandboxConfig.editTitle', '编辑配置')
-              : t('sandboxConfig.createTitle', '新建配置')
+              ? t('form.editTitle')
+              : t('form.createTitle')
           }
           onClose={() => setFormOpen(false)}
           footer={
@@ -566,7 +578,7 @@ export default function SandboxManagement() {
                 className="btn btn-secondary"
                 onClick={() => setFormOpen(false)}
               >
-                {t('actions.cancel', '取消')}
+                {t('actions.cancel')}
               </button>
               <button
                 type="button"
@@ -574,13 +586,13 @@ export default function SandboxManagement() {
                 onClick={handleSubmit}
                 disabled={submitting}
               >
-                {submitting ? t('status.saving', '保存中...') : t('actions.save', '保存')}
+                {submitting ? t('status.saving') : t('actions.save')}
               </button>
             </>
           }
         >
           <div className="form-group">
-            <label>{t('sandboxConfig.configType', '配置类型')}</label>
+            <label>{t('form.configType')}</label>
             <select
               value={form.config_type}
               onChange={(e) => handleTypeChange(e.target.value)}
@@ -596,25 +608,25 @@ export default function SandboxManagement() {
           </div>
 
           <div className="form-group">
-            <label>{t('sandboxConfig.name', '名称')}</label>
+            <label>{t('form.name')}</label>
             <input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder={t('sandboxConfig.namePlaceholder', '如 生产环境 SQL 白名单')}
+              placeholder={t('form.namePlaceholder')}
             />
           </div>
 
           <div className="form-group">
-            <label>{t('sandboxConfig.description', '描述')}</label>
+            <label>{t('form.description')}</label>
             <input
               value={form.description}
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder={t('sandboxConfig.descriptionPlaceholder', '配置用途说明')}
+              placeholder={t('form.descriptionPlaceholder')}
             />
           </div>
 
           <div className="form-group">
-            <label>{t('sandboxConfig.config', '配置 (JSON)')}</label>
+            <label>{t('form.config')}</label>
             <textarea
               rows={10}
               value={form.configText}
@@ -623,12 +635,12 @@ export default function SandboxManagement() {
               style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}
             />
             <span className="text-muted text-sm">
-              {t('sandboxConfig.configHint', '切换配置类型会按默认模板自动填充。')}
+              {t('form.configHint')}
             </span>
           </div>
 
           <div className="form-group">
-            <label>{t('sandboxConfig.priority', '优先级')}</label>
+            <label>{t('form.priority')}</label>
             <input
               type="number"
               value={form.priority}
@@ -645,7 +657,7 @@ export default function SandboxManagement() {
                 checked={form.is_active}
                 onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
               />{' '}
-              {t('sandboxConfig.isActive', '启用该配置')}
+              {t('form.isActive')}
             </label>
           </div>
         </Modal>
@@ -654,7 +666,7 @@ export default function SandboxManagement() {
       {/* Phase 7：测试执行 Modal */}
       {execOpen && execTarget && (
         <Modal
-          title={`测试执行 — ${execTarget.name}`}
+          title={t('exec.title', { name: execTarget.name })}
           onClose={() => setExecOpen(false)}
           footer={
             <>
@@ -663,7 +675,7 @@ export default function SandboxManagement() {
                 className="btn btn-secondary"
                 onClick={() => setExecOpen(false)}
               >
-                关闭
+                {t('actions.close')}
               </button>
               <button
                 type="button"
@@ -671,14 +683,14 @@ export default function SandboxManagement() {
                 onClick={handleExec}
                 disabled={execBusy || !execCode.trim()}
               >
-                {execBusy ? '执行中...' : '执行代码'}
+                {execBusy ? t('exec.executing') : t('exec.runCode')}
               </button>
             </>
           }
         >
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', marginBottom: 6, fontWeight: 600 }}>
-              Python 代码
+              {t('exec.codeLabel')}
             </label>
             <textarea
               rows={8}
@@ -697,7 +709,7 @@ export default function SandboxManagement() {
               placeholder="print('hello')"
             />
             <span className="text-muted text-sm" style={{ display: 'block', marginTop: 4 }}>
-              支持白名单内的模块（math/json/datetime/numpy/pandas 等）。结果会持久化到执行历史。
+              {t('exec.codeHint')}
             </span>
           </div>
 
@@ -713,17 +725,17 @@ export default function SandboxManagement() {
             >
               <div style={{ marginBottom: 6, display: 'flex', gap: 12, fontSize: 12 }}>
                 <span>
-                  状态：
+                  {t('exec.statusLabel')}
                   <strong style={{ color: execResult.success ? 'var(--color-success)' : 'var(--color-danger)' }}>
-                    {execResult.success ? '成功' : '失败'}
+                    {execResult.success ? t('exec.success') : t('exec.failed')}
                   </strong>
                 </span>
-                <span>退出码：{execResult.exit_code}</span>
-                <span>耗时：{execResult.duration_ms}ms</span>
+                <span>{t('exec.exitCode', { code: execResult.exit_code })}</span>
+                <span>{t('exec.duration', { ms: execResult.duration_ms })}</span>
               </div>
               {execResult.stdout && (
                 <div style={{ marginBottom: 8 }}>
-                  <strong style={{ fontSize: 12 }}>stdout：</strong>
+                  <strong style={{ fontSize: 12 }}>stdout:</strong>
                   <pre
                     style={{
                       whiteSpace: 'pre-wrap',
@@ -744,7 +756,7 @@ export default function SandboxManagement() {
               )}
               {execResult.stderr && (
                 <div>
-                  <strong style={{ fontSize: 12 }}>stderr：</strong>
+                  <strong style={{ fontSize: 12 }}>stderr:</strong>
                   <pre
                     style={{
                       whiteSpace: 'pre-wrap',
@@ -771,25 +783,25 @@ export default function SandboxManagement() {
       {/* Phase 7：执行历史 Modal */}
       {historyOpen && historyTarget && (
         <Modal
-          title={`执行历史 — ${historyTarget.name}`}
+          title={t('history.title', { name: historyTarget.name })}
           onClose={() => setHistoryOpen(false)}
         >
           {historyLoading ? (
-            <Loading text="加载历史记录..." />
+            <Loading text={t('history.loading')} />
           ) : historyItems.length === 0 ? (
-            <EmptyState title="暂无执行记录" description="点击「测试执行」生成首条记录" />
+            <EmptyState title={t('history.empty')} description={t('history.emptyDesc')} />
           ) : (
             <div className="table-wrapper">
               <table>
                 <thead>
                   <tr>
-                    <th style={{ width: 60 }}>ID</th>
-                    <th>状态</th>
-                    <th>退出码</th>
-                    <th>耗时</th>
-                    <th>触发来源</th>
-                    <th>时间</th>
-                    <th>代码摘要</th>
+                    <th style={{ width: 60 }}>{t('history.colId')}</th>
+                    <th>{t('history.colStatus')}</th>
+                    <th>{t('history.colExitCode')}</th>
+                    <th>{t('history.colDuration')}</th>
+                    <th>{t('history.colSource')}</th>
+                    <th>{t('history.colTime')}</th>
+                    <th>{t('history.colCodeSummary')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -798,9 +810,9 @@ export default function SandboxManagement() {
                       <td className="text-sm text-muted">#{h.id}</td>
                       <td>
                         {h.success ? (
-                          <span className="badge success">成功</span>
+                          <span className="badge success">{t('history.success')}</span>
                         ) : (
-                          <span className="badge rejected">失败</span>
+                          <span className="badge rejected">{t('history.failed')}</span>
                         )}
                       </td>
                       <td className="text-sm">{h.exit_code}</td>
@@ -840,6 +852,7 @@ export default function SandboxManagement() {
 
 /** Phase 7：沙箱健康检查卡片 — 调用 /sandbox-configs/health 实际执行 print('ok')。 */
 function HealthCheckCard() {
+  const { t } = useTranslation('adminSandbox')
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: [...SANDBOX_QUERY_KEY, 'health'],
     queryFn: () => getSandboxHealth().then((r) => r.data.data),
@@ -867,28 +880,28 @@ function HealthCheckCard() {
         }}
       >
         <div className="card-title" style={{ margin: 0 }}>
-          沙箱健康状态
+          {t('health.title')}
         </div>
         <button
           type="button"
           className="btn btn-sm btn-secondary"
           onClick={() => refetch()}
           disabled={isFetching}
-          title="重新执行健康检查"
+          title={t('health.refreshTitle')}
         >
-          {isFetching ? '检查中...' : '刷新'}
+          {isFetching ? t('health.checking') : t('actions.refresh')}
         </button>
       </div>
       {isLoading ? (
-        <span className="text-sm text-muted">正在执行 print('ok') 验证沙箱可用性...</span>
+        <span className="text-sm text-muted">{t('health.checkingHint')}</span>
       ) : isError ? (
         <span className="text-sm" style={{ color: 'var(--color-danger)' }}>
-          健康检查失败：{getErrorMessage(error, '未知错误')}
+          {t('health.checkFailed')}{getErrorMessage(error, t('health.unknownError'))}
         </span>
       ) : info ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
           <div>
-            <div className="text-sm text-muted">状态</div>
+            <div className="text-sm text-muted">{t('health.status')}</div>
             <div
               className="badge"
               style={{
@@ -896,36 +909,36 @@ function HealthCheckCard() {
                 color: '#fff',
               }}
             >
-              {healthy ? '健康' : '异常'}
+              {healthy ? t('health.healthy') : t('health.unhealthy')}
             </div>
           </div>
           <div>
-            <div className="text-sm text-muted">执行模式</div>
+            <div className="text-sm text-muted">{t('health.mode')}</div>
             <div className="text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
               {info.mode || '—'}
             </div>
           </div>
           <div>
-            <div className="text-sm text-muted">Docker 镜像</div>
+            <div className="text-sm text-muted">{t('health.dockerImage')}</div>
             <div className="text-sm" style={{ fontFamily: 'var(--font-mono)' }}>
               {info.docker_image || '—'}
             </div>
           </div>
           <div>
-            <div className="text-sm text-muted">Docker 可用</div>
-            <div className="text-sm">{info.docker_available ? '是' : '否'}</div>
+            <div className="text-sm text-muted">{t('health.dockerAvailable')}</div>
+            <div className="text-sm">{t(info.docker_available ? 'common.yes' : 'common.no')}</div>
           </div>
           <div>
-            <div className="text-sm text-muted">延迟</div>
+            <div className="text-sm text-muted">{t('health.latency')}</div>
             <div className="text-sm">{info.latency_ms ?? '—'} ms</div>
           </div>
           <div>
-            <div className="text-sm text-muted">检查时间</div>
+            <div className="text-sm text-muted">{t('health.checkedAt')}</div>
             <div className="text-sm text-muted">{info.checked_at}</div>
           </div>
           {info.error && (
             <div style={{ gridColumn: '1 / -1' }}>
-              <div className="text-sm text-muted">错误信息</div>
+              <div className="text-sm text-muted">{t('health.errorLabel')}</div>
               <pre
                 style={{
                   fontSize: 12,
@@ -953,7 +966,7 @@ function ActiveConfigPreview({
   configType: string
   label: string
 }) {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation('adminSandbox')
   const { data, isLoading, isError } = useQuery({
     queryKey: [...SANDBOX_QUERY_KEY, 'active', configType],
     queryFn: () => getActiveConfig(configType).then((r) => r.data.data),
@@ -964,15 +977,15 @@ function ActiveConfigPreview({
     <div className="card">
       <div className="card-title">{label}</div>
       {isLoading ? (
-        <span className="text-sm text-muted">{t('status.loading', '加载中...')}</span>
+        <span className="text-sm text-muted">{t('status.loading')}</span>
       ) : isError || !data ? (
         <span className="text-sm text-muted">
-          {t('sandboxConfig.noActive', '暂无激活配置')}
+          {t('active.noActive')}
         </span>
       ) : (
         <>
           <div className="text-sm text-muted" style={{ marginBottom: 6 }}>
-            {t('sandboxConfig.source', '来源')}：{data.name || data.source}
+            {t('active.source')}：{data.name || data.source}
           </div>
           <pre
             style={{

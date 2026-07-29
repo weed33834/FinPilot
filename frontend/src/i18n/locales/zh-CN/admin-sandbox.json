@@ -1,0 +1,153 @@
+{
+  "title": "沙箱配置管理",
+  "subtitle": "管理 SQL 白名单、代码沙箱与文件上传等安全策略配置。",
+  "actions": {
+    "addConfig": "添加配置",
+    "healthCheck": "健康检查",
+    "healthCheckTitle": "执行 print('ok') 验证沙箱可用性",
+    "refresh": "刷新",
+    "edit": "编辑",
+    "delete": "删除",
+    "enable": "启用",
+    "disable": "禁用",
+    "start": "启动",
+    "startTitle": "标记沙箱实例为运行中",
+    "stop": "停止",
+    "stopTitle": "停止沙箱实例",
+    "restart": "重启",
+    "restartTitle": "重启沙箱实例",
+    "testExec": "测试执行",
+    "testExecTitle": "在该沙箱配置下执行一段 Python 代码并持久化结果",
+    "history": "历史",
+    "historyTitle": "查看历史执行记录",
+    "cancel": "取消",
+    "save": "保存",
+    "close": "关闭"
+  },
+  "filters": {
+    "all": "全部"
+  },
+  "configTypes": {
+    "sql_whitelist": "SQL 白名单",
+    "code_sandbox": "代码沙箱",
+    "file_upload": "文件上传"
+  },
+  "table": {
+    "name": "名称",
+    "configType": "配置类型",
+    "description": "描述",
+    "status": "状态",
+    "priority": "优先级",
+    "actions": "操作"
+  },
+  "badge": {
+    "system": "系统"
+  },
+  "status": {
+    "enabled": "启用",
+    "disabled": "禁用",
+    "loading": "加载中...",
+    "saving": "保存中..."
+  },
+  "empty": {
+    "title": "暂无沙箱配置",
+    "description": "点击「添加配置」创建第一条安全策略。"
+  },
+  "errors": {
+    "loadFailed": "加载配置列表失败",
+    "retry": "重试"
+  },
+  "form": {
+    "createTitle": "新建配置",
+    "editTitle": "编辑配置",
+    "configType": "配置类型",
+    "name": "名称",
+    "namePlaceholder": "如 生产环境 SQL 白名单",
+    "description": "描述",
+    "descriptionPlaceholder": "配置用途说明",
+    "config": "配置 (JSON)",
+    "configHint": "切换配置类型会按默认模板自动填充。",
+    "priority": "优先级",
+    "isActive": "启用该配置",
+    "invalidJson": "配置 JSON 格式错误"
+  },
+  "confirm": {
+    "deleteTitle": "确认删除配置",
+    "deleteConfirm": "确定要删除配置「<strong>{{name}}</strong>」？",
+    "deleteTip": "此操作不可恢复。",
+    "delete": "删除",
+    "cancel": "取消"
+  },
+  "toast": {
+    "createSuccess": "配置创建成功",
+    "updateSuccess": "配置已更新",
+    "deleteSuccess": "配置已删除",
+    "toggleSuccess": "操作成功",
+    "operationFailed": "操作失败",
+    "createFailed": "创建失败",
+    "updateFailed": "更新失败",
+    "deleteFailed": "删除失败",
+    "toggleFailed": "操作失败",
+    "instanceStarted": "沙箱实例已启动",
+    "instanceStopped": "沙箱实例已停止",
+    "instanceRestarted": "沙箱实例已重启",
+    "instanceFailed": "实例操作失败"
+  },
+  "exec": {
+    "title": "测试执行 — {{name}}",
+    "runCode": "执行代码",
+    "executing": "执行中...",
+    "codeLabel": "Python 代码",
+    "codeHint": "支持白名单内的模块（math/json/datetime/numpy/pandas 等）。结果会持久化到执行历史。",
+    "codeRequired": "请输入要执行的代码",
+    "execSuccess": "执行成功",
+    "execCompletedWithErrors": "执行完成（含错误）",
+    "execFailed": "执行失败",
+    "statusLabel": "状态：",
+    "success": "成功",
+    "failed": "失败",
+    "exitCode": "退出码：{{code}}",
+    "duration": "耗时：{{ms}}ms"
+  },
+  "history": {
+    "title": "执行历史 — {{name}}",
+    "loading": "加载历史记录...",
+    "loadFailed": "加载执行历史失败",
+    "empty": "暂无执行记录",
+    "emptyDesc": "点击「测试执行」生成首条记录",
+    "colId": "ID",
+    "colStatus": "状态",
+    "colExitCode": "退出码",
+    "colDuration": "耗时",
+    "colSource": "触发来源",
+    "colTime": "时间",
+    "colCodeSummary": "代码摘要",
+    "success": "成功",
+    "failed": "失败"
+  },
+  "health": {
+    "title": "沙箱健康状态",
+    "refreshTitle": "重新执行健康检查",
+    "checking": "检查中...",
+    "checkingHint": "正在执行 print('ok') 验证沙箱可用性...",
+    "checkFailed": "健康检查失败：",
+    "unknownError": "未知错误",
+    "status": "状态",
+    "healthy": "健康",
+    "unhealthy": "异常",
+    "mode": "执行模式",
+    "dockerImage": "Docker 镜像",
+    "dockerAvailable": "Docker 可用",
+    "latency": "延迟",
+    "checkedAt": "检查时间",
+    "errorLabel": "错误信息"
+  },
+  "common": {
+    "yes": "是",
+    "no": "否"
+  },
+  "active": {
+    "noActive": "暂无激活配置",
+    "source": "来源"
+  }
+}
