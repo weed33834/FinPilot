@@ -1,0 +1,90 @@
+<!-- coding 完整按需索引 -->
+
+# === ON-DEMAND INDEX (按需加载，不预载) ===
+> 以下内容默认**不加载**。Agent 在对话中遇到对应触发条件时，必须主动用 `Read` 工具读取对应文件后再行动。
+> 资源根绝对路径（生成时记录）: `/workspace/AI-RULE/ai_rule/_resources`
+> 资源来源: 包内打包资源（pip install ai-rule 后随包分发，离线可用）
+> 远程仓库: https://gitcode.com/badhope/AI-RULE.git
+> 预算对齐 governance.md §Instruction Budget：不预载是为避免指令过载导致 P0 红线失守。
+
+> **路径解析协议（agent 必读，按顺序尝试，首个成功即用）**:
+> 1. 优先尝试 `<资源根绝对路径>/<表中相对路径>`
+> 2. 若上条路径不存在（如入口文件被复制到其他机器/项目），尝试环境变量 `AI_RULE_REPO` 指向的目录
+> 3. 若是 pip 安装的 ai-rule 包，规则源已随包分发，可从 Python 解释器内查：`python -c "import ai_rule, pathlib; print(pathlib.Path(ai_rule.__file__).parent / '_resources')"`，得到路径后拼接表中相对路径
+> 4. 若仍不存在，从 https://gitcode.com/badhope/AI-RULE.git 重新 clone 到 `~/.cache/ai-rule/`，再从该目录 Read
+> 5. 若网络不可用且本地无仓库，**直接告知用户**：「我需要访问 Rule Hub 仓库才能加载该 skill，请执行 `pip install ai-rule` 或 `git clone https://gitcode.com/badhope/AI-RULE.git` 并设置 `AI_RULE_REPO` 环境变量」，不要跳过或自行编造规则内容
+
+## Meta Rules (按需，仅切换 profile 时加载)
+| 用途 | 文件路径 |
+|---|---|
+| 本文件定义如何从用户意图或项目锚点确定唯一主 Profile，以及可叠加的能力包白名单。 每次会话只能有一个主 Profile；`novel`、`interactive-novel`、`paper` 两两互斥；`agent-builder` 仅用于构建/评估/部署智能体。 | core/profile-router.md |
+
+## Subagent Prompts (按需)
+| 触发关键词 | 用途 | 文件路径 | 大小 |
+|---|---|---|---|
+| architect, subagent | Architect Subagent | profiles/coding/docs/prompts/architect-subagent.md | 684B |
+| engineer, subagent | Engineer Subagent | profiles/coding/docs/prompts/engineer-subagent.md | 641B |
+| critic, subagent | Critic Subagent | profiles/coding/docs/prompts/critic-subagent.md | 697B |
+| verifier, subagent | Verifier Subagent | profiles/coding/docs/prompts/verifier-subagent.md | 599B |
+| final, subagent | Final Subagent | profiles/coding/docs/prompts/final-subagent.md | 511B |
+
+## Skills (按需)
+| 触发条件 (C) | 终止条件 (T) | 文件路径 | 大小 |
+|---|---|---|---|
+| git, sop | — | profiles/coding/docs/skills/git-sop.md | 719B |
+| registry | — | profiles/coding/docs/skills/registry.md | 7091B |
+| powershell, tips | — | profiles/coding/docs/skills/powershell-tips.md | 1035B |
+| mcp, registry | — | profiles/coding/docs/skills/mcp-registry.md | 1417B |
+| tool, skill, mcp | — | profiles/coding/docs/skills/tool-skill-mcp.md | 1638B |
+
+## Capabilities (按需)
+| 能力包 | 用途 | 文件路径 |
+|---|---|---|
+| research | **适用场景**: 需要事实支撑、数据验证、最新信息、版本/API 核实时 **输入/输出契约**: 输入: 问题 + 搜索深度(L1/L2/L3) → 输出: 带来源标注的结论 + 置信度 + 信息缺口 | capabilities/research.md |
+| testing | **适用场景**: 需要编写测试、验证接口、评估覆盖率时 **输入/输出契约**: 输入: 代码 + 接口 + 验收标准 → 输出: 测试用例 + 覆盖率 + 通过/失败报告 | capabilities/testing.md |
+| review | **适用场景**: 代码审查、内容审查、安全审查时 **输入/输出契约**: 输入: 待审文件 + 审查维度 → 输出: 问题清单(含严重度) + 修复建议 | capabilities/review.md |
+| agent-governance | **适用场景**: 评估、观测、安全对齐、对抗测试时 **输入/输出契约**: 输入: Agent 配置 + 日志 → 输出: 评估报告 + 风险项 | capabilities/agent-governance.md |
+| dar | DAR（域权威注册表）为每个领域预置权威源名录、打分规则、检索通道和领域知识。 规范定义见 `core/dar-spec.md`。 | capabilities/dar/README.md + capabilities/dar/dar-coding.yaml |
+
+## MCP (按需，常驻服务由用户手动配置)
+> ⚠️ MCP 红线：AI 禁止自下载/自安装/自启动/自配置 MCP。仅可输出命令与配置 JSON 供用户审阅后粘贴。
+
+| 用途 | 文件路径 |
+|---|---|
+| ⚠️ **红线**：MCP 是常驻后台服务，涉及环境变量、端口、权限。**AI 禁止自下载、自安装、自启动、自配置 MCP**。 本文件只列出「经过筛选、可放心手动接入」的 MCP 服务，供你在各 AI 工具（Trae / Claude Desktop / Cursor / VS Code 等）里手动配置时参考。 配置权永远在你（用户）手里。 | profiles/coding/docs/skills/mcp-registry.md |
+| 改写自项目架构设计。核心目的：让 AI 清楚「什么该自己干、什么该读说明书、什么必须交给你配」。 | profiles/coding/docs/skills/tool-skill-mcp.md |
+| MCP 配置示例（占位 token） | mcp.example.json |
+
+## Domain-Specific Quality Gates (本 Profile 特色场景的质量门槛)
+> 以下为本 Profile 特色的判断节点。AI 在对应场景下**必须先用公式量化再行动**——不准凭直觉判断。
+> 公式优先于直觉；自评与公式冲突取较低值（保守原则，对齐 truth-protocol.md §8）。
+
+| 场景 | 应 Read skill | 应算公式 | 阈值（高分→低分） |
+|---|---|---|---|
+| 代码审查 | profiles/coding/docs/skills/code-review-quality.md | Code_Review_Quality | ≥0.85 Approve / 0.6-0.85 Comments / <0.6 Reject |
+| bug 排查 | profiles/coding/docs/skills/bug-investigation.md | Root_Cause_Confidence (RCC) | ≥0.8 直接修 / 0.5-0.8 待观察 / <0.5 禁修 |
+| 技术选型/检索 | profiles/conversation/docs/skills/deep-search.md §6 | Search_Quality (通用) | ≥0.8 高 / 0.5-0.8 中 / <0.5 低 |
+
+强制标注：交付回复时标注本次走了哪些公式及分数，如 `[LSQ: 0.88 / 置信度: 中 / CoV: 已通过]`，便于用户校验。
+
+## Loading Protocol
+1. 优先遵循 CORE LAYER + PROFILE LAYER 的内联规则；这是会话内始终生效的最小集。
+2. 遇到具体场景时，对照上表关键词，用 `Read(路径)` 工具加载对应文件后再行动。
+3. **不要预加载所有文件**——按需读取避免指令过载（参考 governance.md §Instruction Budget）。
+4. 加载的 skill / capability / subagent 在当前会话内有效；切换 profile 时清除上一 profile 全部状态。
+5. 加载后如与本层规则冲突，优先级：CORE(P0) > 用户明确确认 > 主 PROFILE > 加载的能力包 > 模型默认。
+6. **遇到 Domain-Specific Quality Gates 列出的场景时，必须先 Read 对应 skill 走公式，再交付**——不准跳过自评。
+
+
+# === ADAPTER OVERRIDE (windsurf) ===
+<!-- Windsurf 适配器覆盖层 -->
+
+## Windsurf 使用说明
+
+> **字符限制**：Windsurf 单文件上限 12,000 字符。
+> 当前规则集可能超出此限制，Windsurf 会截断超长内容。
+>
+> **建议**：
+> 1. 若仅需核心规则，可手动删除 SKILLS LAYER 和 CAPABILITIES LAYER 段落
+> 2. 或将规则拆分为多个 `.windsurfrules` 文件放于子目录
+> 3. Windsurf 原生读取 `AGENTS.md`，可直接使用 `AGENTS.md` 作为替代
