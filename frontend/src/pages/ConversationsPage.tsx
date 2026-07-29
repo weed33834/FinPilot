@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { toast } from '../components/ui/Toaster'
@@ -8,6 +9,7 @@ import { ICONS } from '../components/ui/Icons'
 import Modal from '../components/ui/Modal'
 import Loading from '../components/ui/Loading'
 import EmptyState from '../components/ui/EmptyState'
+import MarkdownRenderer from '../components/MarkdownRenderer'
 import { formatDateTime } from '../utils/format'
 import { getErrorMessage } from '../utils/errors'
 import type { DataResponse, PaginatedResponse } from '../types/report'
@@ -76,28 +78,61 @@ function downloadText(text: string, filename: string) {
 export default function ConversationsPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const [archived, setArchived] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [exportingId, setExportingId] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
   // 当前正在执行 归档/取消归档/删除 的对话 id，用于禁用对应行按钮
   const [actingId, setActingId] = useState<string | null>(null)
 
-  // ---- 对话列表（按 archived 分桶）----
+  // 搜索防抖：输入停止 350ms 后触发后端检索（按标题 + 消息内容匹配）
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQ(searchTerm.trim()), 350)
+    return () => clearTimeout(handle)
+  }, [searchTerm])
+
+  // ---- 对话列表（按 archived 分桶，后端搜索 + 无限滚动加载更多）----
   const {
-    data: conversations = [],
+    data,
     isLoading,
     error,
-  } = useQuery<Conversation[]>({
-    queryKey: ['conversations', archived],
-    queryFn: async () => {
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['conversations', archived, debouncedQ],
+    queryFn: async ({ pageParam }) => {
+      const params: Record<string, unknown> = {
+        archived,
+        page: pageParam,
+        page_size: 20,
+      }
+      if (debouncedQ) params.q = debouncedQ
       const response = await api.get<DataResponse<PaginatedResponse<Conversation>>>(
         '/conversations',
-        { params: { archived, page: 1, page_size: 20 } },
+        { params },
       )
-      return response.data.data?.items ?? []
+      return (
+        response.data.data ?? {
+          total: 0,
+          page: pageParam,
+          page_size: 20,
+          items: [],
+        }
+      )
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.page * lastPage.page_size < lastPage.total
+        ? lastPage.page + 1
+        : undefined,
   })
+
+  const conversations = data?.pages.flatMap((p) => p.items) ?? []
+  const total = data?.pages[0]?.total ?? 0
 
   // ---- 对话详情（打开 Modal 时按需拉取）----
   const { data: detail, isLoading: detailLoading } = useQuery<ConversationDetail | null>({
@@ -185,6 +220,11 @@ export default function ConversationsPage() {
 
   const listError = error ? getErrorMessage(error, t('conversations.loadFailed')) : ''
 
+  // 继续对话：跳转到 AgentChatPage 并带上 cid，由该页加载历史消息后可接着提问
+  const handleContinue = (conv: Conversation) => {
+    navigate(`/agent?cid=${conv.id}`)
+  }
+
   // ==================== 渲染 ====================
 
   return (
@@ -215,6 +255,35 @@ export default function ConversationsPage() {
         >
           {t('conversations.tabArchived')}
         </button>
+      </div>
+
+      {/* 搜索框：后端按标题 + 消息内容检索，350ms 防抖 */}
+      <div className="search-box" style={{ marginBottom: 12 }}>
+        <ICONS.search size={16} />
+        <input
+          type="text"
+          className="input"
+          placeholder={t('common:actions.search')}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        {searchTerm && (
+          <button
+            type="button"
+            className="link"
+            onClick={() => setSearchTerm('')}
+            title="清除"
+            style={{ padding: '0 0.5rem' }}
+          >
+            <ICONS.close size={14} />
+          </button>
+        )}
+        {!isLoading && total > 0 && (
+          <span className="text-muted text-sm" style={{ whiteSpace: 'nowrap', padding: '0 0.5rem' }}>
+            共 {total} 条
+          </span>
+        )}
       </div>
 
       {listError && (
@@ -279,6 +348,15 @@ export default function ConversationsPage() {
                         <button
                           type="button"
                           className="secondary"
+                          onClick={() => handleContinue(conv)}
+                          disabled={busy}
+                          title={t('conversations.continue')}
+                        >
+                          {t('conversations.continue')}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
                           onClick={() => setSelectedId(conv.id)}
                           disabled={busy}
                         >
@@ -319,6 +397,18 @@ export default function ConversationsPage() {
               })}
             </tbody>
           </table>
+          {hasNextPage && (
+            <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? '加载中...' : '加载更多'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -328,9 +418,22 @@ export default function ConversationsPage() {
           title={t('conversations.detailTitle')}
           onClose={() => setSelectedId(null)}
           footer={
-            <button type="button" className="secondary" onClick={() => setSelectedId(null)}>
-              {t('common:actions.close')}
-            </button>
+            <div className="action-group">
+              {detail && !detail.is_archived && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    navigate(`/agent?cid=${detail.id}`)
+                  }}
+                >
+                  {t('conversations.continue')}
+                </button>
+              )}
+              <button type="button" className="secondary" onClick={() => setSelectedId(null)}>
+                {t('common:actions.close')}
+              </button>
+            </div>
           }
         >
           {detailLoading || !detail ? (
@@ -367,7 +470,14 @@ export default function ConversationsPage() {
                           <span className="chat-time" style={{ marginBottom: 2 }}>
                             {roleLabel}
                           </span>
-                          <div className="chat-bubble">{msg.content}</div>
+                          {/* agent 消息用 Markdown 渲染（表格/代码块等），user 消息纯文本 */}
+                          {isUser ? (
+                            <div className="chat-bubble">{msg.content}</div>
+                          ) : (
+                            <div className="chat-bubble markdown-body">
+                              <MarkdownRenderer content={msg.content} />
+                            </div>
+                          )}
                           <span className="chat-time">{formatDateTime(msg.timestamp)}</span>
                         </div>
                       </div>

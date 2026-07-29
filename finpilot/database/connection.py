@@ -142,7 +142,7 @@ def init_db() -> None:
         install_tenant_filter(engine)
     except Exception as exc:  # noqa: BLE001
         logger.warning("tenant_filter 安装失败: %s", exc)
-    logger.info("数据库已初始化：%s", DATABASE_PATH)
+    logger.info("数据库已初始化：%s", DATABASE_URL)
 
 
 def get_db():

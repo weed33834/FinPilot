@@ -21,7 +21,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func, inspect, or_, select, text
 from sqlalchemy.orm import Session
 
 from finpilot.api.deps import get_current_user, get_db_session
@@ -137,15 +137,31 @@ def list_conversations(
     archived: bool = Query(default=False, description="true=仅归档，false=仅活跃"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    q: str | None = Query(default=None, max_length=200, description="按标题或消息内容搜索"),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """列出当前用户的会话（按 archived 分桶，按 updated_at 倒序）."""
+    """列出当前用户的会话（按 archived 分桶，按 updated_at 倒序）.
+
+    传入 ``q`` 时按标题或消息内容做大小写不敏感子串匹配（标题优先排序）。
+    """
     user_id = current_user["user_id"]
     base_q = db.query(Conversation).filter(
         Conversation.user_id == user_id,
         Conversation.is_archived.is_(bool(archived)),
     )
+
+    # 关键词过滤：标题命中 或 任一消息内容命中
+    if q and q.strip():
+        pattern = f"%{q.strip()}%"
+        msg_match_exists = (
+            select(Message.conversation_id)
+            .where(Message.content.ilike(pattern))
+            .correlate(Conversation)
+            .exists()
+        )
+        base_q = base_q.filter(or_(Conversation.title.ilike(pattern), msg_match_exists))
+
     total = base_q.count()
     items = (
         base_q.order_by(

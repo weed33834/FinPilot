@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { useState } from 'react'
 import EmptyState from './ui/EmptyState.tsx'
 
 export interface ReasoningStep {
@@ -96,6 +97,193 @@ function isNonEmpty(value: string | undefined): value is string {
   return value !== undefined && value !== null && value !== ''
 }
 
+interface WebSearchResultItem {
+  title?: string
+  url?: string
+  snippet?: string
+}
+
+interface WebSearchObservation {
+  query?: string
+  engine?: string
+  result_count?: number
+  results?: WebSearchResultItem[]
+  summary?: string
+  error?: string
+}
+
+/**
+ * web_search 工具的 observation 可视化：解析 JSON 后渲染可折叠的引用来源卡片，
+ * 包含序号、标题（点击跳转新标签页）、URL、摘要。解析失败回退为带"观察："标签的纯文本。
+ */
+function WebSearchResults({ raw }: { raw: string }) {
+  const [expanded, setExpanded] = useState(true)
+
+  let data: WebSearchObservation | null = null
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') data = parsed as WebSearchObservation
+    } catch {
+      data = null
+    }
+  }
+
+  // 解析失败：回退为与原 observation 块一致的纯文本展示
+  if (!data) {
+    return (
+      <div style={{ ...toneBlockStyle('info'), marginBottom: '0.375rem' }}>
+        <strong>观察：</strong>
+        <span style={{ whiteSpace: 'pre-wrap' }}>{raw}</span>
+      </div>
+    )
+  }
+
+  // 搜索失败分支
+  if (data.error) {
+    return (
+      <div style={{ ...toneBlockStyle('error'), marginBottom: '0.375rem' }}>
+        <strong>搜索失败：</strong>
+        <span>{data.error}</span>
+      </div>
+    )
+  }
+
+  const results = Array.isArray(data.results) ? data.results : []
+  const query = data.query || ''
+  const count = data.result_count ?? results.length
+
+  return (
+    <div
+      style={{
+        marginBottom: '0.375rem',
+        border: `1px solid ${TONE_ACCENT.info}`,
+        borderRadius: 'var(--radius-sm)',
+        background: TONE_BG.info,
+        overflow: 'hidden',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          padding: '0.5rem 0.75rem',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          color: TONE_TEXT.info,
+          fontSize: '0.8125rem',
+          fontWeight: 600,
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          🌐 联网搜索{query ? `：${query}` : ''} · 共 {count} 条结果
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            transition: 'transform 0.15s',
+            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            flexShrink: 0,
+          }}
+        >
+          ▶
+        </span>
+      </button>
+      {expanded && (
+        <>
+          {results.length > 0 ? (
+            <ol style={{ listStyle: 'none', margin: 0, padding: '0.25rem 0.75rem 0.5rem' }}>
+              {results.map((r, i) => (
+                <li
+                  key={`search-result-${i}`}
+                  style={{
+                    padding: '0.375rem 0',
+                    borderBottom: i < results.length - 1 ? '1px solid var(--color-border)' : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'baseline' }}>
+                    <span
+                      style={{
+                        color: 'var(--color-text-muted)',
+                        fontSize: '0.75rem',
+                        minWidth: '1.25rem',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {i + 1}.
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {r.url ? (
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: TONE_TEXT.info,
+                            fontWeight: 500,
+                            textDecoration: 'none',
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {r.title || r.url}
+                        </a>
+                      ) : (
+                        <span style={{ fontWeight: 500 }}>{r.title || '(无标题)'}</span>
+                      )}
+                      {r.url && (
+                        <div
+                          style={{
+                            fontSize: '0.6875rem',
+                            color: 'var(--color-text-muted)',
+                            marginTop: '0.125rem',
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          {r.url}
+                        </div>
+                      )}
+                      {r.snippet && (
+                        <p
+                          style={{
+                            margin: '0.25rem 0 0',
+                            fontSize: '0.75rem',
+                            color: 'var(--color-text)',
+                            lineHeight: 1.5,
+                            opacity: 0.85,
+                          }}
+                        >
+                          {r.snippet}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <div
+              style={{
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.75rem',
+                color: 'var(--color-text-muted)',
+              }}
+            >
+              搜索未返回结果
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 interface ReasoningStepItemProps {
   step: ReasoningStep
   index: number
@@ -187,12 +375,15 @@ function ReasoningStepItem({ step, index, isLast }: ReasoningStepItemProps) {
         </pre>
       )}
 
-      {isNonEmpty(step.observation) && (
-        <div style={{ ...toneBlockStyle('info'), marginBottom: '0.375rem' }}>
-          <strong>观察：</strong>
-          <span>{step.observation}</span>
-        </div>
-      )}
+      {isNonEmpty(step.observation) &&
+        (step.action === 'web_search' ? (
+          <WebSearchResults raw={step.observation} />
+        ) : (
+          <div style={{ ...toneBlockStyle('info'), marginBottom: '0.375rem' }}>
+            <strong>观察：</strong>
+            <span style={{ whiteSpace: 'pre-wrap' }}>{step.observation}</span>
+          </div>
+        ))}
 
       {isNonEmpty(step.result) && (
         <div style={{ ...toneBlockStyle('success'), marginBottom: '0.375rem' }}>

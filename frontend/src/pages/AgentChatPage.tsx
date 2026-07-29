@@ -50,7 +50,7 @@ interface UploadedFile {
 }
 
 interface SseEvent {
-  type: 'start' | 'thinking' | 'thinking_token' | 'answer_token' | 'done' | 'error' | 'interrupt'
+  type: 'start' | 'thinking_token' | 'answer_token' | 'done' | 'error'
   content?: string
   question?: string
   conversation_id?: string
@@ -537,9 +537,6 @@ export default function AgentChatPage() {
                       }
                       return m
 
-                    case 'thinking':
-                      return { ...m, thinking: event.content || '' }
-
                     case 'thinking_token':
                       return { ...m, thinking: (m.thinking || '') + (event.content || '') }
 
@@ -552,12 +549,6 @@ export default function AgentChatPage() {
                         thinkingTimeMs: event.thinking_time_ms,
                         thinkingExpanded: false,
                       }
-
-                    case 'interrupt':
-                      // 后端主动中断（如命中安全策略/超限），保留已生成内容并提示
-                      setError(event.message || '对话已被中断')
-                      setErrorLevel('server')
-                      return { ...m, thinkingExpanded: false }
 
                     case 'error':
                       setError(event.message || '未知错误')
