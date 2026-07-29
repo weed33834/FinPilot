@@ -251,6 +251,18 @@ def configure_middleware(app: FastAPI) -> None:
             headers={"X-Trace-ID": request.headers.get("X-Trace-ID", "")},
         )
 
+    # Prometheus 指标采集：暴露 /metrics 端点供 Grafana/Prometheus 抓取。
+    # 采集请求量、延迟分位、状态码分布、在途请求数等默认指标。
+    # best-effort：库未安装时降级跳过，不影响应用启动。
+    try:
+        from prometheus_fastapi_instrumentator import Instrumentator
+
+        Instrumentator().instrument(app).expose(
+            app, endpoint="/metrics", include_in_schema=False
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("prometheus_instrumentation_skipped: %s", exc)
+
 
 def _ensure_default_admin() -> None:
     """确保存在默认管理员账号，幂等。
@@ -333,3 +345,12 @@ try:
     app.include_router(websocket_router)
 except Exception as exc:  # noqa: BLE001
     logger.warning("websocket_router 加载失败: %s", exc)
+
+# 生产级健康检查端点：挂载在 app 根路径 /health/*（非 /api/v1），
+# 便于 K8s readiness/liveness 探针与负载均衡器直接探活（无需 cookie 认证）。
+try:
+    from .health import router as health_router
+
+    app.include_router(health_router)
+except Exception as exc:  # noqa: BLE001
+    logger.warning("health_router 加载失败: %s", exc)

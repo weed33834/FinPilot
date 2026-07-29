@@ -328,3 +328,39 @@ class TestExceptionHandling:
         _register_and_login(client, "normal@finpilot.ai")
         r = client.get("/api/v1/users/")
         assert r.status_code == 403
+
+
+# ══════════════════════════════════════════════════════════════════
+# 10. 可观测性（健康检查 + Prometheus 指标）
+# ══════════════════════════════════════════════════════════════════
+class TestObservability:
+    """生产级可观测性端点：无需认证即可探活，供 K8s/Prometheus 使用。"""
+
+    def test_liveness_probe(self, client):
+        """存活探针 /health/live 始终返回 200。"""
+        r = client.get("/health/live")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+
+    def test_readiness_probe(self, client):
+        """就绪探针 /health/ready：DB 可达即 200（Redis 降级容忍）。"""
+        r = client.get("/health/ready")
+        assert r.status_code == 200, f"内存 DB 应就绪: {r.text[:200]}"
+        body = r.json()
+        assert body["status"] == "ready"
+        assert body["checks"]["db"]["status"] == "ok"
+
+    def test_full_health(self, client):
+        """聚合健康状态 /health 列出各依赖组件。"""
+        r = client.get("/health")
+        assert r.status_code == 200
+        assert "db" in r.json()["checks"]
+
+    def test_metrics_endpoint(self, client):
+        """Prometheus /metrics 端点暴露指标（text 格式，含 http_ 指标）。"""
+        # 先打一次请求产生指标
+        client.get("/health/live")
+        r = client.get("/metrics")
+        assert r.status_code == 200
+        # prometheus 文本格式以 # HELP / 指标名 开头
+        assert "http_" in r.text or "python_gc" in r.text
