@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
 import {
   BarChart,
@@ -12,6 +13,7 @@ import {
 } from 'recharts'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
+import { toast } from '../../components/ui/Toaster.tsx'
 import { ICONS } from '../../components/ui/Icons.tsx'
 import { getErrorMessage } from '../../utils/errors.ts'
 import {
@@ -28,10 +30,16 @@ import {
   CHART_COLORS,
 } from '../../components/charts/chartTokens.ts'
 
-const DEFAULT_FINANCIAL_DATA = `[
-  { "company": "示例公司A", "revenue": 1000, "net_profit": 200, "total_assets": 5000, "pe": 15 },
-  { "company": "示例公司B", "revenue": 1200, "net_profit": 180, "total_assets": 4800, "pe": 18 }
-]`
+function buildDefaultFinancialData(companyA: string, companyB: string): string {
+  return JSON.stringify(
+    [
+      { company: companyA, revenue: 1000, net_profit: 200, total_assets: 5000, pe: 15 },
+      { company: companyB, revenue: 1200, net_profit: 180, total_assets: 4800, pe: 18 },
+    ],
+    null,
+    2,
+  )
+}
 
 function fmtPct(v: number): string {
   return `${(v * 100).toFixed(2)}%`
@@ -43,7 +51,10 @@ function fmtNum(v: number, digits = 4): string {
 }
 
 export default function FactorMiningPage() {
-  const [financialDataText, setFinancialDataText] = useState(DEFAULT_FINANCIAL_DATA)
+  const { t } = useTranslation('adminFactorMining')
+  const [financialDataText, setFinancialDataText] = useState(() =>
+    buildDefaultFinancialData(t('input.exampleCompanyA'), t('input.exampleCompanyB')),
+  )
   const [forwardReturnsText, setForwardReturnsText] = useState('')
   const [result, setResult] = useState<MineFactorsResponse | null>(null)
 
@@ -53,11 +64,15 @@ export default function FactorMiningPage() {
       try {
         const parsed = JSON.parse(financialDataText)
         if (!Array.isArray(parsed)) {
-          throw new Error('财务数据必须是 JSON 数组')
+          throw new Error(t('errors.financialArrayRequired'))
         }
         financial_data = parsed as Array<Record<string, unknown>>
       } catch (e) {
-        throw new Error(`财务数据 JSON 解析失败：${e instanceof Error ? e.message : String(e)}`)
+        throw new Error(
+          t('errors.financialParseFailed', {
+            message: e instanceof Error ? e.message : String(e),
+          }),
+        )
       }
 
       let forward_returns: Record<string, number> | undefined
@@ -65,11 +80,15 @@ export default function FactorMiningPage() {
         try {
           const parsedFR = JSON.parse(forwardReturnsText)
           if (typeof parsedFR !== 'object' || parsedFR === null || Array.isArray(parsedFR)) {
-            throw new Error('远期收益必须是 JSON 对象')
+            throw new Error(t('errors.forwardReturnsObjectRequired'))
           }
           forward_returns = parsedFR as Record<string, number>
         } catch (e) {
-          throw new Error(`远期收益 JSON 解析失败：${e instanceof Error ? e.message : String(e)}`)
+          throw new Error(
+            t('errors.forwardReturnsParseFailed', {
+              message: e instanceof Error ? e.message : String(e),
+            }),
+          )
         }
       }
 
@@ -78,6 +97,13 @@ export default function FactorMiningPage() {
     },
     onSuccess: (data) => {
       setResult(data)
+      toast.success(
+        t('toast.mineSuccess'),
+        t('toast.mineSuccessDesc', { count: data.factors.length }),
+      )
+    },
+    onError: (err) => {
+      toast.error(t('toast.mineFailed'), getErrorMessage(err, t('errors.mineFailed')))
     },
   })
 
@@ -104,48 +130,50 @@ export default function FactorMiningPage() {
     <div className="admin-model-management">
       {/* Header */}
       <div className="admin-page-header">
-        <h1 className="admin-page-title">因子挖掘</h1>
-        <p className="admin-page-desc">
-          输入公司财务数据（JSON 数组），系统将自动挖掘候选因子并评估其 IC、IR 等预测能力。
-        </p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('description')}</p>
       </div>
 
       {/* Input */}
       <div className="admin-card">
         <div className="admin-card-header">
-          <span className="admin-card-title">数据输入</span>
+          <span className="admin-card-title">{t('input.title')}</span>
         </div>
 
         <div className="admin-form-row">
           <label className="admin-form-label">
-            财务数据 <span className="admin-form-hint">（公司财务字典的 JSON 数组）</span>
+            {t('input.financialData')}{' '}
+            <span className="admin-form-hint">{t('input.financialDataHint')}</span>
           </label>
           <textarea
             className="admin-form-input"
             value={financialDataText}
             onChange={(e) => setFinancialDataText(e.target.value)}
             rows={8}
-            placeholder='[ { "company": "A", "revenue": 1000, ... } ]'
+            placeholder={t('input.financialDataPlaceholder')}
             style={{ fontFamily: 'var(--font-mono)', minHeight: 180, resize: 'vertical' }}
           />
         </div>
 
         <div className="admin-form-row">
           <label className="admin-form-label">
-            远期收益 <span className="admin-form-hint">（可选，JSON 对象，键为公司标识）</span>
+            {t('input.forwardReturns')}{' '}
+            <span className="admin-form-hint">{t('input.forwardReturnsHint')}</span>
           </label>
           <textarea
             className="admin-form-input"
             value={forwardReturnsText}
             onChange={(e) => setForwardReturnsText(e.target.value)}
             rows={4}
-            placeholder='{ "示例公司A": 0.12, "示例公司B": -0.05 }'
+            placeholder={t('input.forwardReturnsPlaceholder')}
             style={{ fontFamily: 'var(--font-mono)', minHeight: 100, resize: 'vertical' }}
           />
         </div>
 
         {mineMut.isError && (
-          <div className="admin-form-error">{getErrorMessage(mineMut.error, '因子挖掘失败')}</div>
+          <div className="admin-form-error">
+            {getErrorMessage(mineMut.error, t('errors.mineFailed'))}
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -155,7 +183,7 @@ export default function FactorMiningPage() {
             disabled={mineMut.isPending}
           >
             <ICONS.trend size={14} />
-            {mineMut.isPending ? '挖掘中…' : '挖掘因子'}
+            {mineMut.isPending ? t('actions.mining') : t('actions.mine')}
           </button>
           <button
             className="btn btn-secondary"
@@ -165,23 +193,23 @@ export default function FactorMiningPage() {
             }}
             disabled={mineMut.isPending}
           >
-            清空结果
+            {t('actions.clear')}
           </button>
         </div>
       </div>
 
       {/* Results */}
-      {mineMut.isPending && <Loading text="正在挖掘因子…" />}
+      {mineMut.isPending && <Loading text={t('loading')} />}
 
       {!mineMut.isPending && result && (
         <>
           {/* Summary */}
           <div className="admin-card">
             <div className="admin-card-header">
-              <span className="admin-card-title">分析摘要</span>
+              <span className="admin-card-title">{t('summary.title')}</span>
             </div>
             <p style={{ margin: 0, lineHeight: 1.7, color: 'var(--color-text-secondary)' }}>
-              {result.summary || '暂无摘要信息。'}
+              {result.summary || t('summary.empty')}
             </p>
             {result.best_factors.length > 0 && (
               <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -201,7 +229,7 @@ export default function FactorMiningPage() {
                     }}
                   >
                     <ICONS.check size={12} />
-                    {f.name}（IC {fmtNum(f.ic, 3)}）
+                    {t('summary.bestFactor', { name: f.name, ic: fmtNum(f.ic, 3) })}
                   </span>
                 ))}
               </div>
@@ -211,10 +239,10 @@ export default function FactorMiningPage() {
           {/* IC Chart */}
           <div className="admin-card">
             <div className="admin-card-header">
-              <span className="admin-card-title">因子 IC 值对比</span>
+              <span className="admin-card-title">{t('chart.title')}</span>
             </div>
             {chartData.length === 0 ? (
-              <EmptyState title="暂无因子数据" icon="queries" />
+              <EmptyState title={t('chart.empty')} icon="queries" />
             ) : (
               <div className="chart-container chart-container-lg">
                 <ResponsiveContainer width="100%" height="100%">
@@ -226,7 +254,7 @@ export default function FactorMiningPage() {
                       contentStyle={CHART_TOOLTIP_STYLE}
                       labelStyle={CHART_LABEL_STYLE}
                       cursor={{ fill: 'var(--color-primary-subtle)' }}
-                      formatter={(value) => [fmtNum(Number(value), 4), 'IC']}
+                      formatter={(value) => [fmtNum(Number(value), 4), t('chart.icLabel')]}
                     />
                     <Bar dataKey="ic" radius={[6, 6, 0, 0]} maxBarSize={48}>
                       {chartData.map((entry, idx) => (
@@ -242,22 +270,22 @@ export default function FactorMiningPage() {
           {/* Factor Table */}
           <div className="admin-card">
             <div className="admin-card-header">
-              <span className="admin-card-title">因子明细（按排名排序）</span>
+              <span className="admin-card-title">{t('table.title')}</span>
             </div>
             {sortedFactors.length === 0 ? (
-              <EmptyState title="暂无因子明细" icon="queries" />
+              <EmptyState title={t('table.empty')} icon="queries" />
             ) : (
               <div className="admin-table-wrapper">
                 <table className="admin-table">
                   <thead>
                     <tr>
-                      <th style={{ width: 60, textAlign: 'center' }}>排名</th>
-                      <th>名称</th>
-                      <th>分类</th>
-                      <th style={{ width: 100, textAlign: 'right' }}>IC</th>
-                      <th style={{ width: 100, textAlign: 'right' }}>IR</th>
-                      <th style={{ width: 110, textAlign: 'right' }}>胜率</th>
-                      <th>说明</th>
+                      <th style={{ width: 60, textAlign: 'center' }}>{t('table.rank')}</th>
+                      <th>{t('table.name')}</th>
+                      <th>{t('table.category')}</th>
+                      <th style={{ width: 100, textAlign: 'right' }}>{t('table.ic')}</th>
+                      <th style={{ width: 100, textAlign: 'right' }}>{t('table.ir')}</th>
+                      <th style={{ width: 110, textAlign: 'right' }}>{t('table.winRate')}</th>
+                      <th>{t('table.description')}</th>
                     </tr>
                   </thead>
                   <tbody>

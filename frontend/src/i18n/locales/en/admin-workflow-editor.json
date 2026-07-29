@@ -1,0 +1,61 @@
+{
+  "title": "Workflow Editor",
+  "description": "Visually orchestrate workflows: drop nodes from the left palette, click a node then another to connect them, and edit node properties on the right.",
+  "palette": {
+    "title": "Node Palette",
+    "hint": "Click a palette item to add a node; drag nodes to move; click a node to select and start a connection; press Delete to remove the selected node; click a line to delete it.",
+    "types": {
+      "llm": "LLM Call",
+      "query": "Data Query",
+      "tool": "Tool Execution",
+      "condition": "Condition",
+      "output": "Output",
+      "start": "Start",
+      "end": "End"
+    }
+  },
+  "toolbar": {
+    "stats": "Nodes {{nodes}} · Edges {{edges}}",
+    "connecting": "Connecting: click a target node to complete, or click the source node again to cancel"
+  },
+  "actions": {
+    "save": "Save",
+    "load": "Load",
+    "clear": "Clear",
+    "export": "Export JSON"
+  },
+  "properties": {
+    "title": "Node Properties",
+    "nodeType": "Node Type",
+    "name": "Name",
+    "namePlaceholder": "Give the node a recognizable name",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe what this node does",
+    "params": "Params (JSON)",
+    "paramsPlaceholder": "{}",
+    "deleteNode": "Delete Node"
+  },
+  "empty": {
+    "canvasTitle": "Canvas is empty",
+    "canvasDesc": "Click a node in the left palette to start orchestration.",
+    "noSelectionTitle": "No node selected",
+    "noSelectionDesc": "Click a node in the canvas to edit its properties."
+  },
+  "edge": {
+    "deleteHint": "Click to delete this connection"
+  },
+  "toast": {
+    "saved": "Saved to local storage",
+    "saveFailed": "Save failed",
+    "loaded": "Loaded from local storage",
+    "noLocalData": "No saved data found locally",
+    "loadFailed": "Failed to parse local data",
+    "cleared": "Canvas cleared",
+    "exported": "Exported workflow.json",
+    "nodeDeleted": "Node deleted"
+  },
+  "errors": {
+    "saveFailed": "Save failed",
+    "loadFailed": "Failed to parse local data"
+  }
+}

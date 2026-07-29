@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
 import {
   LineChart,
@@ -11,6 +12,7 @@ import {
 } from 'recharts'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
+import { toast } from '../../components/ui/Toaster.tsx'
 import { ICONS } from '../../components/ui/Icons.tsx'
 import { getErrorMessage } from '../../utils/errors.ts'
 import {
@@ -28,17 +30,8 @@ import {
 } from '../../components/charts/chartTokens.ts'
 import { formatTick } from '../../utils/format.ts'
 
-interface StrategyOption {
-  value: StrategyType
-  label: string
-  description: string
-}
-
-const STRATEGIES: StrategyOption[] = [
-  { value: 'sma_cross', label: '均线交叉 (SMA Cross)', description: '短期均线上穿/下穿长期均线产生买卖信号' },
-  { value: 'momentum', label: '动量策略 (Momentum)', description: '基于价格动量的趋势跟随策略' },
-  { value: 'mean_reversion', label: '均值回复 (Mean Reversion)', description: '价格偏离均值后向均值回归的逆向策略' },
-]
+// 策略枚举值原样提交给 API，展示文案由 i18n 映射（strategies.<value>.label/description）
+const STRATEGIES: StrategyType[] = ['sma_cross', 'momentum', 'mean_reversion']
 
 interface MetricCard {
   key: string
@@ -58,6 +51,7 @@ function fmtNum(v: number, digits = 4): string {
 }
 
 export default function BacktestingPage() {
+  const { t } = useTranslation('adminBacktesting')
   const [strategy, setStrategy] = useState<StrategyType>('sma_cross')
   const [initialCapital, setInitialCapital] = useState(1000000)
   const [periodDays, setPeriodDays] = useState(252)
@@ -75,13 +69,17 @@ export default function BacktestingPage() {
       setPrices(data.prices)
       setDates(data.dates)
       setResult(null)
+      toast.success(t('toast.mockGenerated'), t('toast.mockGeneratedDesc', { count: data.prices.length }))
+    },
+    onError: (err) => {
+      toast.error(t('toast.mockFailed'), getErrorMessage(err, t('errors.generateMockFailed')))
     },
   })
 
   const backtestMut = useMutation({
     mutationFn: async () => {
       if (prices.length === 0 || dates.length === 0) {
-        throw new Error('请先生成模拟数据')
+        throw new Error(t('errors.generateMockFirst'))
       }
       const res = await runBacktest(
         {
@@ -96,6 +94,10 @@ export default function BacktestingPage() {
     },
     onSuccess: (data) => {
       setResult(data)
+      toast.success(t('toast.backtestSuccess'))
+    },
+    onError: (err) => {
+      toast.error(t('toast.backtestFailed'), getErrorMessage(err, t('errors.runBacktestFailed')))
     },
   })
 
@@ -106,61 +108,61 @@ export default function BacktestingPage() {
 
   const metrics: MetricCard[] = useMemo(() => {
     if (!result) return []
-    return [
-      { key: 'total_return', label: '总收益', value: fmtPct(result.total_return), hint: 'Total Return' },
-      { key: 'annual_return', label: '年化收益', value: fmtPct(result.annual_return), hint: 'Annual Return' },
-      { key: 'sharpe', label: '夏普比率', value: fmtNum(result.sharpe_ratio, 3), hint: 'Sharpe Ratio' },
-      { key: 'max_drawdown', label: '最大回撤', value: fmtPct(result.max_drawdown), hint: 'Max Drawdown' },
-      { key: 'alpha', label: 'Alpha', value: fmtNum(result.alpha, 4), hint: 'Alpha' },
-      { key: 'beta', label: 'Beta', value: fmtNum(result.beta, 4), hint: 'Beta' },
-      { key: 'win_rate', label: '胜率', value: fmtPct(result.win_rate), hint: 'Win Rate' },
+    const items: Array<{ key: string; value: string }> = [
+      { key: 'total_return', value: fmtPct(result.total_return) },
+      { key: 'annual_return', value: fmtPct(result.annual_return) },
+      { key: 'sharpe', value: fmtNum(result.sharpe_ratio, 3) },
+      { key: 'max_drawdown', value: fmtPct(result.max_drawdown) },
+      { key: 'alpha', value: fmtNum(result.alpha, 4) },
+      { key: 'beta', value: fmtNum(result.beta, 4) },
+      { key: 'win_rate', value: fmtPct(result.win_rate) },
     ]
-  }, [result])
+    return items.map((m) => ({
+      key: m.key,
+      label: t(`metrics.${m.key}.label`),
+      value: m.value,
+      hint: t(`metrics.${m.key}.hint`),
+    }))
+  }, [result, t])
 
   const handleGenerateMock = () => mockMut.mutate()
   const handleRunBacktest = () => backtestMut.mutate()
-
-  const selectedStrategy = STRATEGIES.find((s) => s.value === strategy)
 
   return (
     <div className="admin-model-management">
       {/* Header */}
       <div className="admin-page-header">
-        <h1 className="admin-page-title">策略回测</h1>
-        <p className="admin-page-desc">
-          选择交易策略并配置参数，基于模拟或真实行情数据运行回测，评估收益与风险表现。
-        </p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('subtitle')}</p>
       </div>
 
       {/* Config */}
       <div className="admin-card">
         <div className="admin-card-header">
-          <span className="admin-card-title">回测配置</span>
+          <span className="admin-card-title">{t('config.title')}</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
           <div className="admin-form-row">
-            <label className="admin-form-label">策略类型</label>
+            <label className="admin-form-label">{t('config.strategyType')}</label>
             <select
               className="admin-form-select"
               value={strategy}
               onChange={(e) => setStrategy(e.target.value as StrategyType)}
             >
-              {STRATEGIES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
+              {STRATEGIES.map((value) => (
+                <option key={value} value={value}>
+                  {t(`strategies.${value}.label`)}
                 </option>
               ))}
             </select>
-            {selectedStrategy && (
-              <span className="admin-form-hint" style={{ marginTop: 4, display: 'block' }}>
-                {selectedStrategy.description}
-              </span>
-            )}
+            <span className="admin-form-hint" style={{ marginTop: 4, display: 'block' }}>
+              {t(`strategies.${strategy}.description`)}
+            </span>
           </div>
 
           <div className="admin-form-row">
-            <label className="admin-form-label">初始资金</label>
+            <label className="admin-form-label">{t('config.initialCapital')}</label>
             <input
               className="admin-form-input"
               type="number"
@@ -171,7 +173,7 @@ export default function BacktestingPage() {
           </div>
 
           <div className="admin-form-row">
-            <label className="admin-form-label">回测天数</label>
+            <label className="admin-form-label">{t('config.periodDays')}</label>
             <input
               className="admin-form-input"
               type="number"
@@ -183,8 +185,19 @@ export default function BacktestingPage() {
         </div>
 
         {(mockMut.isError || backtestMut.isError) && (
-          <div className="admin-form-error" style={{ marginTop: 12 }}>
-            {getErrorMessage(mockMut.error || backtestMut.error, '操作失败')}
+          <div
+            className="admin-form-error"
+            style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+          >
+            <span>{getErrorMessage(mockMut.error || backtestMut.error, t('errors.operationFailed'))}</span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => (backtestMut.isError ? handleRunBacktest() : handleGenerateMock())}
+            >
+              <ICONS.refresh size={14} />
+              {t('actions.retry')}
+            </button>
           </div>
         )}
 
@@ -195,22 +208,22 @@ export default function BacktestingPage() {
             disabled={mockMut.isPending || backtestMut.isPending}
           >
             <ICONS.refresh size={14} />
-            {mockMut.isPending ? '生成中…' : '生成模拟数据'}
+            {mockMut.isPending ? t('actions.generating') : t('actions.generateMock')}
           </button>
           <button
             className="btn btn-primary"
             onClick={handleRunBacktest}
             disabled={backtestMut.isPending || mockMut.isPending || prices.length === 0}
-            title={prices.length === 0 ? '请先生成模拟数据' : undefined}
+            title={prices.length === 0 ? t('hints.generateMockFirst') : undefined}
           >
             <ICONS.trend size={14} />
-            {backtestMut.isPending ? '回测中…' : '运行回测'}
+            {backtestMut.isPending ? t('actions.backtesting') : t('actions.runBacktest')}
           </button>
         </div>
 
         {prices.length > 0 && (
           <div style={{ marginTop: 12, color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            已加载 {prices.length} 个交易日模拟数据，价格区间：
+            {t('hints.mockLoaded', { count: prices.length })}
             <span style={{ fontFamily: 'var(--font-mono)' }}>
               {' '}
               {Math.min(...prices).toFixed(2)} – {Math.max(...prices).toFixed(2)}
@@ -221,7 +234,7 @@ export default function BacktestingPage() {
 
       {/* Loading */}
       {(mockMut.isPending || backtestMut.isPending) && (
-        <Loading text={backtestMut.isPending ? '正在运行回测…' : '正在生成模拟数据…'} />
+        <Loading text={backtestMut.isPending ? t('loading.backtesting') : t('loading.generatingMock')} />
       )}
 
       {/* Results */}
@@ -258,10 +271,10 @@ export default function BacktestingPage() {
           {/* Equity Curve */}
           <div className="admin-card">
             <div className="admin-card-header">
-              <span className="admin-card-title">净值曲线</span>
+              <span className="admin-card-title">{t('equityCurve.title')}</span>
             </div>
             {equityData.length === 0 ? (
-              <EmptyState title="暂无净值数据" icon="trend" />
+              <EmptyState title={t('equityCurve.empty')} icon="trend" />
             ) : (
               <div className="chart-container chart-container-lg">
                 <ResponsiveContainer width="100%" height="100%">
@@ -272,7 +285,7 @@ export default function BacktestingPage() {
                     <ReTooltip
                       contentStyle={CHART_TOOLTIP_STYLE}
                       labelStyle={CHART_LABEL_STYLE}
-                      formatter={(value) => [formatTick(Number(value)), '净值']}
+                      formatter={(value) => [formatTick(Number(value)), t('equityCurve.tooltipLabel')]}
                     />
                     <Line
                       type="monotone"
@@ -292,10 +305,10 @@ export default function BacktestingPage() {
           {/* Trade Log */}
           <div className="admin-card">
             <div className="admin-card-header">
-              <span className="admin-card-title">交易记录（共 {result.trade_log.length} 条）</span>
+              <span className="admin-card-title">{t('tradeLog.title', { count: result.trade_log.length })}</span>
             </div>
             {result.trade_log.length === 0 ? (
-              <EmptyState title="暂无交易记录" icon="queries" />
+              <EmptyState title={t('tradeLog.empty')} icon="queries" />
             ) : (
               <div className="test-result-box" style={{ maxHeight: 320 }}>
                 {JSON.stringify(result.trade_log, null, 2)}

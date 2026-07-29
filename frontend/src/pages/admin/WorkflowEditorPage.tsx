@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import EmptyState from '../../components/ui/EmptyState.tsx'
 import { ICONS } from '../../components/ui/Icons.tsx'
+import { toast } from '../../components/ui/Toaster.tsx'
+import { getErrorMessage } from '../../utils/errors.ts'
 
 interface PaletteItem {
   type: string
@@ -33,16 +37,6 @@ interface DragState {
   moved: boolean
 }
 
-const PALETTE: PaletteItem[] = [
-  { type: 'llm', label: 'LLM调用', color: '#6366f1' },
-  { type: 'query', label: '数据查询', color: '#0ea5e9' },
-  { type: 'tool', label: '工具执行', color: '#10b981' },
-  { type: 'condition', label: '条件判断', color: '#f59e0b' },
-  { type: 'output', label: '输出', color: '#8b5cf6' },
-  { type: 'start', label: '开始', color: '#22c55e' },
-  { type: 'end', label: '结束', color: '#ef4444' },
-]
-
 const NODE_W = 150
 const NODE_H = 56
 const CANVAS_W = 2200
@@ -54,8 +48,20 @@ function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function paletteOf(type: string): PaletteItem {
-  return PALETTE.find((p) => p.type === type) ?? PALETTE[0]
+function paletteItems(t: TFunction): PaletteItem[] {
+  return [
+    { type: 'llm', label: t('palette.types.llm'), color: '#6366f1' },
+    { type: 'query', label: t('palette.types.query'), color: '#0ea5e9' },
+    { type: 'tool', label: t('palette.types.tool'), color: '#10b981' },
+    { type: 'condition', label: t('palette.types.condition'), color: '#f59e0b' },
+    { type: 'output', label: t('palette.types.output'), color: '#8b5cf6' },
+    { type: 'start', label: t('palette.types.start'), color: '#22c55e' },
+    { type: 'end', label: t('palette.types.end'), color: '#ef4444' },
+  ]
+}
+
+function paletteOf(type: string, palette: PaletteItem[]): PaletteItem {
+  return palette.find((p) => p.type === type) ?? palette[0]
 }
 
 function nodeLeft(n: WFNode) {
@@ -66,27 +72,22 @@ function nodeRight(n: WFNode) {
 }
 
 export default function WorkflowEditorPage() {
+  const { t } = useTranslation('adminWorkflowEditor')
   const [nodes, setNodes] = useState<WFNode[]>([])
   const [edges, setEdges] = useState<WFEdge[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [connectSource, setConnectSource] = useState<string | null>(null)
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
-  const [notice, setNotice] = useState('')
 
   const innerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const connectSourceRef = useRef<string | null>(null)
 
+  const palette = useMemo(() => paletteItems(t), [t])
+
   useEffect(() => {
     connectSourceRef.current = connectSource
   }, [connectSource])
-
-  // 自动消失的提示
-  useEffect(() => {
-    if (!notice) return
-    const t = window.setTimeout(() => setNotice(''), 2200)
-    return () => window.clearTimeout(t)
-  }, [notice])
 
   const handleNodeClick = useCallback((id: string) => {
     setSelectedId(id)
@@ -150,7 +151,8 @@ export default function WorkflowEditorPage() {
     setEdges((prev) => prev.filter((e) => e.source !== id && e.target !== id))
     setSelectedId((prev) => (prev === id ? null : prev))
     setConnectSource((prev) => (prev === id ? null : prev))
-  }, [])
+    toast.info(t('toast.nodeDeleted'))
+  }, [t])
 
   // 键盘：Delete 删除选中 / Esc 取消
   useEffect(() => {
@@ -238,22 +240,22 @@ export default function WorkflowEditorPage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    setNotice('已导出 workflow.json')
+    toast.success(t('toast.exported'))
   }
 
   const saveLocal = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges }))
-      setNotice('已保存到本地存储')
-    } catch {
-      setNotice('保存失败')
+      toast.success(t('toast.saved'))
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('errors.saveFailed')))
     }
   }
 
   const loadLocal = () => {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) {
-      setNotice('本地无保存数据')
+      toast.info(t('toast.noLocalData'))
       return
     }
     try {
@@ -262,9 +264,9 @@ export default function WorkflowEditorPage() {
       setEdges(parsed.edges ?? [])
       setSelectedId(null)
       setConnectSource(null)
-      setNotice('已从本地加载')
-    } catch {
-      setNotice('本地数据解析失败')
+      toast.success(t('toast.loaded'))
+    } catch (err) {
+      toast.error(getErrorMessage(err, t('errors.loadFailed')))
     }
   }
 
@@ -273,7 +275,7 @@ export default function WorkflowEditorPage() {
     setEdges([])
     setSelectedId(null)
     setConnectSource(null)
-    setNotice('已清空画布')
+    toast.info(t('toast.cleared'))
   }
 
   const selectedNode = useMemo(
@@ -318,9 +320,9 @@ export default function WorkflowEditorPage() {
     <div className="admin-model-management">
       {/* Header */}
       <div className="admin-page-header">
-        <h1 className="admin-page-title">工作流编辑器</h1>
+        <h1 className="admin-page-title">{t('title')}</h1>
         <p className="admin-page-desc">
-          可视化编排工作流：从左侧拖入节点，点击节点后再点击另一节点即可连线，右侧编辑节点属性。
+          {t('description')}
         </p>
       </div>
 
@@ -329,42 +331,27 @@ export default function WorkflowEditorPage() {
         <div className="admin-toolbar-left" style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
           {connectSource ? (
             <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-              连线中：点击目标节点完成连接，再次点击源节点取消
+              {t('toolbar.connecting')}
             </span>
           ) : (
-            <span>节点 {nodes.length} · 连线 {edges.length}</span>
+            <span>{t('toolbar.stats', { nodes: nodes.length, edges: edges.length })}</span>
           )}
         </div>
         <div className="admin-toolbar-right" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={saveLocal}>
-            <ICONS.download size={14} /> 保存
+            <ICONS.download size={14} /> {t('actions.save')}
           </button>
           <button className="btn btn-secondary" onClick={loadLocal}>
-            <ICONS.refresh size={14} /> 加载
+            <ICONS.refresh size={14} /> {t('actions.load')}
           </button>
           <button className="btn btn-secondary" onClick={clearAll}>
-            <ICONS.close size={14} /> 清空
+            <ICONS.close size={14} /> {t('actions.clear')}
           </button>
           <button className="btn btn-primary" onClick={exportJSON}>
-            <ICONS.copy size={14} /> 导出 JSON
+            <ICONS.copy size={14} /> {t('actions.export')}
           </button>
         </div>
       </div>
-
-      {notice && (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--color-primary-subtle)',
-            color: 'var(--color-primary)',
-            fontSize: 'var(--text-sm)',
-          }}
-        >
-          {notice}
-        </div>
-      )}
 
       {/* Editor body */}
       <div
@@ -396,9 +383,9 @@ export default function WorkflowEditorPage() {
               marginBottom: 8,
             }}
           >
-            节点面板
+            {t('palette.title')}
           </div>
-          {PALETTE.map((p) => (
+          {palette.map((p) => (
             <button
               key={p.type}
               onClick={() => addNode(p)}
@@ -430,7 +417,7 @@ export default function WorkflowEditorPage() {
               lineHeight: 1.6,
             }}
           >
-            点击面板项添加节点；拖拽节点移动；点击节点选中并设为连线起点；Delete 删除选中；点击连线删除。
+            {t('palette.hint')}
           </div>
         </div>
 
@@ -478,7 +465,7 @@ export default function WorkflowEditorPage() {
                   style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                   onClick={() => deleteEdge(ep.id)}
                 >
-                  <title>点击删除该连线</title>
+                  <title>{t('edge.deleteHint')}</title>
                 </path>
               ))}
               {previewPath && (
@@ -496,11 +483,11 @@ export default function WorkflowEditorPage() {
             {/* Nodes */}
             {nodes.length === 0 && edges.length === 0 && (
               <div style={{ position: 'absolute', top: '40%', left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
-                <EmptyState title="画布为空" description="从左侧节点面板点击添加节点以开始编排。" />
+                <EmptyState title={t('empty.canvasTitle')} description={t('empty.canvasDesc')} />
               </div>
             )}
             {nodes.map((n) => {
-              const pal = paletteOf(n.type)
+              const pal = paletteOf(n.type, palette)
               const isSelected = n.id === selectedId
               const isSource = n.id === connectSource
               return (
@@ -584,43 +571,44 @@ export default function WorkflowEditorPage() {
               marginBottom: 12,
             }}
           >
-            节点属性
+            {t('properties.title')}
           </div>
           {selectedNode ? (
             <div className="admin-form">
               <div className="admin-form-row">
-                <label className="admin-form-label">节点类型</label>
+                <label className="admin-form-label">{t('properties.nodeType')}</label>
                 <input
                   className="admin-form-input"
-                  value={paletteOf(selectedNode.type).label}
+                  value={paletteOf(selectedNode.type, palette).label}
                   disabled
                   style={{ opacity: 0.7 }}
                 />
               </div>
               <div className="admin-form-row">
-                <label className="admin-form-label">名称</label>
+                <label className="admin-form-label">{t('properties.name')}</label>
                 <input
                   className="admin-form-input"
                   value={selectedNode.name}
+                  placeholder={t('properties.namePlaceholder')}
                   onChange={(e) => updateNode(selectedNode.id, { name: e.target.value })}
                 />
               </div>
               <div className="admin-form-row">
-                <label className="admin-form-label">描述</label>
+                <label className="admin-form-label">{t('properties.description')}</label>
                 <input
                   className="admin-form-input"
                   value={selectedNode.description}
-                  placeholder="节点用途说明"
+                  placeholder={t('properties.descriptionPlaceholder')}
                   onChange={(e) => updateNode(selectedNode.id, { description: e.target.value })}
                 />
               </div>
               <div className="admin-form-row">
-                <label className="admin-form-label">参数 (JSON)</label>
+                <label className="admin-form-label">{t('properties.params')}</label>
                 <textarea
                   className="admin-form-input"
                   value={selectedNode.params}
                   rows={6}
-                  placeholder='{}'
+                  placeholder={t('properties.paramsPlaceholder')}
                   onChange={(e) => updateNode(selectedNode.id, { params: e.target.value })}
                   style={{ fontFamily: 'var(--font-mono)', minHeight: 120, resize: 'vertical' }}
                 />
@@ -630,11 +618,11 @@ export default function WorkflowEditorPage() {
                 style={{ width: '100%', marginTop: 8 }}
                 onClick={() => deleteNode(selectedNode.id)}
               >
-                <ICONS.close size={14} /> 删除节点
+                <ICONS.close size={14} /> {t('properties.deleteNode')}
               </button>
             </div>
           ) : (
-            <EmptyState title="未选中节点" description="点击画布中的节点以编辑属性。" size="sm" />
+            <EmptyState title={t('empty.noSelectionTitle')} description={t('empty.noSelectionDesc')} size="sm" />
           )}
         </div>
       </div>

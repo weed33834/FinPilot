@@ -1,0 +1,70 @@
+{
+  "title": "策略回测",
+  "subtitle": "选择交易策略并配置参数，基于模拟或真实行情数据运行回测，评估收益与风险表现。",
+  "config": {
+    "title": "回测配置",
+    "strategyType": "策略类型",
+    "initialCapital": "初始资金",
+    "periodDays": "回测天数"
+  },
+  "strategies": {
+    "sma_cross": {
+      "label": "均线交叉 (SMA Cross)",
+      "description": "短期均线上穿/下穿长期均线产生买卖信号"
+    },
+    "momentum": {
+      "label": "动量策略 (Momentum)",
+      "description": "基于价格动量的趋势跟随策略"
+    },
+    "mean_reversion": {
+      "label": "均值回复 (Mean Reversion)",
+      "description": "价格偏离均值后向均值回归的逆向策略"
+    }
+  },
+  "actions": {
+    "generateMock": "生成模拟数据",
+    "generating": "生成中…",
+    "runBacktest": "运行回测",
+    "backtesting": "回测中…",
+    "retry": "重试"
+  },
+  "hints": {
+    "generateMockFirst": "请先生成模拟数据",
+    "mockLoaded": "已加载 {{count}} 个交易日模拟数据，价格区间："
+  },
+  "loading": {
+    "backtesting": "正在运行回测…",
+    "generatingMock": "正在生成模拟数据…"
+  },
+  "metrics": {
+    "total_return": { "label": "总收益", "hint": "Total Return" },
+    "annual_return": { "label": "年化收益", "hint": "Annual Return" },
+    "sharpe": { "label": "夏普比率", "hint": "Sharpe Ratio" },
+    "max_drawdown": { "label": "最大回撤", "hint": "Max Drawdown" },
+    "alpha": { "label": "Alpha", "hint": "Alpha" },
+    "beta": { "label": "Beta", "hint": "Beta" },
+    "win_rate": { "label": "胜率", "hint": "Win Rate" }
+  },
+  "equityCurve": {
+    "title": "净值曲线",
+    "empty": "暂无净值数据",
+    "tooltipLabel": "净值"
+  },
+  "tradeLog": {
+    "title": "交易记录（共 {{count}} 条）",
+    "empty": "暂无交易记录"
+  },
+  "errors": {
+    "operationFailed": "操作失败",
+    "generateMockFailed": "生成模拟数据失败",
+    "runBacktestFailed": "运行回测失败",
+    "generateMockFirst": "请先生成模拟数据"
+  },
+  "toast": {
+    "mockGenerated": "模拟数据已生成",
+    "mockGeneratedDesc": "已加载 {{count}} 个交易日数据",
+    "mockFailed": "生成模拟数据失败",
+    "backtestSuccess": "回测完成",
+    "backtestFailed": "运行回测失败"
+  }
+}

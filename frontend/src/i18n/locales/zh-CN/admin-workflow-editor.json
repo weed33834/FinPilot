@@ -1,0 +1,61 @@
+{
+  "title": "工作流编辑器",
+  "description": "可视化编排工作流：从左侧拖入节点，点击节点后再点击另一节点即可连线，右侧编辑节点属性。",
+  "palette": {
+    "title": "节点面板",
+    "hint": "点击面板项添加节点；拖拽节点移动；点击节点选中并设为连线起点；Delete 删除选中；点击连线删除。",
+    "types": {
+      "llm": "LLM调用",
+      "query": "数据查询",
+      "tool": "工具执行",
+      "condition": "条件判断",
+      "output": "输出",
+      "start": "开始",
+      "end": "结束"
+    }
+  },
+  "toolbar": {
+    "stats": "节点 {{nodes}} · 连线 {{edges}}",
+    "connecting": "连线中：点击目标节点完成连接，再次点击源节点取消"
+  },
+  "actions": {
+    "save": "保存",
+    "load": "加载",
+    "clear": "清空",
+    "export": "导出 JSON"
+  },
+  "properties": {
+    "title": "节点属性",
+    "nodeType": "节点类型",
+    "name": "名称",
+    "namePlaceholder": "为节点起一个易识别的名称",
+    "description": "描述",
+    "descriptionPlaceholder": "节点用途说明",
+    "params": "参数 (JSON)",
+    "paramsPlaceholder": "{}",
+    "deleteNode": "删除节点"
+  },
+  "empty": {
+    "canvasTitle": "画布为空",
+    "canvasDesc": "从左侧节点面板点击添加节点以开始编排。",
+    "noSelectionTitle": "未选中节点",
+    "noSelectionDesc": "点击画布中的节点以编辑属性。"
+  },
+  "edge": {
+    "deleteHint": "点击删除该连线"
+  },
+  "toast": {
+    "saved": "已保存到本地存储",
+    "saveFailed": "保存失败",
+    "loaded": "已从本地加载",
+    "noLocalData": "本地无保存数据",
+    "loadFailed": "本地数据解析失败",
+    "cleared": "已清空画布",
+    "exported": "已导出 workflow.json",
+    "nodeDeleted": "已删除节点"
+  },
+  "errors": {
+    "saveFailed": "保存失败",
+    "loadFailed": "本地数据解析失败"
+  }
+}

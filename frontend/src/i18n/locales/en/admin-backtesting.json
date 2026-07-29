@@ -1,0 +1,70 @@
+{
+  "title": "Strategy Backtesting",
+  "subtitle": "Select a trading strategy and configure parameters to run backtests on simulated or real market data, evaluating return and risk performance.",
+  "config": {
+    "title": "Backtest Configuration",
+    "strategyType": "Strategy Type",
+    "initialCapital": "Initial Capital",
+    "periodDays": "Backtest Period (days)"
+  },
+  "strategies": {
+    "sma_cross": {
+      "label": "SMA Cross",
+      "description": "Buy/sell signals generated when the short-term SMA crosses above/below the long-term SMA"
+    },
+    "momentum": {
+      "label": "Momentum",
+      "description": "Trend-following strategy based on price momentum"
+    },
+    "mean_reversion": {
+      "label": "Mean Reversion",
+      "description": "Contrarian strategy betting that price reverts to the mean after deviation"
+    }
+  },
+  "actions": {
+    "generateMock": "Generate Mock Data",
+    "generating": "Generating…",
+    "runBacktest": "Run Backtest",
+    "backtesting": "Backtesting…",
+    "retry": "Retry"
+  },
+  "hints": {
+    "generateMockFirst": "Please generate mock data first",
+    "mockLoaded": "Loaded {{count}} trading days of mock data, price range: "
+  },
+  "loading": {
+    "backtesting": "Running backtest…",
+    "generatingMock": "Generating mock data…"
+  },
+  "metrics": {
+    "total_return": { "label": "Total Return", "hint": "Total Return" },
+    "annual_return": { "label": "Annual Return", "hint": "Annual Return" },
+    "sharpe": { "label": "Sharpe Ratio", "hint": "Sharpe Ratio" },
+    "max_drawdown": { "label": "Max Drawdown", "hint": "Max Drawdown" },
+    "alpha": { "label": "Alpha", "hint": "Alpha" },
+    "beta": { "label": "Beta", "hint": "Beta" },
+    "win_rate": { "label": "Win Rate", "hint": "Win Rate" }
+  },
+  "equityCurve": {
+    "title": "Equity Curve",
+    "empty": "No equity data",
+    "tooltipLabel": "Equity"
+  },
+  "tradeLog": {
+    "title": "Trade Log ({{count}} entries)",
+    "empty": "No trade records"
+  },
+  "errors": {
+    "operationFailed": "Operation failed",
+    "generateMockFailed": "Failed to generate mock data",
+    "runBacktestFailed": "Failed to run backtest",
+    "generateMockFirst": "Please generate mock data first"
+  },
+  "toast": {
+    "mockGenerated": "Mock data generated",
+    "mockGeneratedDesc": "Loaded {{count}} trading days of data",
+    "mockFailed": "Failed to generate mock data",
+    "backtestSuccess": "Backtest completed",
+    "backtestFailed": "Failed to run backtest"
+  }
+}

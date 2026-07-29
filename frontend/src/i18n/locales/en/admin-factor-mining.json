@@ -1,0 +1,54 @@
+{
+  "title": "Factor Mining",
+  "description": "Enter company financial data (JSON array). The system will automatically mine candidate factors and evaluate their predictive power such as IC and IR.",
+  "input": {
+    "title": "Data Input",
+    "financialData": "Financial Data",
+    "financialDataHint": "(JSON array of company financial dictionaries)",
+    "financialDataPlaceholder": "[ { \"company\": \"A\", \"revenue\": 1000, ... } ]",
+    "forwardReturns": "Forward Returns",
+    "forwardReturnsHint": "(optional, JSON object, keyed by company identifier)",
+    "forwardReturnsPlaceholder": "{ \"Company A\": 0.12, \"Company B\": -0.05 }",
+    "exampleCompanyA": "Company A",
+    "exampleCompanyB": "Company B"
+  },
+  "actions": {
+    "mine": "Mine Factors",
+    "mining": "Mining…",
+    "clear": "Clear Results"
+  },
+  "errors": {
+    "mineFailed": "Factor mining failed",
+    "financialArrayRequired": "Financial data must be a JSON array",
+    "financialParseFailed": "Failed to parse financial data JSON: {{message}}",
+    "forwardReturnsObjectRequired": "Forward returns must be a JSON object",
+    "forwardReturnsParseFailed": "Failed to parse forward returns JSON: {{message}}"
+  },
+  "loading": "Mining factors…",
+  "summary": {
+    "title": "Analysis Summary",
+    "empty": "No summary available.",
+    "bestFactor": "{{name}} (IC {{ic}})"
+  },
+  "chart": {
+    "title": "Factor IC Comparison",
+    "icLabel": "IC",
+    "empty": "No factor data"
+  },
+  "table": {
+    "title": "Factor Details (sorted by rank)",
+    "empty": "No factor details",
+    "rank": "Rank",
+    "name": "Name",
+    "category": "Category",
+    "ic": "IC",
+    "ir": "IR",
+    "winRate": "Win Rate",
+    "description": "Description"
+  },
+  "toast": {
+    "mineSuccess": "Factor mining completed",
+    "mineSuccessDesc": "Mined {{count}} factors",
+    "mineFailed": "Factor mining failed"
+  }
+}

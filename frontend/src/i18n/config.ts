@@ -10,6 +10,9 @@ import zhCNKpi from './locales/zh-CN/kpi.json'
 import zhCNAdmin from './locales/zh-CN/admin.json'
 import zhCNAdminSettings from './locales/zh-CN/admin-settings.json'
 import zhCNAdminRuntimeLogs from './locales/zh-CN/admin-runtime-logs.json'
+import zhCNAdminFactorMining from './locales/zh-CN/admin-factor-mining.json'
+import zhCNAdminBacktesting from './locales/zh-CN/admin-backtesting.json'
+import zhCNAdminWorkflowEditor from './locales/zh-CN/admin-workflow-editor.json'
 import enCommon from './locales/en/common.json'
 import enMenu from './locales/en/menu.json'
 import enAuth from './locales/en/auth.json'
@@ -19,6 +22,9 @@ import enKpi from './locales/en/kpi.json'
 import enAdmin from './locales/en/admin.json'
 import enAdminSettings from './locales/en/admin-settings.json'
 import enAdminRuntimeLogs from './locales/en/admin-runtime-logs.json'
+import enAdminFactorMining from './locales/en/admin-factor-mining.json'
+import enAdminBacktesting from './locales/en/admin-backtesting.json'
+import enAdminWorkflowEditor from './locales/en/admin-workflow-editor.json'
 
 // brand / footer 文案内联在 auth.json 中（登录页专用），通过命名空间映射复用，
 // 避免为少量登录页文案单独建立文件。
@@ -60,6 +66,9 @@ i18n
         admin: zhCNAdmin,
         adminSettings: zhCNAdminSettings,
         adminRuntimeLogs: zhCNAdminRuntimeLogs,
+        adminFactorMining: zhCNAdminFactorMining,
+        adminBacktesting: zhCNAdminBacktesting,
+        adminWorkflowEditor: zhCNAdminWorkflowEditor,
         brand: zhCNBrand,
         footer: zhCNFooter,
       },
@@ -73,6 +82,9 @@ i18n
         admin: enAdmin,
         adminSettings: enAdminSettings,
         adminRuntimeLogs: enAdminRuntimeLogs,
+        adminFactorMining: enAdminFactorMining,
+        adminBacktesting: enAdminBacktesting,
+        adminWorkflowEditor: enAdminWorkflowEditor,
         brand: enBrand,
         footer: enFooter,
       },
@@ -80,7 +92,7 @@ i18n
     lng: getInitialLanguage(),
     fallbackLng: 'zh-CN',
     supportedLngs: ['zh-CN', 'en'],
-    ns: ['common', 'menu', 'auth', 'dashboard', 'security', 'kpi', 'admin', 'adminSettings', 'adminRuntimeLogs', 'brand', 'footer'],
+    ns: ['common', 'menu', 'auth', 'dashboard', 'security', 'kpi', 'admin', 'adminSettings', 'adminRuntimeLogs', 'adminFactorMining', 'adminBacktesting', 'adminWorkflowEditor', 'brand', 'footer'],
     defaultNS: 'common',
     interpolation: {
       escapeValue: false,

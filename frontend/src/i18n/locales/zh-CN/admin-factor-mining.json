@@ -1,0 +1,54 @@
+{
+  "title": "因子挖掘",
+  "description": "输入公司财务数据（JSON 数组），系统将自动挖掘候选因子并评估其 IC、IR 等预测能力。",
+  "input": {
+    "title": "数据输入",
+    "financialData": "财务数据",
+    "financialDataHint": "（公司财务字典的 JSON 数组）",
+    "financialDataPlaceholder": "[ { \"company\": \"A\", \"revenue\": 1000, ... } ]",
+    "forwardReturns": "远期收益",
+    "forwardReturnsHint": "（可选，JSON 对象，键为公司标识）",
+    "forwardReturnsPlaceholder": "{ \"示例公司A\": 0.12, \"示例公司B\": -0.05 }",
+    "exampleCompanyA": "示例公司A",
+    "exampleCompanyB": "示例公司B"
+  },
+  "actions": {
+    "mine": "挖掘因子",
+    "mining": "挖掘中…",
+    "clear": "清空结果"
+  },
+  "errors": {
+    "mineFailed": "因子挖掘失败",
+    "financialArrayRequired": "财务数据必须是 JSON 数组",
+    "financialParseFailed": "财务数据 JSON 解析失败：{{message}}",
+    "forwardReturnsObjectRequired": "远期收益必须是 JSON 对象",
+    "forwardReturnsParseFailed": "远期收益 JSON 解析失败：{{message}}"
+  },
+  "loading": "正在挖掘因子…",
+  "summary": {
+    "title": "分析摘要",
+    "empty": "暂无摘要信息。",
+    "bestFactor": "{{name}}（IC {{ic}}）"
+  },
+  "chart": {
+    "title": "因子 IC 值对比",
+    "icLabel": "IC",
+    "empty": "暂无因子数据"
+  },
+  "table": {
+    "title": "因子明细（按排名排序）",
+    "empty": "暂无因子明细",
+    "rank": "排名",
+    "name": "名称",
+    "category": "分类",
+    "ic": "IC",
+    "ir": "IR",
+    "winRate": "胜率",
+    "description": "说明"
+  },
+  "toast": {
+    "mineSuccess": "因子挖掘完成",
+    "mineSuccessDesc": "共挖掘 {{count}} 个因子",
+    "mineFailed": "因子挖掘失败"
+  }
+}
