@@ -1,0 +1,114 @@
+# FinPilot AI — 一键编排（Redis + PostgreSQL + 后端 + 前端）
+#
+# 用法：
+#   cp .env.example .env          # 按需修改密钥
+#   docker compose up -d          # 启动全部服务
+#   docker compose logs -f backend
+#
+# 服务端口：
+#   - 前端:  http://localhost:8080
+#   - 后端:  http://localhost:8010  (API + /health + /metrics)
+#   - Redis: 6379
+#   - PostgreSQL: 5432
+#
+# 健康检查：后端 /health/ready 供 K8s/Compose depends_on 判定就绪。
+
+services:
+  # ───────────────────────── 缓存 / 会话 / 分布式锁 ─────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: finpilot-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ───────────────────────── 主数据库 ─────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: finpilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finpilot_dev_pwd}
+      POSTGRES_DB: ${POSTGRES_DB:-finpilot}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready 用与业务相同的用户探测，避免 "role does not exist" 误报
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finpilot} -d ${POSTGRES_DB:-finpilot}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # ───────────────────────── 后端 API ─────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finpilot-backend
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # 数据库（覆盖 connection.py 的 SQLite 默认值）
+      FINPILOT_DATABASE_URL: postgresql+pg8000://${POSTGRES_USER:-finpilot}:${POSTGRES_PASSWORD:-finpilot_dev_pwd}@postgres:5432/${POSTGRES_DB:-finpilot}
+      # Redis（会话存储 / 限流 / 分布式锁）
+      REDIS_URL: redis://redis:6379/0
+      # LLM
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-DeepSeek-V4-Pro}
+      # 默认管理员（不设置则不创建默认 admin，避免硬编码风险）
+      FINPILOT_ADMIN_EMAIL: ${FINPILOT_ADMIN_EMAIL:-admin@finpilot.ai}
+      FINPILOT_ADMIN_PASSWORD: ${FINPILOT_ADMIN_PASSWORD:-}
+      # 会话加密密钥（生产必须设置，至少 32 字节随机串）
+      SECRET_KEY: ${SECRET_KEY:-}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      TZ: Asia/Shanghai
+    ports:
+      - "8010:8001"
+    volumes:
+      # 上传文件 / 解析产物 / 生成的报告持久化到宿主机，避免容器重建丢失
+      - backend-data:/app/finpilot_equity/web_app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health/live',timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ───────────────────────── 前端 SPA（Vite 构建 + nginx 静态托管） ─────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finpilot-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-data:
+  postgres-data:
+  backend-data:

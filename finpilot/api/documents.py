@@ -454,21 +454,35 @@ def reindex_document(
         )
 
     rag = RagService(db)
-    # 1. 移除旧索引
-    removed = rag.remove_document(document_id, db)
-    # 2. 重新解析物理文件
+    # 分布式锁：防止同一文档并发重建索引导致 chunk 重复/状态错乱
+    from finpilot.core.distributed_lock import distributed_lock
+
     try:
-        parser = get_parser(doc.file_path)
-        parsed = parser.parse(doc.file_path)
-    except ParserError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"解析失败: {exc}",
-        )
-    # 3. 重新索引
-    full_text = "\n\n".join(p.text for p in parsed.pages if p.text)
-    chunks = rag.index_document(doc.id, full_text, tenant_id=tenant_id)
-    crud.update_document_status(db, doc.id, "indexed")
+        with distributed_lock(f"doc:{document_id}", timeout=120, blocking_timeout=5):
+            # 1. 移除旧索引
+            removed = rag.remove_document(document_id, db)
+            # 2. 重新解析物理文件
+            try:
+                parser = get_parser(doc.file_path)
+                parsed = parser.parse(doc.file_path)
+            except ParserError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"解析失败: {exc}",
+                )
+            # 3. 重新索引
+            full_text = "\n\n".join(p.text for p in parsed.pages if p.text)
+            chunks = rag.index_document(doc.id, full_text, tenant_id=tenant_id)
+            crud.update_document_status(db, doc.id, "indexed")
+    except Exception as exc:
+        # 锁获取失败（LockAcquireError）单独区分，其余异常原样抛
+        from finpilot.core.distributed_lock import LockAcquireError
+        if isinstance(exc, LockAcquireError):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"文档 {document_id} 正在被其他进程重建索引，请稍后重试",
+            )
+        raise
     return _ok(
         {"document_id": str(doc.id), "removed_chunks": removed, "indexed_chunks": chunks},
         "索引重建完成",

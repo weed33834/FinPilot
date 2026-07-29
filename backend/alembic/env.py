@@ -18,6 +18,13 @@ from finpilot.database.models import Base
 # access to the values within the .ini file in use.
 config = context.config
 
+# 数据库 URL 可移植化：优先读取环境变量 FINPILOT_DATABASE_URL / DATABASE_URL，
+# 覆盖 ini 中硬编码的 sqlalchemy.url（此前 ini 硬编码了 Windows 绝对路径，
+# 其他环境无法直接使用）。
+_db_url = os.getenv("FINPILOT_DATABASE_URL") or os.getenv("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:

@@ -6,9 +6,10 @@ WORKDIR /app
 # - build-essential: 编译 numpy<2 等需要
 # - libfreetype6, libfontconfig1: matplotlib 字体渲染
 # - libpq-dev: pg8000 编译需要
+# - curl: HEALTHCHECK 探活
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential libfreetype6 libfontconfig1 libpq-dev && \
+        build-essential libfreetype6 libfontconfig1 libpq-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖（使用完整 requirements.txt，确保 langgraph / mcp / RAG 等模块可用）
@@ -21,8 +22,19 @@ RUN pip install --no-cache-dir -e . && \
     apt-get purge -y --auto-remove build-essential && \
     rm -rf /var/lib/apt/lists/*
 
+# 创建非 root 用户运行应用，降低容器逃逸风险
+# 数据目录 /app/finpilot_equity/web_app/data 用于持久化上传文件/报告，需授权给该用户
+RUN useradd --create-home --shell /bin/bash finpilot && \
+    mkdir -p /app/finpilot_equity/web_app/data && \
+    chown -R finpilot:finpilot /app
+USER finpilot
+
 EXPOSE 8001
 
 # 默认启动 Web 应用入口（端口 8001）
 # 可通过 docker run 覆盖 CMD 启动其他入口
 CMD ["uvicorn", "finpilot_equity.web_app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+
+# 存活探针：进程能响应 /health/live 即健康（不检查依赖，避免误杀）
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=40s \
+  CMD curl -fsS http://localhost:8001/health/live || exit 1

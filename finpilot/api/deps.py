@@ -163,6 +163,9 @@ def require_scope(required_scope: str):
             )
 
         api_key.last_used_at = datetime.now(timezone.utc)
+        # 递增调用计数：此前只更新 last_used_at，usage_count 永远为 0，
+        # 导致按 API Key 的用量统计与配额管理形同虚设。
+        api_key.usage_count = (api_key.usage_count or 0) + 1
         db.commit()
 
         return {
