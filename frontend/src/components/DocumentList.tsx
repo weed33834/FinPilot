@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Badge from './ui/Badge.tsx'
 import EmptyState from './ui/EmptyState.tsx'
 import type { Document } from '../types/document'
@@ -9,11 +10,13 @@ interface DocumentListProps {
 }
 
 export default function DocumentList({ documents, onSelect }: DocumentListProps) {
+  const { t } = useTranslation()
   if (documents.length === 0) {
     return (
       <EmptyState
-        title="暂无文档"
-        description="上传财务报表或凭证文档后，它们会出现在这里。"
+        icon="documents"
+        title={t('common:documents.emptyTitle')}
+        description={t('common:documents.emptyDesc')}
       />
     )
   }
@@ -23,11 +26,11 @@ export default function DocumentList({ documents, onSelect }: DocumentListProps)
       <table className="financial">
         <thead>
           <tr>
-            <th>文件名</th>
-            <th>状态</th>
-            <th>置信度</th>
-            <th>创建时间</th>
-            <th>操作</th>
+            <th>{t('common:documents.colFilename')}</th>
+            <th>{t('common:documents.colStatus')}</th>
+            <th>{t('common:documents.colConfidence')}</th>
+            <th>{t('common:documents.colCreatedAt')}</th>
+            <th>{t('common:documents.colActions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -45,7 +48,7 @@ export default function DocumentList({ documents, onSelect }: DocumentListProps)
               <td>{formatDateTime(doc.created_at)}</td>
               <td>
                 <button type="button" className="secondary" onClick={() => onSelect(doc)}>
-                  查看
+                  {t('common:documents.view')}
                 </button>
               </td>
             </tr>

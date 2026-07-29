@@ -619,6 +619,74 @@ h4 { font-size: var(--text-base); }
   letter-spacing: 0.06em;
 }
 
+/* 卡片标题行：标题 + 内联搜索/筛选控件横向排列 */
+.card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.card-title-row .card-title {
+  margin: 0;
+}
+
+/* 内联搜索框：图标 + 输入框 */
+.search-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  min-width: 200px;
+  max-width: 280px;
+  transition: border-color 160ms ease, box-shadow 200ms ease;
+}
+
+.search-inline:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
+}
+
+.search-inline input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.search-inline input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* 报告生成中提示徽章：带旋转图标 */
+.generating-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: var(--radius-full, 999px);
+}
+
+.generating-hint svg {
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ==================== Buttons ==================== */
 
 button,

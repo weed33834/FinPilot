@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { getErrorMessage } from '../utils/errors'
@@ -8,33 +9,32 @@ import DocumentDetail from '../components/DocumentDetail'
 import DocumentList from '../components/DocumentList'
 import DocumentUpload from '../components/DocumentUpload'
 import Loading from '../components/ui/Loading.tsx'
+import EmptyState from '../components/ui/EmptyState.tsx'
 import Badge from '../components/ui/Badge.tsx'
 import { ICONS } from '../components/ui/Icons.tsx'
-
-const statusOptions: { value: string; label: string }[] = [
-  { value: '', label: '全部' },
-  { value: 'pending', label: '待处理' },
-  { value: 'processing', label: '解析中' },
-  { value: 'success', label: '成功' },
-  { value: 'failed', label: '失败' },
-  { value: 'needs_review', label: '待复核' },
-]
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '待处理',
-  processing: '解析中',
-  success: '成功',
-  failed: '失败',
-  needs_review: '待复核',
-}
+import { toast } from '../components/ui/Toaster.tsx'
 
 export default function DocumentsPage() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const [documents, setDocuments] = useState<Document[]>([])
   const [selected, setSelected] = useState<Document | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const [keyword, setKeyword] = useState('')
+
+  const statusOptions = useMemo(
+    () => [
+      { value: '', label: t('common:documents.statusAll') },
+      { value: 'pending', label: t('common:documents.statusPending') },
+      { value: 'processing', label: t('common:documents.statusProcessing') },
+      { value: 'success', label: t('common:documents.statusSuccess') },
+      { value: 'failed', label: t('common:documents.statusFailed') },
+      { value: 'needs_review', label: t('common:documents.statusNeedsReview') },
+    ],
+    [t],
+  )
 
   const fetchDocuments = async (filterStatus: string) => {
     setLoading(true)
@@ -45,7 +45,7 @@ export default function DocumentsPage() {
       })
       setDocuments(response.data.data?.items || [])
     } catch (err) {
-      setError(getErrorMessage(err, '加载文档列表失败'))
+      setError(getErrorMessage(err, t('common:documents.loadFailed')))
     } finally {
       setLoading(false)
     }
@@ -67,17 +67,18 @@ export default function DocumentsPage() {
         const response = await api.get<DataResponse<Document>>(`/documents/${id}`)
         if (!cancelled) setSelected(response.data.data)
       } catch (err) {
-        if (!cancelled) setError(getErrorMessage(err, '加载文档详情失败'))
+        if (!cancelled) setError(getErrorMessage(err, t('common:documents.loadDetailFailed')))
       }
     }
     void fetchDetail()
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, t])
 
   const handleUploaded = (doc: Document) => {
     setDocuments((prev) => [doc, ...prev])
+    toast.success(t('common:documents.statSuccess'), doc.filename)
   }
 
   const stats = useMemo(() => {
@@ -95,14 +96,21 @@ export default function DocumentsPage() {
       counts[d.status] = (counts[d.status] || 0) + 1
     })
     return Object.entries(counts)
-      .map(([status, count]) => ({ status, label: STATUS_LABELS[status] || status, count }))
+      .map(([s, count]) => ({ status: s, count }))
       .sort((a, b) => b.count - a.count)
   }, [documents])
+
+  // 关键词过滤（客户端，按文件名匹配）
+  const filteredDocuments = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return documents
+    return documents.filter((d) => (d.filename || '').toLowerCase().includes(kw))
+  }, [documents, keyword])
 
   return (
     <div className="container">
       <div className="page-header">
-        <h1>文档解析</h1>
+        <h1>{t('common:documents.title')}</h1>
       </div>
 
       <div className="stat-grid compact">
@@ -113,7 +121,7 @@ export default function DocumentsPage() {
             </div>
           </div>
           <div className="stat-value">{stats.total}</div>
-          <div className="stat-label">全部文档</div>
+          <div className="stat-label">{t('common:documents.statTotal')}</div>
         </div>
         <div className={`stat-card ${!stats.success ? 'is-zero' : ''}`}>
           <div className="stat-card-head">
@@ -122,7 +130,7 @@ export default function DocumentsPage() {
             </div>
           </div>
           <div className="stat-value">{stats.success}</div>
-          <div className="stat-label">解析成功</div>
+          <div className="stat-label">{t('common:documents.statSuccess')}</div>
         </div>
         <div className={`stat-card ${!stats.needsReview ? 'is-zero' : ''}`}>
           <div className="stat-card-head">
@@ -131,7 +139,7 @@ export default function DocumentsPage() {
             </div>
           </div>
           <div className="stat-value">{stats.needsReview}</div>
-          <div className="stat-label">待复核</div>
+          <div className="stat-label">{t('common:documents.statNeedsReview')}</div>
         </div>
         <div className={`stat-card ${!stats.processing ? 'is-zero' : ''}`}>
           <div className="stat-card-head">
@@ -140,7 +148,7 @@ export default function DocumentsPage() {
             </div>
           </div>
           <div className="stat-value">{stats.processing}</div>
-          <div className="stat-label">解析中</div>
+          <div className="stat-label">{t('common:documents.statProcessing')}</div>
         </div>
         <div className={`stat-card ${!stats.failed ? 'is-zero' : ''}`}>
           <div className="stat-card-head">
@@ -149,13 +157,13 @@ export default function DocumentsPage() {
             </div>
           </div>
           <div className="stat-value">{stats.failed}</div>
-          <div className="stat-label">失败</div>
+          <div className="stat-label">{t('common:documents.statFailed')}</div>
         </div>
       </div>
 
       {statusDistribution.length > 0 && (
         <div className="card status-summary">
-          <h3 className="card-title">状态分布</h3>
+          <h3 className="card-title">{t('common:documents.statusDistribution')}</h3>
           <div className="status-badges">
             {statusDistribution.map((item) => (
               <div key={item.status} className="status-badge-item">
@@ -169,7 +177,7 @@ export default function DocumentsPage() {
 
       <div className="toolbar">
         <div className="form-group">
-          <label htmlFor="status-filter">状态筛选</label>
+          <label htmlFor="status-filter">{t('common:documents.filterStatus')}</label>
           <select
             id="status-filter"
             value={status}
@@ -182,17 +190,53 @@ export default function DocumentsPage() {
             ))}
           </select>
         </div>
+        {documents.length > 0 && (
+          <div className="search-inline">
+            <ICONS.search size={14} />
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder={t('common:documents.searchPlaceholder')}
+              aria-label={t('common:documents.searchPlaceholder')}
+            />
+          </div>
+        )}
       </div>
 
       <DocumentUpload onUploaded={handleUploaded} />
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={() => fetchDocuments(status)}>
+            {t('common:documents.retry')}
+          </button>
         </div>
       )}
 
-      {loading ? <Loading text="加载文档中..." /> : <DocumentList documents={documents} onSelect={setSelected} />}
+      {loading ? (
+        <Loading text={t('common:documents.loading')} />
+      ) : documents.length === 0 ? (
+        <EmptyState
+          icon="documents"
+          title={t('common:documents.emptyTitle')}
+          description={t('common:documents.emptyDesc')}
+          action={
+            <button type="button" className="secondary" onClick={() => fetchDocuments(status)}>
+              {t('common:documents.retry')}
+            </button>
+          }
+        />
+      ) : filteredDocuments.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title={t('common:documents.emptySearchTitle')}
+          description={t('common:documents.emptySearchDesc')}
+        />
+      ) : (
+        <DocumentList documents={filteredDocuments} onSelect={setSelected} />
+      )}
 
       {selected && <DocumentDetail document={selected} onClose={() => setSelected(null)} />}
     </div>

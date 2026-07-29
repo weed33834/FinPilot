@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Badge from './ui/Badge.tsx'
 import EmptyState from './ui/EmptyState.tsx'
 import type { Report } from '../types/report.ts'
@@ -9,8 +10,15 @@ interface ReportListProps {
 }
 
 export default function ReportList({ reports, onSelect }: ReportListProps) {
+  const { t } = useTranslation()
   if (reports.length === 0) {
-    return <EmptyState title="暂无报告" description="创建报告后，它们会出现在这里。" />
+    return (
+      <EmptyState
+        icon="reports"
+        title={t('common:reports.emptyTitle')}
+        description={t('common:reports.emptyDesc')}
+      />
+    )
   }
 
   return (
@@ -18,11 +26,11 @@ export default function ReportList({ reports, onSelect }: ReportListProps) {
       <table className="financial">
         <thead>
           <tr>
-            <th>标题</th>
-            <th>类型</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
+            <th>{t('common:reports.colTitle')}</th>
+            <th>{t('common:reports.colType')}</th>
+            <th>{t('common:reports.colStatus')}</th>
+            <th>{t('common:reports.colCreatedAt')}</th>
+            <th>{t('common:reports.colActions')}</th>
           </tr>
         </thead>
         <tbody>
@@ -36,7 +44,7 @@ export default function ReportList({ reports, onSelect }: ReportListProps) {
               <td>{formatDateTime(report.created_at)}</td>
               <td>
                 <button type="button" className="secondary" onClick={() => onSelect(report)}>
-                  查看
+                  {t('common:reports.view')}
                 </button>
               </td>
             </tr>

@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
 import Badge from '../components/ui/Badge.tsx'
+import { ICONS } from '../components/ui/Icons.tsx'
+import { toast } from '../components/ui/Toaster.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
 import { formatDateTime } from '../utils/format.ts'
 import type { PendingApproval } from '../types/approval'
@@ -17,12 +20,6 @@ interface ApprovalRecord {
   created_at: string | null
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  approve: '通过',
-  reject: '驳回',
-  modify: '退回修改',
-}
-
 function toPendingApproval(report: Report): PendingApproval {
   return {
     id: report.id,
@@ -34,6 +31,7 @@ function toPendingApproval(report: Report): PendingApproval {
 }
 
 export default function ApprovalsPage() {
+  const { t } = useTranslation()
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([])
   const [history, setHistory] = useState<ApprovalRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -41,6 +39,7 @@ export default function ApprovalsPage() {
   const [error, setError] = useState('')
   const [comments, setComments] = useState<Record<string, string>>({})
   const [acting, setActing] = useState<Record<string, boolean>>({})
+  const [keyword, setKeyword] = useState('')
 
   const fetchPendingApprovals = async () => {
     setLoading(true)
@@ -53,7 +52,7 @@ export default function ApprovalsPage() {
       const reports = Array.isArray(payload) ? payload : payload?.items || []
       setPendingApprovals(reports.map(toPendingApproval))
     } catch (err) {
-      setError(getErrorMessage(err, '加载待审批报告失败'))
+      setError(getErrorMessage(err, t('common:approvals.loadFailed')))
     } finally {
       setLoading(false)
     }
@@ -80,7 +79,19 @@ export default function ApprovalsPage() {
     fetchHistory()
   }, [])
 
+  // 关键词过滤（客户端，按报告标题匹配）
+  const filteredApprovals = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return pendingApprovals
+    return pendingApprovals.filter((a) => (a.report_title || '').toLowerCase().includes(kw))
+  }, [pendingApprovals, keyword])
+
   const handleAction = async (reportId: string, action: 'approve' | 'reject') => {
+    // 驳回必须填写原因
+    if (action === 'reject' && !comments[reportId]?.trim()) {
+      toast.warning(t('common:approvals.commentRequired'))
+      return
+    }
     setActing((prev) => ({ ...prev, [reportId]: true }))
     try {
       await api.post(`/approvals/${reportId}/action`, {
@@ -88,92 +99,136 @@ export default function ApprovalsPage() {
         comments: comments[reportId] || undefined,
       })
       setComments((prev) => ({ ...prev, [reportId]: '' }))
+      toast.success(action === 'approve' ? t('common:approvals.toastApproved') : t('common:approvals.toastRejected'))
       await Promise.all([fetchPendingApprovals(), fetchHistory()])
     } catch (err) {
-      setError(getErrorMessage(err, '审批操作失败'))
+      toast.error(getErrorMessage(err, t('common:approvals.actionFailed')))
     } finally {
       setActing((prev) => ({ ...prev, [reportId]: false }))
     }
+  }
+
+  const actionLabel = (action: string) => {
+    if (action === 'approve') return t('common:approvals.actionApprove')
+    if (action === 'reject') return t('common:approvals.actionReject')
+    if (action === 'modify') return t('common:approvals.actionModify')
+    return action
   }
 
   return (
     <div className="container">
       <div className="page-header">
         <div>
-          <h1>人工审批</h1>
-          <p className="text-muted text-sm">复核待审批报告，也能翻历史记录</p>
+          <h1>{t('common:approvals.title')}</h1>
+          <p className="text-muted text-sm">{t('common:approvals.subtitle')}</p>
         </div>
         <button type="button" className="secondary" onClick={() => { fetchPendingApprovals(); fetchHistory() }}>
-          刷新
+          {t('common:approvals.refresh')}
         </button>
       </div>
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={() => fetchPendingApprovals()}>
+            {t('common:approvals.retry')}
+          </button>
         </div>
       )}
 
       <div className="card">
-        <h3 className="card-title">待审批报告</h3>
+        <div className="card-title-row">
+          <h3 className="card-title">{t('common:approvals.pendingTitle')}</h3>
+          {pendingApprovals.length > 0 && (
+            <div className="search-inline">
+              <ICONS.search size={14} />
+              <input
+                type="search"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder={t('common:approvals.searchPlaceholder')}
+                aria-label={t('common:approvals.searchPlaceholder')}
+              />
+            </div>
+          )}
+        </div>
         {loading ? (
-          <Loading text="加载待审批报告中..." />
+          <Loading text={t('common:approvals.pendingLoading')} />
         ) : pendingApprovals.length === 0 ? (
-          <EmptyState title="暂无待审批报告" description="当有报告进入待审批状态时，将显示在这里。" />
+          <EmptyState
+            icon="approvals"
+            title={t('common:approvals.emptyPendingTitle')}
+            description={t('common:approvals.emptyPendingDesc')}
+            action={
+              <button type="button" className="secondary" onClick={() => fetchPendingApprovals()}>
+                {t('common:approvals.refresh')}
+              </button>
+            }
+          />
+        ) : filteredApprovals.length === 0 ? (
+          <EmptyState
+            icon="search"
+            title={t('common:approvals.emptySearchTitle')}
+            description={t('common:approvals.emptySearchDesc')}
+          />
         ) : (
           <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
-                  <th>报告</th>
-                  <th>状态</th>
-                  <th>提交时间</th>
-                  <th>备注</th>
-                  <th>操作</th>
+                  <th>{t('common:approvals.colReport')}</th>
+                  <th>{t('common:approvals.colStatus')}</th>
+                  <th>{t('common:approvals.colSubmittedAt')}</th>
+                  <th>{t('common:approvals.colComment')}</th>
+                  <th>{t('common:approvals.colActions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {pendingApprovals.map((approval) => (
-                  <tr key={approval.id}>
-                    <td>{approval.report_title}</td>
-                    <td><Badge status="reviewing" label="待审批" /></td>
-                    <td>{formatDateTime(approval.created_at)}</td>
-                    <td>
-                      <input
-                        value={comments[approval.report_id] || ''}
-                        onChange={(e) =>
-                          setComments((prev) => ({
-                            ...prev,
-                            [approval.report_id]: e.target.value,
-                          }))
-                        }
-                        placeholder="审批备注（可选）"
-                        aria-label="审批备注"
-                        disabled={acting[approval.report_id]}
-                        className="full-width"
-                      />
-                    </td>
-                    <td>
-                      <div className="action-group">
-                        <button
-                          type="button"
-                          onClick={() => handleAction(approval.report_id, 'approve')}
+                {filteredApprovals.map((approval) => {
+                  const commentEmpty = !comments[approval.report_id]?.trim()
+                  return (
+                    <tr key={approval.id}>
+                      <td>{approval.report_title}</td>
+                      <td><Badge status="reviewing" label={t('common:approvals.statusReviewing')} /></td>
+                      <td>{formatDateTime(approval.created_at)}</td>
+                      <td>
+                        <input
+                          value={comments[approval.report_id] || ''}
+                          onChange={(e) =>
+                            setComments((prev) => ({
+                              ...prev,
+                              [approval.report_id]: e.target.value,
+                            }))
+                          }
+                          placeholder={t('common:approvals.commentPlaceholder')}
+                          aria-label={t('common:approvals.colComment')}
                           disabled={acting[approval.report_id]}
-                        >
-                          通过
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => handleAction(approval.report_id, 'reject')}
-                          disabled={acting[approval.report_id]}
-                        >
-                          驳回
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          className="full-width"
+                        />
+                      </td>
+                      <td>
+                        <div className="action-group">
+                          <button
+                            type="button"
+                            onClick={() => handleAction(approval.report_id, 'approve')}
+                            disabled={acting[approval.report_id]}
+                          >
+                            {t('common:approvals.approve')}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => handleAction(approval.report_id, 'reject')}
+                            disabled={acting[approval.report_id] || commentEmpty}
+                            title={commentEmpty ? t('common:approvals.commentRequired') : undefined}
+                          >
+                            {t('common:approvals.reject')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -181,21 +236,25 @@ export default function ApprovalsPage() {
       </div>
 
       <div className="card">
-        <h3 className="card-title">审核历史</h3>
+        <h3 className="card-title">{t('common:approvals.historyTitle')}</h3>
         {historyLoading ? (
-          <Loading text="加载审核历史..." />
+          <Loading text={t('common:approvals.historyLoading')} />
         ) : history.length === 0 ? (
-          <EmptyState title="暂无审核记录" description="已完成的审批将记录在这里。" />
+          <EmptyState
+            icon="approvals"
+            title={t('common:approvals.emptyHistoryTitle')}
+            description={t('common:approvals.emptyHistoryDesc')}
+          />
         ) : (
           <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
-                  <th>报告 ID</th>
-                  <th>审核人</th>
-                  <th>动作</th>
-                  <th>备注</th>
-                  <th>时间</th>
+                  <th>{t('common:approvals.colReportId')}</th>
+                  <th>{t('common:approvals.colReviewer')}</th>
+                  <th>{t('common:approvals.colAction')}</th>
+                  <th>{t('common:approvals.colComment')}</th>
+                  <th>{t('common:approvals.colTime')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,7 +267,7 @@ export default function ApprovalsPage() {
                     <td>
                       <Badge
                         status={record.action === 'approve' ? 'approved' : record.action === 'reject' ? 'rejected' : 'modify'}
-                        label={ACTION_LABELS[record.action] || record.action}
+                        label={actionLabel(record.action)}
                       />
                     </td>
                     <td>{record.comments || <span className="text-muted">—</span>}</td>
