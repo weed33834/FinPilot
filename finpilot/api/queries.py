@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from finpilot.database.models import Conversation, Message, QueryRecord
 from finpilot.text2sql import NL2SQLEngine
 
-from .deps import get_current_user, get_db_session
+from .deps import get_current_user, get_db_session, tenant_of
 from .schemas import QueryRequest, QueryResponse
 
 router = APIRouter(prefix="/queries", tags=["queries"])
@@ -31,10 +31,6 @@ router = APIRouter(prefix="/queries", tags=["queries"])
 
 def _ok(data, message: str = "ok", code: int = 0):
     return {"code": code, "message": message, "data": data}
-
-
-def _tenant_of(user: dict) -> str:
-    return f"user_{user['user_id']}"
 
 
 # 单条查询记录持久化的 rows 截断上限，避免单条记录过大
@@ -180,7 +176,7 @@ def execute_query(
     current_user: dict = Depends(get_current_user),
 ):
     """自然语言 -> SQL -> 执行，返回结果集与置信度"""
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     user_id = str(current_user["user_id"])
     started = time.time()
 
@@ -316,7 +312,7 @@ def execute_query_wrapped(
     前端 types/query.ts NLQueryResult:
       { question, sql, data, execution_time_ms, confidence, backend, explanation, error }
     """
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     user_id = str(current_user["user_id"])
     started = time.time()
     engine = NL2SQLEngine(db)
@@ -464,7 +460,7 @@ def query_history(
 
     QueryRecord 表为空时（旧数据），回退到从会话 user 消息中提取。
     """
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     records = (
         db.query(QueryRecord)
         .filter(QueryRecord.tenant_id == tenant_id)

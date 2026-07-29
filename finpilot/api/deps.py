@@ -18,6 +18,16 @@ from finpilot.core.session import session_store
 SESSION_COOKIE = "session_id"
 
 
+def tenant_of(user: dict) -> str:
+    """从当前用户解析 tenant_id，统一返回 ``user_{user_id}`` 格式。
+
+    这是 agent.py / documents.py / queries.py 已在用的格式，保持向后兼容。
+    所有多租户隔离场景应统一调用本函数，避免出现 ``str(user_id)`` /
+    ``user_{user_id}`` 等不一致的 tenant_id 计算。
+    """
+    return f"user_{user.get('user_id', 'default')}"
+
+
 async def create_session(user_id: int, email: str, role: str, name: Optional[str] = None, tenant_id: Optional[str] = None) -> str:
     """创建 Redis 会话，返回 session_id。"""
     user_data = {

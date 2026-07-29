@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from finpilot.database.models import Notification
 
-from .deps import get_current_user, get_db_session
+from .deps import get_current_user, get_db_session, tenant_of
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -89,7 +89,7 @@ def list_notifications(
     这里统一返回 {items, total, page, page_size} 兼容两种消费方式。
     """
     uid = _user_id_of(current_user)
-    tenant_id = str(current_user.get("tenant_id") or current_user.get("user_id") or "default")
+    tenant_id = tenant_of(current_user)
     q = db.query(Notification).filter(
         Notification.tenant_id == tenant_id,
         Notification.user_id == uid,
@@ -122,7 +122,7 @@ def mark_notification_read(
 ) -> dict:
     """标记单条通知为已读。"""
     uid = _user_id_of(current_user)
-    tenant_id = str(current_user.get("tenant_id") or current_user.get("user_id") or "default")
+    tenant_id = tenant_of(current_user)
     try:
         pk = int(notification_id)
     except (TypeError, ValueError):
@@ -158,7 +158,7 @@ def mark_all_read(
 ) -> dict:
     """标记当前用户所有未读通知为已读。"""
     uid = _user_id_of(current_user)
-    tenant_id = str(current_user.get("tenant_id") or current_user.get("user_id") or "default")
+    tenant_id = tenant_of(current_user)
     updated = (
         db.query(Notification)
         .filter(

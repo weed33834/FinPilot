@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from finpilot.api.deps import get_current_user, get_db_session
+from finpilot.api.deps import get_current_user, get_db_session, tenant_of
 from finpilot.database.models import Report as ReportORM
 
 from .schemas import ReportRequest as ReportRequestSchema
@@ -86,7 +86,7 @@ async def list_reports(
     _perm: dict = Depends(require_permission(Permission.VIEW_FINANCIALS)),
 ) -> dict[str, Any]:
     """列出当前用户的研报（分页，按创建时间倒序）。需要 VIEW_FINANCIALS 权限。"""
-    tenant_id = str(current_user.get("user_id", "default"))
+    tenant_id = tenant_of(current_user)
     query = db.query(ReportORM).filter(ReportORM.tenant_id == tenant_id)
     total = query.count()
     items = (
@@ -119,7 +119,7 @@ def create_report(
     if not title:
         raise HTTPException(status_code=400, detail="title 不能为空")
 
-    tenant_id = str(current_user.get("user_id", "default"))
+    tenant_id = tenant_of(current_user)
     report = ReportORM(
         tenant_id=tenant_id,
         created_by=current_user.get("user_id"),
@@ -167,7 +167,7 @@ def get_report(
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """获取研报详情."""
-    tenant_id = str(current_user.get("user_id", "default"))
+    tenant_id = tenant_of(current_user)
     try:
         rid = int(report_id)
     except (TypeError, ValueError) as exc:
@@ -190,7 +190,7 @@ def export_report(
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
     """导出研报（生成下载 URL；当前以 data: URI 返回）."""
-    tenant_id = str(current_user.get("user_id", "default"))
+    tenant_id = tenant_of(current_user)
     try:
         rid = int(report_id)
     except (TypeError, ValueError) as exc:
@@ -267,7 +267,12 @@ def _generate_report_content(report_id: int, tenant_id: str) -> None:
 
     db = SessionLocal()
     try:
-        report = db.get(ReportORM, report_id)
+        # 带 tenant_id 过滤，防止跨租户读取报告（db.get 不触发 tenant_filter 事件）
+        report = (
+            db.query(ReportORM)
+            .filter(ReportORM.id == report_id, ReportORM.tenant_id == tenant_id)
+            .first()
+        )
         if not report:
             return
 
@@ -276,8 +281,8 @@ def _generate_report_content(report_id: int, tenant_id: str) -> None:
             year = params.get("year")
             period = params.get("period", "annual")
 
-            # 取最新一条财务报表作为数据源
-            fin_q = db.query(FinancialReport)
+            # 取最新一条财务报表作为数据源（按 tenant_id 隔离）
+            fin_q = db.query(FinancialReport).filter(FinancialReport.tenant_id == tenant_id)
             if year:
                 fin_q = fin_q.filter(FinancialReport.period.like(f"{year}%"))
             fin_report = fin_q.order_by(FinancialReport.created_at.desc()).first()
@@ -362,7 +367,7 @@ async def run_reconciliation(
     _perm: dict = Depends(require_permission(Permission.VIEW_FINANCIALS)),
 ) -> dict[str, Any]:
     """执行全部审计检查：净收入勾稽、现金验证、试算平衡、复式记账。"""
-    tenant_id = str(current_user.get("user_id", "default"))
+    tenant_id = tenant_of(current_user)
     from datetime import datetime as dt
     period_end = dt.utcnow()
     result = await run_full_audit(db, tenant_id, period_end)
@@ -381,7 +386,7 @@ def export_pdf_report(
     import tempfile
     from fastapi.responses import FileResponse
 
-    tenant_id = str(current_user.get("user_id", "default"))
+    tenant_id = tenant_of(current_user)
     model_cls = {
         "balance_sheet": BalanceSheet,
         "income_statement": IncomeStatement,

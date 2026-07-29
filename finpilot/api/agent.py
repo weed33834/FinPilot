@@ -26,7 +26,7 @@ from finpilot.llm.intent import classify_intent, extract_parameters
 from finpilot.database import crud
 from finpilot.database.models import Conversation, Message, LlmProvider, LlmModel
 
-from .deps import get_current_user, get_db_session
+from .deps import get_current_user, get_db_session, tenant_of
 from .rate_limit import limiter, get_user_key
 from .schemas import ChatRequest, ChatResponse
 
@@ -298,23 +298,24 @@ class CreateConversationRequest(BaseModel):
     title: Optional[str] = None
 
 
-def _tenant_of(user: dict) -> str:
-    """按用户生成租户 ID"""
-    return f"user_{user['user_id']}"
-
-
-def _load_agent_config(db: Session, conversation_id: str | None) -> Any:
+def _load_agent_config(db: Session, conversation_id: str | None, user_id: int | None = None) -> Any:
     """从会话加载绑定的 AgentConfig（best-effort）。
 
     因果链：管理员在后台配置 AgentConfig → 会话绑定 agent_config_id →
     运行时读取该配置并注入 run_agent（覆盖 system_prompt / model_id）。
     会话未绑定或配置已被禁用/删除时返回 None，回退到默认 ReAct 行为。
+
+    安全：传入 ``user_id`` 时校验会话归属当前用户，防止跨租户/跨用户
+    通过伪造 conversation_id 读取他人会话绑定的 AgentConfig。
     """
     if not conversation_id:
         return None
     try:
         conv = db.get(Conversation, int(conversation_id))
         if not conv or conv.agent_config_id is None:
+            return None
+        # 校验会话归属当前用户，防止跨用户/跨租户读取 AgentConfig
+        if user_id is not None and conv.user_id != user_id:
             return None
         from finpilot.database.models import AgentConfig
 
@@ -327,6 +328,37 @@ def _load_agent_config(db: Session, conversation_id: str | None) -> Any:
         return None
 
 
+def _build_assistant_message_meta(result: dict[str, Any], started_at: float) -> dict[str, Any]:
+    """从 run_agent 返回结果与计时构造 assistant 消息的运行时元数据.
+
+    提取规则（best-effort，缺字段一律回退 None）：
+    - model_name: result["model_name"]（run_agent 当前未填充，预留兼容）
+    - tokens_in / tokens_out: result["tokens_in"] / result["tokens_out"]
+      （run_agent 当前未填充，预留兼容）
+    - latency_ms: 由 chat 入口的 started_at 计算总耗时（毫秒，取整）
+    - tool_calls: result["steps"] 序列化为 JSON 字符串（ReAct 步骤草稿本）
+    """
+    latency_ms = int((time.time() - started_at) * 1000)
+
+    tool_calls_json: Optional[str]
+    steps = result.get("steps") or []
+    if steps:
+        try:
+            tool_calls_json = json.dumps(steps, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            tool_calls_json = None
+    else:
+        tool_calls_json = None
+
+    return {
+        "model_name": result.get("model_name"),
+        "tokens_in": result.get("tokens_in"),
+        "tokens_out": result.get("tokens_out"),
+        "latency_ms": latency_ms,
+        "tool_calls": tool_calls_json,
+    }
+
+
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("20/minute", key_func=get_user_key)
 def chat(
@@ -336,7 +368,7 @@ def chat(
     current_user: dict = Depends(get_current_user),
 ):
     """调用智能体运行时处理用户问题"""
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     user_id = str(current_user["user_id"])
 
     # 无会话则自动创建一个，标题取问题前 50 字
@@ -357,7 +389,7 @@ def chat(
     effective_question = _inject_file_context(req.question, getattr(req, "files", []) or [], tenant_id)
 
     # 从会话加载绑定的 AgentConfig（若有），让管理员后台配置真正接入运行时
-    agent_config = _load_agent_config(db, conversation_id)
+    agent_config = _load_agent_config(db, conversation_id, user_id=current_user["user_id"])
 
     # 运行智能体（内部按 thread_id 持久化 ReAct 状态）
     started_at = time.time()
@@ -406,8 +438,19 @@ def chat(
         except Exception:  # noqa: BLE001
             pass
 
-    # 记录助手回复
-    crud.add_message(db, int(conversation_id), "assistant", result.get("answer", ""))
+    # 记录助手回复（携带 LLM 运行时元数据：model/tokens/latency/tool_calls）
+    assistant_meta = _build_assistant_message_meta(result, started_at)
+    crud.add_message(
+        db,
+        int(conversation_id),
+        "assistant",
+        result.get("answer", ""),
+        model_name=assistant_meta["model_name"],
+        tokens_in=assistant_meta["tokens_in"],
+        tokens_out=assistant_meta["tokens_out"],
+        latency_ms=assistant_meta["latency_ms"],
+        tool_calls=assistant_meta["tool_calls"],
+    )
 
     return ChatResponse(
         answer=result.get("answer", ""),
@@ -440,7 +483,7 @@ def chat_stream(
       - {type: "done", message_id}
       - {type: "error", message}
     """
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     user_id = str(current_user["user_id"])
 
     # 复用 /chat 的会话管理逻辑
@@ -665,7 +708,7 @@ def create_conversation(
         db,
         user_id=current_user["user_id"],
         title=req.title or "新会话",
-        tenant_id=_tenant_of(current_user),
+        tenant_id=tenant_of(current_user),
     )
     return {
         "id": conv.id,

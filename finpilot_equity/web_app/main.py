@@ -45,14 +45,14 @@ from .admin_routes import router as admin_router  # noqa: E402
 init_db()
 init_default_admin()
 
-# Add middleware for request logging
+# Add middleware for request logging（先加，确保最先执行日志记录）
 app.add_middleware(RequestLoggerMiddleware)
 
 # Include admin routes
 app.include_router(admin_router)
 
 # ============== FinPilot AI 企业财务智能API ==============
-from finpilot.api import create_router, configure_cors  # noqa: E402
+from finpilot.api import create_router, configure_middleware  # noqa: E402
 from finpilot.database import init_db as init_finpilot_db  # noqa: E402
 from finpilot.database.connection import SessionLocal as FinPilotSessionLocal  # noqa: E402
 from finpilot.database.seed import seed_financial_data  # noqa: E402
@@ -62,8 +62,9 @@ init_finpilot_db()
 with FinPilotSessionLocal() as _fp_session:
     seed_financial_data(_fp_session)
 
-# 配置 CORS（允许前端 React 开发服务器访问）
-configure_cors(app)
+# 统一挂载全部中间件（CORS + Tenant + RateLimit + trace + lifespan/subscription_scheduler）
+# 解决双 App 架构断裂：此前仅挂载 CORS，缺失 TenantMiddleware / SlowAPIMiddleware / lifespan
+configure_middleware(app)
 # 挂载 /api/v1 路由
 app.include_router(create_router())
 

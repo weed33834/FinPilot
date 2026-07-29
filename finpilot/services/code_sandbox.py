@@ -410,3 +410,34 @@ class CodeSandbox:
     def _cleanup(path: str) -> None:
         with contextlib.suppress(OSError):
             os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# 便捷函数
+# ---------------------------------------------------------------------------
+
+
+def execute_sandboxed(code: str, timeout: int = 30) -> dict:
+    """便捷函数：实例化 CodeSandbox 执行代码并返回 dict 形式结果.
+
+    封装 ``CodeSandbox().execute(code, timeout=timeout)``，把
+    :class:`SandboxResult` 转换为普通 dict，便于不需要长期持有沙箱实例
+    的调用方（如工具测试）一次性使用。
+
+    Args:
+        code: 要执行的 Python 源码。
+        timeout: 超时秒数，默认 30。
+
+    Returns:
+        包含 stdout / stderr / exit_code / execution_time_ms / truncated
+        五个字段的 dict。
+    """
+    sandbox = CodeSandbox()
+    result = sandbox.execute(code, timeout=timeout)
+    return {
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "exit_code": result.exit_code,
+        "execution_time_ms": result.execution_time_ms,
+        "truncated": result.truncated,
+    }

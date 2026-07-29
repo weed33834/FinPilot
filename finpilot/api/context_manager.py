@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 
 from finpilot.database.models import Conversation, Memory, Message
 
-from ._compat_helpers import ok, parse_int_id, tenant_of
-from .deps import get_current_user, get_db_session
+from ._compat_helpers import ok, parse_int_id
+from .deps import get_current_user, get_db_session, tenant_of
 
 router = APIRouter(prefix="/context", tags=["context"])
 

@@ -123,7 +123,7 @@ def _register_one_server(
                 func=_make_mcp_tool_func(server_id, tool.name, param_names),
                 tags=["mcp", _sanitize_name(server_name)],
             )
-            tool_registry.register(spec)
+            tool_registry.register_spec(spec)
             names.add(registry_name)
             count += 1
             logger.info(

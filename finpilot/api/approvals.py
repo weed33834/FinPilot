@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from finpilot.database.models import Approval, Report
 
-from .deps import get_db_session, require_admin
+from .deps import get_db_session, require_admin, tenant_of
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
@@ -127,7 +127,13 @@ def approval_action(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"无效动作: {action}，支持 approve/reject/modify",
         )
-    r = db.get(Report, report_id)
+    # 带 tenant_id 过滤，防止跨租户审批他人报告（db.get 不触发 tenant_filter 事件）
+    tenant_id = tenant_of(current_user)
+    r = (
+        db.query(Report)
+        .filter(Report.id == report_id, Report.tenant_id == tenant_id)
+        .first()
+    )
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="报告不存在")
 

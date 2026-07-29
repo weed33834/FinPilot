@@ -69,6 +69,15 @@ class ToolRegistry:
 
         return decorator
 
+    def register_spec(self, spec: ToolSpec) -> None:
+        """直接注册一个已构造的 ToolSpec（非装饰器方式）。
+
+        供 MCP 工具桥接等外部模块使用：它们已构造好 ToolSpec 对象，
+        无需经过装饰器工厂。此前 ``mcp_tool_bridge`` 误用 ``register(spec)``
+        把 ToolSpec 当作 name 参数传入，导致 TypeError 被静默吞掉。
+        """
+        self._tools[spec.name] = spec
+
     def get(self, name: str) -> Optional[ToolSpec]:
         """按名获取工具规格，不存在返回 None。"""
         return self._tools.get(name)

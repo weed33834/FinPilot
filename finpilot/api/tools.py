@@ -649,10 +649,25 @@ def _test_python_function(tool: Tool, params: dict) -> dict:
         return {"success": False, "message": "config 中缺少 code 字段", "result": None}
 
     try:
+        import json as _json
+
         from finpilot.services.code_sandbox import execute_sandboxed
 
-        result = execute_sandboxed(code, params)
-        return {"success": True, "message": "Python 函数执行成功", "result": result}
+        # 把 params 注入为代码可见变量，便于被测函数引用；
+        # 用三引号包裹 JSON 避免 shell 转义，default=str 兜底非可序列化对象。
+        params_json = _json.dumps(params or {}, default=str, ensure_ascii=False)
+        full_code = (
+            "import json as _json\n"
+            f"params = _json.loads({params_json!r})\n"
+            f"{code}"
+        )
+        sb_result = execute_sandboxed(full_code)
+        success = sb_result["exit_code"] == 0
+        output = sb_result["stdout"] or sb_result["stderr"]
+        message = "Python 函数执行成功" if success else (
+            f"exit_code={sb_result['exit_code']}: {sb_result['stderr'][:200]}"
+        )
+        return {"success": success, "message": message, "result": output}
     except ImportError:
         return {
             "success": True,

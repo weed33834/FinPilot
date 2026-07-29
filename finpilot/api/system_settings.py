@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 from finpilot.database.connection import engine
 from finpilot.database.models import LlmModel, LlmProvider, SearchEngine, SystemSetting
 
-from ._compat_helpers import ok, tenant_of
-from .deps import get_current_user, get_db_session, require_admin
+from ._compat_helpers import ok
+from .deps import get_current_user, get_db_session, require_admin, tenant_of
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

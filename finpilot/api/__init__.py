@@ -3,8 +3,8 @@
 
 用法::
 
-    from finpilot.api import create_router, configure_cors
+    from finpilot.api import create_router, configure_middleware
 """
-from .router import configure_cors, create_router
+from .router import configure_cors, configure_middleware, create_router
 
-__all__ = ["create_router", "configure_cors"]
+__all__ = ["create_router", "configure_cors", "configure_middleware"]

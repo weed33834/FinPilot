@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 from finpilot.database.crud import encode_api_key
 from finpilot.database.models import SearchEngine
 
-from ._compat_helpers import ok, parse_int_id, tenant_of
-from .deps import get_db_session, require_admin
+from ._compat_helpers import ok, parse_int_id
+from .deps import get_db_session, require_admin, tenant_of
 
 router = APIRouter(prefix="/search-engines", tags=["search-engines"])
 

@@ -119,9 +119,33 @@ def get_conversations(
     )
 
 
-def add_message(db: Session, conversation_id: int, role: str, content: str) -> Message:
-    """向会话中添加一条消息（role: user/assistant/system）"""
-    msg = Message(conversation_id=conversation_id, role=role, content=content)
+def add_message(
+    db: Session,
+    conversation_id: int,
+    role: str,
+    content: str,
+    model_name: Optional[str] = None,
+    tokens_in: Optional[int] = None,
+    tokens_out: Optional[int] = None,
+    latency_ms: Optional[int] = None,
+    tool_calls: Optional[str] = None,
+) -> Message:
+    """向会话中添加一条消息（role: user/assistant/system）.
+
+    LLM 运行时元数据（model_name/tokens_in/tokens_out/latency_ms/tool_calls）
+    仅在 assistant 消息上填充；user/system 消息保留默认 None。
+    tool_calls 应为 JSON 字符串（调用方负责序列化）。
+    """
+    msg = Message(
+        conversation_id=conversation_id,
+        role=role,
+        content=content,
+        model_name=model_name,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        latency_ms=latency_ms,
+        tool_calls=tool_calls,
+    )
     db.add(msg)
     db.commit()
     db.refresh(msg)

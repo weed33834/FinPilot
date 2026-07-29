@@ -17,8 +17,8 @@ from sqlalchemy.orm import Session
 
 from finpilot.database.models import AgentConfig
 
-from ._compat_helpers import coerce_model_id, ok, parse_int_id, tenant_of
-from .deps import get_db_session, require_admin
+from ._compat_helpers import coerce_model_id, ok, parse_int_id
+from .deps import get_db_session, require_admin, tenant_of
 
 router = APIRouter(prefix="/agent-configs", tags=["agent-configs"])
 

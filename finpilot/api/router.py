@@ -159,10 +159,91 @@ def configure_cors(app: FastAPI) -> None:
     )
 
 
-def _ensure_default_admin() -> None:
-    """确保存在默认管理员账号（admin@finpilot.ai / admin123），幂等。
+def configure_middleware(app: FastAPI) -> None:
+    """为任意 FastAPI app 统一挂载全部中间件与 lifespan。
 
-    先建表再建用户，失败不阻断路由创建。同时导入默认 LLM 供应商与模型。
+    解决双 App 架构断裂：``finpilot_equity.web_app.main.app`` 此前仅挂载 CORS，
+    缺失 TenantMiddleware / SlowAPIMiddleware / trace_middleware / subscription_scheduler lifespan。
+    现统一通过本函数挂载，两个入口（``router.app`` 与 ``web_app.main.app``）行为一致。
+
+    调用顺序：CORS → Tenant → SlowAPI → trace（FastAPI 中间件按 LIFO 执行，
+    最后 add 的最先执行，故 trace 放最后确保最先注入 trace_id）。
+    """
+    # lifespan：启动订阅调度后台线程，停止时优雅关闭
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        # 1. 启动订阅调度后台线程
+        try:
+            from finpilot.services.subscription_scheduler import start_scheduler
+            start_scheduler()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("subscription_scheduler_start_failed: %s", exc)
+        # 2. 批量加载 MCP 工具到 tool_registry（此前从未在启动时调用，导致 MCP 工具永远不可用）
+        try:
+            from finpilot.database import SessionLocal
+            from finpilot.services.mcp_tool_bridge import register_mcp_tools
+            with SessionLocal() as _db:
+                n = register_mcp_tools("default", _db)
+                if n:
+                    logger.info("mcp_tools_registered_at_startup: %d", n)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("mcp_tools_startup_load_failed: %s", exc)
+        try:
+            yield
+        finally:
+            try:
+                from finpilot.services.subscription_scheduler import stop_scheduler
+                stop_scheduler()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # 设置 lifespan（若 app 已有 lifespan 则跳过，避免覆盖）
+    if app.router.lifespan_context is None:
+        app.router.lifespan = _lifespan
+
+    # Rate Limiting
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
+
+    # 多租户中间件 — 从 X-Tenant-ID 请求头或用户会话提取 tenant_id
+    app.add_middleware(TenantMiddleware)
+
+    # 链路追踪中间件 — 每个请求生成 trace_id 注入 structlog 上下文中
+    @app.middleware("http")
+    async def trace_middleware(request: Request, call_next):
+        trace_id = request.headers.get("X-Trace-ID", str(uuid.uuid4()))
+        trace_id_var.set(trace_id)
+        structlog.contextvars.bind_contextvars(trace_id=trace_id)
+        response = await call_next(request)
+        response.headers["X-Trace-ID"] = trace_id
+        return response
+
+    # CORS
+    configure_cors(app)
+
+    # 全局异常处理器 — 脱敏未捕获异常，避免堆栈泄露给前端
+    @app.exception_handler(Exception)
+    async def _global_exception_handler(request: Request, exc: Exception):
+        logger.exception("unhandled_exception path=%s method=%s", request.url.path, request.method)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": -1,
+                "message": "服务器内部错误，请联系管理员",
+                "data": None,
+            },
+            headers={"X-Trace-ID": request.headers.get("X-Trace-ID", "")},
+        )
+
+
+def _ensure_default_admin() -> None:
+    """确保存在默认管理员账号，幂等。
+
+    安全改进：管理员密码从环境变量 ``FINPILOT_ADMIN_PASSWORD`` 读取，
+    未设置则不创建默认管理员（避免硬编码 admin123 的安全风险）。
+    同时导入默认 LLM 供应商与模型。
     """
     from finpilot.database import SessionLocal, crud, init_db
     from finpilot.database.models import LlmProvider, LlmModel
@@ -173,16 +254,25 @@ def _ensure_default_admin() -> None:
     except SQLAlchemyError:
         return
 
+    admin_email = os.getenv("FINPILOT_ADMIN_EMAIL", "admin@finpilot.ai")
+    admin_password = os.getenv("FINPILOT_ADMIN_PASSWORD", "")
+
     db = SessionLocal()
     try:
-        if not crud.get_user_by_email(db, "admin@finpilot.ai"):
-            crud.create_user(
-                db,
-                email="admin@finpilot.ai",
-                password_hash=hash_password("admin123"),
-                name="管理员",
-                role="admin",
-            )
+        if not crud.get_user_by_email(db, admin_email):
+            if not admin_password:
+                logger.warning(
+                    "default_admin_skipped: FINPILOT_ADMIN_PASSWORD 未设置，"
+                    "跳过默认管理员创建。请设置环境变量或手动创建管理员。"
+                )
+            else:
+                crud.create_user(
+                    db,
+                    email=admin_email,
+                    password_hash=hash_password(admin_password),
+                    name="管理员",
+                    role="admin",
+                )
 
         # 导入默认 LLM 供应商与模型（基于 .env 配置）
         if not db.query(LlmProvider).first():
@@ -217,51 +307,6 @@ def _ensure_default_admin() -> None:
 # 模块级 FastAPI 应用实例（供 uvicorn 直接加载）
 setup_logging()
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """应用生命周期：启动订阅调度后台线程，停止时优雅关闭.
-
-    替代 FastAPI 0.93+ 已弃用的 ``@app.on_event('startup'/'shutdown')``。
-    可由 ``FINPILOT_SUBSCRIPTION_SCHEDULER=0`` 关闭。
-    """
-    try:
-        from finpilot.services.subscription_scheduler import start_scheduler
-
-        start_scheduler()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("subscription_scheduler_start_failed: %s", exc)
-    try:
-        yield
-    finally:
-        try:
-            from finpilot.services.subscription_scheduler import stop_scheduler
-
-            stop_scheduler()
-        except Exception:  # noqa: BLE001
-            pass
-
-
-app = FastAPI(title="FinPilot AI", version="1.0.0", lifespan=lifespan)
-
-# ── Rate Limiting 全局配置 ──
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# SlowAPIMiddleware 从 app.state.limiter 读取 Limiter 实例，全局默认 100/min
-app.add_middleware(SlowAPIMiddleware)
-
-# 链路追踪中间件 — 每个请求生成 trace_id 注入 structlog 上下文中
-@app.middleware("http")
-async def trace_middleware(request: Request, call_next):
-    trace_id = request.headers.get("X-Trace-ID", str(uuid.uuid4()))
-    trace_id_var.set(trace_id)
-    structlog.contextvars.bind_contextvars(trace_id=trace_id)
-    response = await call_next(request)
-    response.headers["X-Trace-ID"] = trace_id
-    return response
-
-# 多租户中间件 — 从 X-Tenant-ID 请求头或用户会话提取 tenant_id
-app.add_middleware(TenantMiddleware)
-
-configure_cors(app)
+app = FastAPI(title="FinPilot AI", version="1.0.0")
+configure_middleware(app)
 app.include_router(create_router())

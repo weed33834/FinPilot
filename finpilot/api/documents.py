@@ -18,11 +18,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy.orm import Session
 
 from finpilot.database import crud
-from finpilot.database.models import FinancialAccount, FinancialReport
+from finpilot.database.models import Document, FinancialAccount, FinancialReport
 from finpilot.parser import ParserError, get_parser
 from finpilot.rag import RagService
 
-from .deps import get_current_user, get_db_session
+from .deps import get_current_user, get_db_session, tenant_of
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -52,11 +52,6 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # 文件大小上限 50MB
 MAX_FILE_SIZE = 50 * 1024 * 1024
-
-
-def _tenant_of(user: dict) -> str:
-    """按用户生成租户 ID，用于文档隔离"""
-    return f"user_{user['user_id']}"
 
 
 def _parse_number(value: str) -> float | None:
@@ -173,9 +168,8 @@ def list_documents(
     即 ``{code, message, data: {items, total, page, page_size}}``。
     此前返回裸数组 + skip/limit 参数，导致前端 ``resp.data.data.items`` 为 undefined。
     """
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     # crud.list_documents 不支持 status 过滤，这里在查询层补上
-    from finpilot.database.models import Document
     q = db.query(Document).filter(Document.tenant_id == tenant_id)
     if status:
         q = q.filter(Document.status == status)
@@ -223,7 +217,7 @@ async def upload_document(
     saved_path = UPLOAD_DIR / saved_name
     saved_path.write_bytes(content)
 
-    tenant_id = _tenant_of(current_user)
+    tenant_id = tenant_of(current_user)
     # 创建文档记录（状态 pending）
     doc = crud.create_document(
         db,
@@ -369,7 +363,13 @@ def get_document(
     current_user: dict = Depends(get_current_user),
 ):
     """获取文档详情."""
-    doc = crud.get_document(db, document_id)
+    # 带 tenant_id 过滤，防止跨租户读取（db.get 不触发 tenant_filter 事件）
+    tenant_id = tenant_of(current_user)
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.tenant_id == tenant_id)
+        .first()
+    )
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
     return _ok(_doc_to_dict(doc))
@@ -382,7 +382,13 @@ def delete_document(
     current_user: dict = Depends(get_current_user),
 ):
     """删除文档（同时删除物理文件）."""
-    doc = crud.get_document(db, document_id)
+    # 带 tenant_id 过滤，防止跨租户删除（db.get 不触发 tenant_filter 事件）
+    tenant_id = tenant_of(current_user)
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.tenant_id == tenant_id)
+        .first()
+    )
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
     # 删除物理文件，不存在则忽略

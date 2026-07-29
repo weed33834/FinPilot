@@ -11,15 +11,15 @@ from typing import Any, Optional
 
 from fastapi import HTTPException, status
 
+# 统一 tenant_id 计算：从 deps 导入并 re-export，保持向后兼容。
+# 此前本函数用 ``str(user.get("tenant_id") or user.get("user_id") or "default")``
+# 产生 ``"1"``，与 agent.py 的 ``"user_1"`` 不一致，导致多租户隔离失效。
+from finpilot.api.deps import tenant_of  # noqa: F401
+
 
 def ok(data: Any, message: str = "success") -> dict:
     """统一 ``{code, message, data}`` 包装，与前端 ``DataResponse<T>`` 对齐。"""
     return {"code": 0, "message": message, "data": data}
-
-
-def tenant_of(user: dict) -> str:
-    """从当前用户解析 tenant_id：优先 ``tenant_id``，其次 ``user_id``，兜底 ``default``。"""
-    return str(user.get("tenant_id") or user.get("user_id") or "default")
 
 
 def parse_int_id(_id: str, label: str = "记录") -> int:
