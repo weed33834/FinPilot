@@ -1,14 +1,14 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 function NotFoundPage() {
+  const { t } = useTranslation('admin')
   return (
-    <div className="container" style={{ textAlign: 'center', paddingTop: '80px' }}>
-      <p style={{ fontSize: '72px', fontWeight: 700, color: 'var(--primary)', margin: 0, lineHeight: 1 }}>404</p>
-      <h1 style={{ marginTop: '16px' }}>页面未找到</h1>
-      <p className="text-muted" style={{ marginBottom: '24px' }}>您访问的页面不存在或已被移除。</p>
-      <Link to="/dashboard" className="btn" style={{ display: 'inline-block' }}>
-        返回首页
-      </Link>
+    <div className="container" style={{ textAlign: 'center', paddingTop: '80px' }} role="alert" aria-live="polite">
+      <p className="not-found-code">{t('notFound.code')}</p>
+      <h1>{t('notFound.title')}</h1>
+      <p className="text-muted">{t('notFound.description')}</p>
+      <Link to="/agent" className="btn">{t('notFound.backHome')}</Link>
     </div>
   )
 }

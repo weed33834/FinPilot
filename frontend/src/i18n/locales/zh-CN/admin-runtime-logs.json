@@ -1,0 +1,175 @@
+{
+  "title": "运行记录",
+  "description": "完整留存 API 调用、问答交互、模块启用状态，实时监测全流程运行状态",
+  "tabs": {
+    "stats": "总览",
+    "logs": "日志列表",
+    "conversations": "问答交互",
+    "modules": "模块状态"
+  },
+  "actions": {
+    "refresh": "刷新",
+    "refreshTitle": "刷新所有数据",
+    "export": "导出",
+    "exporting": "导出中…",
+    "exportTitle": "按当前筛选条件导出 JSON",
+    "batchClean": "批量清理",
+    "cleaning": "清理中…",
+    "cleanTitle": "按分类 / 天数批量清理",
+    "search": "查询",
+    "searching": "查询中…",
+    "reset": "重置",
+    "detail": "详情",
+    "delete": "删除",
+    "deleting": "删除中…",
+    "close": "关闭",
+    "cancel": "取消",
+    "executeClean": "执行清理"
+  },
+  "stats": {
+    "loading": "正在加载统计数据…",
+    "totalLogs": "总日志数",
+    "totalLogsHint": "Total",
+    "todayNew": "今日新增",
+    "todayNewHint": "Today",
+    "successRate": "成功率",
+    "successRateHint": "Success Rate",
+    "recentErrors": "最近错误数",
+    "recentErrorsHint": "Recent Errors"
+  },
+  "distributions": {
+    "category": "分类分布",
+    "level": "等级分布",
+    "sourceTop": "来源 Top 10",
+    "recentErrors": "最近错误（最多 10 条）"
+  },
+  "table": {
+    "time": "时间",
+    "category": "分类",
+    "level": "等级",
+    "source": "来源",
+    "event": "事件",
+    "eventMessage": "事件 / 消息",
+    "duration": "耗时",
+    "status": "状态",
+    "actions": "操作"
+  },
+  "filters": {
+    "category": "分类",
+    "level": "等级",
+    "status": "状态",
+    "keyword": "关键词",
+    "startTime": "起始时间",
+    "endTime": "结束时间",
+    "keywordPlaceholder": "搜索事件 / 消息",
+    "allCategories": "全部分类",
+    "categories": {
+      "api": "API 调用",
+      "llm": "LLM 调用",
+      "tool": "工具调用",
+      "mcp": "MCP 调用",
+      "agent": "Agent 交互",
+      "conversation": "问答交互",
+      "workflow": "工作流",
+      "sandbox": "沙箱",
+      "auth": "认证授权"
+    },
+    "allLevels": "全部等级",
+    "levels": {
+      "debug": "DEBUG",
+      "info": "INFO",
+      "warning": "WARN",
+      "error": "ERROR",
+      "critical": "CRITICAL"
+    },
+    "allStatus": "全部状态",
+    "status": {
+      "success": "成功",
+      "failed": "失败"
+    }
+  },
+  "detail": {
+    "title": "日志详情 — {{id}}…",
+    "loading": "加载详情…",
+    "time": "时间",
+    "category": "分类",
+    "source": "来源",
+    "event": "事件",
+    "level": "等级",
+    "status": "状态",
+    "duration": "耗时",
+    "statusCode": "状态码",
+    "userId": "用户 ID",
+    "ip": "IP",
+    "sessionId": "会话 ID",
+    "tenant": "租户",
+    "message": "消息",
+    "payload": "Payload"
+  },
+  "conversations": {
+    "loading": "正在加载问答交互…",
+    "totalConversations": "会话总数",
+    "totalConversationsHint": "Conversations",
+    "totalMessages": "消息总数",
+    "totalMessagesHint": "Messages",
+    "userMessages": "用户消息",
+    "userMessagesHint": "User",
+    "assistantMessages": "助手消息",
+    "assistantMessagesHint": "Assistant",
+    "recentMessages": "最近 {{count}} 条消息",
+    "unknownRole": "unknown"
+  },
+  "modules": {
+    "loading": "正在加载模块状态…",
+    "checkedAt": "检查时间：{{time}}",
+    "total": "总数",
+    "active": "启用",
+    "inactive": "禁用",
+    "activeRate": "启用率"
+  },
+  "empty": {
+    "loading": "加载中…",
+    "noData": "暂无数据",
+    "noStats": "暂无统计数据",
+    "noLogs": "暂无运行日志",
+    "noLogFound": "未找到日志",
+    "noErrors": "暂无错误记录",
+    "noConversations": "暂无问答交互数据",
+    "noMessages": "暂无消息",
+    "noModules": "暂无模块状态数据"
+  },
+  "payload": {
+    "empty": "（无）"
+  },
+  "pagination": {
+    "info": "第 {{page}} / {{totalPages}} 页（共 {{total}} 条）",
+    "prev": "上一页",
+    "next": "下一页"
+  },
+  "toast": {
+    "deleted": "已删除该日志",
+    "deleteFailed": "删除失败",
+    "exportSuccess": "导出成功",
+    "exportSuccessDesc": "共 {{count}} 条记录",
+    "exportFailed": "导出失败",
+    "cleanSuccess": "批量清理完成",
+    "cleanSuccessDesc": "共删除 {{count}} 条日志",
+    "cleanFailed": "批量清理失败",
+    "refreshed": "已刷新"
+  },
+  "confirm": {
+    "deleteTitle": "删除运行日志",
+    "deleteMessage": "确认删除日志「{{target}}」？该操作不可恢复。",
+    "deleteConfirm": "删除",
+    "batchCleanTitle": "确认批量清理",
+    "batchCleanConfirm": "执行清理",
+    "batchCleanMessageAll": "将删除 全部分类 中早于 <strong>{{days}}</strong> 天的日志，该操作不可恢复。",
+    "batchCleanMessageCategory": "将删除 <strong>分类「{{category}}」</strong> 中早于 <strong>{{days}}</strong> 天的日志，该操作不可恢复。"
+  },
+  "cleanModal": {
+    "title": "批量清理运行日志",
+    "categoryLabel": "分类（留空表示全部分类）",
+    "daysLabel": "清理 N 天前的日志",
+    "daysHint": "将删除创建时间早于 {{days}} 天前的日志记录。"
+  }
+}

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Trans, useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import Modal from '../../components/ui/Modal.tsx'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
@@ -22,6 +24,41 @@ import {
 } from '../../api/runtimeLogs.ts'
 
 type Tab = 'stats' | 'logs' | 'conversations' | 'modules'
+
+/* 筛选选项 value 列表（label 走 i18n，在组件内构建） */
+function categoryOptions(t: TFunction) {
+  return [
+    { value: '', label: t('filters.allCategories') },
+    { value: 'api', label: t('filters.categories.api') },
+    { value: 'llm', label: t('filters.categories.llm') },
+    { value: 'tool', label: t('filters.categories.tool') },
+    { value: 'mcp', label: t('filters.categories.mcp') },
+    { value: 'agent', label: t('filters.categories.agent') },
+    { value: 'conversation', label: t('filters.categories.conversation') },
+    { value: 'workflow', label: t('filters.categories.workflow') },
+    { value: 'sandbox', label: t('filters.categories.sandbox') },
+    { value: 'auth', label: t('filters.categories.auth') },
+  ]
+}
+
+function levelOptions(t: TFunction) {
+  return [
+    { value: '', label: t('filters.allLevels') },
+    { value: 'debug', label: t('filters.levels.debug') },
+    { value: 'info', label: t('filters.levels.info') },
+    { value: 'warning', label: t('filters.levels.warning') },
+    { value: 'error', label: t('filters.levels.error') },
+    { value: 'critical', label: t('filters.levels.critical') },
+  ]
+}
+
+function statusOptions(t: TFunction) {
+  return [
+    { value: '', label: t('filters.allStatus') },
+    { value: 'true', label: t('filters.status.success') },
+    { value: 'false', label: t('filters.status.failed') },
+  ]
+}
 
 /* ------------------------------------------------------------------ */
 /*  辅助                                                                */
@@ -101,8 +138,9 @@ function StatCard({
 
 /* 横向 bar：data = [{label, value}] */
 function BarList({ data }: { data: Array<{ label: string; value: number }> }) {
+  const { t } = useTranslation('adminRuntimeLogs')
   if (data.length === 0) {
-    return <div style={{ padding: 16, textAlign: 'center', color: '#9aa' }}>暂无数据</div>
+    return <EmptyState title={t('empty.noData')} size="sm" />
   }
   const max = Math.max(...data.map((d) => d.value), 1)
   return (
@@ -157,10 +195,11 @@ function BarList({ data }: { data: Array<{ label: string; value: number }> }) {
 
 /* payload JSON 展示 */
 function PayloadView({ raw }: { raw: string | null }) {
+  const { t } = useTranslation('adminRuntimeLogs')
   const parsed = useMemo(() => parsePayloadJson(raw), [raw])
   let pretty: string
   if (parsed === null || parsed === undefined) {
-    pretty = '（无）'
+    pretty = t('payload.empty')
   } else if (typeof parsed === 'string') {
     // 解析失败回退为原始字符串
     pretty = parsed
@@ -186,8 +225,9 @@ function PayloadView({ raw }: { raw: string | null }) {
 /* ------------------------------------------------------------------ */
 
 function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['stats']; isLoading: boolean }) {
-  if (isLoading && !stats) return <Loading text="正在加载统计数据…" />
-  if (!stats) return <EmptyState title="暂无统计数据" icon="audit" />
+  const { t } = useTranslation('adminRuntimeLogs')
+  if (isLoading && !stats) return <Loading text={t('stats.loading')} />
+  if (!stats) return <EmptyState title={t('empty.noStats')} icon="audit" />
 
   const categoryRows = Object.entries(stats.by_category || {})
     .map(([label, value]) => ({ label, value: Number(value) }))
@@ -217,18 +257,18 @@ function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['st
           marginBottom: 16,
         }}
       >
-        <StatCard label="总日志数" value={stats.total ?? 0} hint="Total" />
-        <StatCard label="今日新增" value={stats.today ?? 0} hint="Today" accent="#3b82f6" />
+        <StatCard label={t('stats.totalLogs')} value={stats.total ?? 0} hint={t('stats.totalLogsHint')} />
+        <StatCard label={t('stats.todayNew')} value={stats.today ?? 0} hint={t('stats.todayNewHint')} accent="#3b82f6" />
         <StatCard
-          label="成功率"
+          label={t('stats.successRate')}
           value={`${successRate.toFixed(1)}%`}
-          hint="Success Rate"
+          hint={t('stats.successRateHint')}
           accent={successRate >= 95 ? '#22c55e' : successRate >= 80 ? '#eab308' : '#ef4444'}
         />
         <StatCard
-          label="最近错误数"
+          label={t('stats.recentErrors')}
           value={recentErrors.length}
-          hint="Recent Errors"
+          hint={t('stats.recentErrorsHint')}
           accent={recentErrors.length === 0 ? '#22c55e' : '#ef4444'}
         />
       </div>
@@ -244,7 +284,7 @@ function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['st
         {/* 分类分布 */}
         <div className="admin-card">
           <div className="admin-card-header">
-            <span className="admin-card-title">分类分布</span>
+            <span className="admin-card-title">{t('distributions.category')}</span>
           </div>
           <BarList data={categoryRows} />
         </div>
@@ -252,10 +292,10 @@ function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['st
         {/* 等级分布 */}
         <div className="admin-card">
           <div className="admin-card-header">
-            <span className="admin-card-title">等级分布</span>
+            <span className="admin-card-title">{t('distributions.level')}</span>
           </div>
           {levelEntries.length === 0 ? (
-            <div style={{ padding: 16, textAlign: 'center', color: '#9aa' }}>暂无数据</div>
+            <EmptyState title={t('empty.noData')} size="sm" />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {levelEntries.map(([level, count]) => {
@@ -293,7 +333,7 @@ function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['st
       {/* 来源分布 */}
       <div className="admin-card" style={{ marginBottom: 16 }}>
         <div className="admin-card-header">
-          <span className="admin-card-title">来源 Top 10</span>
+          <span className="admin-card-title">{t('distributions.sourceTop')}</span>
         </div>
         <BarList data={sourceRows} />
       </div>
@@ -301,20 +341,20 @@ function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['st
       {/* 最近错误 */}
       <div className="admin-card">
         <div className="admin-card-header">
-          <span className="admin-card-title">最近错误（最多 10 条）</span>
+          <span className="admin-card-title">{t('distributions.recentErrors')}</span>
         </div>
         {recentErrors.length === 0 ? (
-          <EmptyState title="暂无错误记录" icon="check" />
+          <EmptyState title={t('empty.noErrors')} icon="check" />
         ) : (
           <div className="admin-table-wrapper">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th style={{ width: 160 }}>时间</th>
-                  <th style={{ width: 80 }}>等级</th>
-                  <th style={{ width: 110 }}>分类</th>
-                  <th style={{ width: 130 }}>来源</th>
-                  <th>事件 / 消息</th>
+                  <th style={{ width: 160 }}>{t('table.time')}</th>
+                  <th style={{ width: 80 }}>{t('table.level')}</th>
+                  <th style={{ width: 110 }}>{t('table.category')}</th>
+                  <th style={{ width: 130 }}>{t('table.source')}</th>
+                  <th>{t('table.eventMessage')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -354,34 +394,6 @@ function StatsTab({ stats, isLoading }: { stats: ReturnType<typeof useStats>['st
 /*  日志列表 Tab                                                        */
 /* ------------------------------------------------------------------ */
 
-const CATEGORY_OPTIONS = [
-  { value: '', label: '全部分类' },
-  { value: 'api', label: 'API 调用' },
-  { value: 'llm', label: 'LLM 调用' },
-  { value: 'tool', label: '工具调用' },
-  { value: 'mcp', label: 'MCP 调用' },
-  { value: 'agent', label: 'Agent 交互' },
-  { value: 'conversation', label: '问答交互' },
-  { value: 'workflow', label: '工作流' },
-  { value: 'sandbox', label: '沙箱' },
-  { value: 'auth', label: '认证授权' },
-]
-
-const LEVEL_OPTIONS = [
-  { value: '', label: '全部等级' },
-  { value: 'debug', label: 'DEBUG' },
-  { value: 'info', label: 'INFO' },
-  { value: 'warning', label: 'WARN' },
-  { value: 'error', label: 'ERROR' },
-  { value: 'critical', label: 'CRITICAL' },
-]
-
-const SUCCESS_OPTIONS = [
-  { value: '', label: '全部状态' },
-  { value: 'true', label: '成功' },
-  { value: 'false', label: '失败' },
-]
-
 function LogsTab({
   filters,
   setFilters,
@@ -398,6 +410,7 @@ function LogsTab({
   cleaning: boolean
 }) {
   const queryClient = useQueryClient()
+  const { t } = useTranslation('adminRuntimeLogs')
   const [page, setPage] = useState(1)
   const [detailId, setDetailId] = useState<string | null>(null)
   const pageSize = 20
@@ -433,10 +446,10 @@ function LogsTab({
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteRuntimeLog(id),
     onSuccess: () => {
-      toast.success('已删除该日志')
+      toast.success(t('toast.deleted'))
       void queryClient.invalidateQueries({ queryKey: ['runtime-logs'] })
     },
-    onError: (err: unknown) => toast.error('删除失败', getErrorMessage(err)),
+    onError: (err: unknown) => toast.error(t('toast.deleteFailed'), getErrorMessage(err)),
   })
 
   const handleSearch = () => {
@@ -464,10 +477,10 @@ function LogsTab({
 
   const handleDelete = async (item: RuntimeLogItem) => {
     const ok = await confirm({
-      title: '删除运行日志',
-      message: `确认删除日志「${item.event || item.id}」？该操作不可恢复。`,
+      title: t('confirm.deleteTitle'),
+      message: t('confirm.deleteMessage', { target: item.event || item.id }),
       variant: 'danger',
-      confirmText: '删除',
+      confirmText: t('confirm.deleteConfirm'),
     })
     if (!ok) return
     deleteMut.mutate(item.id)
@@ -481,56 +494,56 @@ function LogsTab({
         style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}
       >
         <div className="admin-form-group" style={{ marginBottom: 0 }}>
-          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>分类</label>
+          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>{t('filters.category')}</label>
           <select
             className="admin-filter-select"
             value={filters.category}
             onChange={(e) => setFilters({ ...filters, category: e.target.value })}
           >
-            {CATEGORY_OPTIONS.map((o) => (
+            {categoryOptions(t).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>
         <div className="admin-form-group" style={{ marginBottom: 0 }}>
-          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>等级</label>
+          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>{t('filters.level')}</label>
           <select
             className="admin-filter-select"
             value={filters.level}
             onChange={(e) => setFilters({ ...filters, level: e.target.value })}
           >
-            {LEVEL_OPTIONS.map((o) => (
+            {levelOptions(t).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>
         <div className="admin-form-group" style={{ marginBottom: 0 }}>
-          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>状态</label>
+          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>{t('filters.status')}</label>
           <select
             className="admin-filter-select"
             value={filters.success}
             onChange={(e) => setFilters({ ...filters, success: e.target.value })}
           >
-            {SUCCESS_OPTIONS.map((o) => (
+            {statusOptions(t).map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
         </div>
         <div className="admin-form-group" style={{ marginBottom: 0, flex: 1, minWidth: 200 }}>
-          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>关键词</label>
+          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>{t('filters.keyword')}</label>
           <input
             className="admin-search-input"
             style={{ width: '100%' }}
             value={filters.keyword}
             onChange={(e) => setFilters({ ...filters, keyword: e.target.value })}
-            placeholder="搜索事件 / 消息"
+            placeholder={t('filters.keywordPlaceholder')}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSearch()
             }}
           />
         </div>
         <div className="admin-form-group" style={{ marginBottom: 0 }}>
-          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>起始时间</label>
+          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>{t('filters.startTime')}</label>
           <input
             type="datetime-local"
             className="admin-filter-select"
@@ -539,7 +552,7 @@ function LogsTab({
           />
         </div>
         <div className="admin-form-group" style={{ marginBottom: 0 }}>
-          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>结束时间</label>
+          <label style={{ fontSize: '0.65rem', display: 'block', marginBottom: 2, color: 'var(--color-text-muted)' }}>{t('filters.endTime')}</label>
           <input
             type="datetime-local"
             className="admin-filter-select"
@@ -550,18 +563,18 @@ function LogsTab({
         <div className="admin-actions" style={{ marginBottom: 0 }}>
           <button className="btn btn-primary" onClick={handleSearch} disabled={isLoading}>
             <ICONS.search size={14} />
-            {isLoading ? '查询中…' : '查询'}
+            {isLoading ? t('actions.searching') : t('actions.search')}
           </button>
           <button className="btn btn-secondary" onClick={handleReset} disabled={isLoading}>
-            重置
+            {t('actions.reset')}
           </button>
-          <button className="btn btn-secondary" onClick={onExport} disabled={exporting} title="按当前筛选条件导出 JSON">
+          <button className="btn btn-secondary" onClick={onExport} disabled={exporting} title={t('actions.exportTitle')}>
             <ICONS.download size={14} />
-            {exporting ? '导出中…' : '导出'}
+            {exporting ? t('actions.exporting') : t('actions.export')}
           </button>
-          <button className="btn btn-danger" onClick={onBatchDelete} disabled={cleaning} title="按分类 / 天数批量清理">
+          <button className="btn btn-danger" onClick={onBatchDelete} disabled={cleaning} title={t('actions.cleanTitle')}>
             <ICONS.empty size={14} />
-            {cleaning ? '清理中…' : '批量清理'}
+            {cleaning ? t('actions.cleaning') : t('actions.batchClean')}
           </button>
         </div>
       </div>
@@ -570,21 +583,21 @@ function LogsTab({
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: 160 }}>时间</th>
-              <th style={{ width: 110 }}>分类</th>
-              <th style={{ width: 80 }}>等级</th>
-              <th style={{ width: 140 }}>来源</th>
-              <th>事件</th>
-              <th style={{ width: 100 }}>耗时</th>
-              <th style={{ width: 90 }}>状态</th>
-              <th style={{ width: 150 }}>操作</th>
+              <th style={{ width: 160 }}>{t('table.time')}</th>
+              <th style={{ width: 110 }}>{t('table.category')}</th>
+              <th style={{ width: 80 }}>{t('table.level')}</th>
+              <th style={{ width: 140 }}>{t('table.source')}</th>
+              <th>{t('table.event')}</th>
+              <th style={{ width: 100 }}>{t('table.duration')}</th>
+              <th style={{ width: 90 }}>{t('table.status')}</th>
+              <th style={{ width: 150 }}>{t('table.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                  {isLoading || isFetching ? '加载中…' : '暂无运行日志'}
+                  {isLoading || isFetching ? t('empty.loading') : t('empty.noLogs')}
                 </td>
               </tr>
             ) : (
@@ -615,9 +628,9 @@ function LogsTab({
                     </td>
                     <td>
                       {it.success ? (
-                        <span className="badge success">成功</span>
+                        <span className="badge success">{t('filters.status.success')}</span>
                       ) : (
-                        <span className="badge failed">失败</span>
+                        <span className="badge failed">{t('filters.status.failed')}</span>
                       )}
                     </td>
                     <td>
@@ -626,14 +639,14 @@ function LogsTab({
                           className="admin-action-btn"
                           onClick={() => setDetailId(it.id)}
                         >
-                          详情
+                          {t('actions.detail')}
                         </button>
                         <button
                           className="admin-action-btn"
                           onClick={() => void handleDelete(it)}
                           disabled={deleteMut.isPending && deleteMut.variables === it.id}
                         >
-                          {deleteMut.isPending && deleteMut.variables === it.id ? '删除中…' : '删除'}
+                          {deleteMut.isPending && deleteMut.variables === it.id ? t('actions.deleting') : t('actions.delete')}
                         </button>
                       </div>
                     </td>
@@ -648,7 +661,7 @@ function LogsTab({
       {total > 0 && (
         <div className="admin-pagination">
           <span className="page-info">
-            第 {page} / {totalPages} 页（共 {total} 条）
+            {t('pagination.info', { page, totalPages, total })}
           </span>
           <div className="page-buttons">
             <button
@@ -656,14 +669,14 @@ function LogsTab({
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
             >
-              上一页
+              {t('pagination.prev')}
             </button>
             <button
               className="page-btn"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
             >
-              下一页
+              {t('pagination.next')}
             </button>
           </div>
         </div>
@@ -680,6 +693,7 @@ function LogsTab({
 }
 
 function LogDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
+  const { t } = useTranslation('adminRuntimeLogs')
   const { data, isLoading } = useQuery({
     queryKey: ['runtime-logs', 'detail', id],
     queryFn: () => getRuntimeLogDetail(id).then((r) => r.data.data),
@@ -687,18 +701,18 @@ function LogDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
 
   return (
     <Modal
-      title={`日志详情 — ${id.slice(0, 8)}…`}
+      title={t('detail.title', { id: id.slice(0, 8) })}
       onClose={onClose}
       footer={
         <button className="btn btn-secondary" onClick={onClose}>
-          关闭
+          {t('actions.close')}
         </button>
       }
     >
       {isLoading ? (
-        <Loading text="加载详情…" />
+        <Loading text={t('detail.loading')} />
       ) : !data ? (
-        <EmptyState title="未找到日志" icon="audit" />
+        <EmptyState title={t('empty.noLogFound')} icon="audit" />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div
@@ -709,12 +723,12 @@ function LogDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
               fontSize: '0.8rem',
             }}
           >
-            <MetaItem label="时间" value={fmtTime(data.created_at)} />
-            <MetaItem label="分类" value={data.category || '-'} mono />
-            <MetaItem label="来源" value={data.source || '-'} mono />
-            <MetaItem label="事件" value={data.event || '-'} />
+            <MetaItem label={t('detail.time')} value={fmtTime(data.created_at)} />
+            <MetaItem label={t('detail.category')} value={data.category || '-'} mono />
+            <MetaItem label={t('detail.source')} value={data.source || '-'} mono />
+            <MetaItem label={t('detail.event')} value={data.event || '-'} />
             <MetaItem
-              label="等级"
+              label={t('detail.level')}
               value={
                 <span
                   className="badge"
@@ -725,21 +739,21 @@ function LogDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
               }
             />
             <MetaItem
-              label="状态"
-              value={data.success ? <span className="badge success">成功</span> : <span className="badge failed">失败</span>}
+              label={t('detail.status')}
+              value={data.success ? <span className="badge success">{t('filters.status.success')}</span> : <span className="badge failed">{t('filters.status.failed')}</span>}
             />
-            <MetaItem label="耗时" value={fmtDuration(data.duration_ms)} mono />
-            <MetaItem label="状态码" value={data.status_code != null ? String(data.status_code) : '-'} mono />
-            <MetaItem label="用户 ID" value={data.user_id || '-'} mono />
-            <MetaItem label="IP" value={data.ip_address || '-'} mono />
-            <MetaItem label="会话 ID" value={data.session_id || '-'} mono />
-            <MetaItem label="租户" value={data.tenant_id || '-'} mono />
+            <MetaItem label={t('detail.duration')} value={fmtDuration(data.duration_ms)} mono />
+            <MetaItem label={t('detail.statusCode')} value={data.status_code != null ? String(data.status_code) : '-'} mono />
+            <MetaItem label={t('detail.userId')} value={data.user_id || '-'} mono />
+            <MetaItem label={t('detail.ip')} value={data.ip_address || '-'} mono />
+            <MetaItem label={t('detail.sessionId')} value={data.session_id || '-'} mono />
+            <MetaItem label={t('detail.tenant')} value={data.tenant_id || '-'} mono />
           </div>
 
           {data.message && (
             <div>
               <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                消息
+                {t('detail.message')}
               </div>
               <div className="test-result-box" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {data.message}
@@ -749,7 +763,7 @@ function LogDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
 
           <div>
             <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Payload
+              {t('detail.payload')}
             </div>
             <PayloadView raw={data.payload_json} />
           </div>
@@ -777,13 +791,14 @@ function MetaItem({ label, value, mono }: { label: string; value: React.ReactNod
 /* ------------------------------------------------------------------ */
 
 function ConversationsTab() {
+  const { t } = useTranslation('adminRuntimeLogs')
   const { data, isLoading } = useQuery({
     queryKey: ['runtime-logs', 'conversations'],
     queryFn: () => getConversationsSummary().then((r) => r.data.data),
   })
 
-  if (isLoading && !data) return <Loading text="正在加载问答交互…" />
-  if (!data) return <EmptyState title="暂无问答交互数据" icon="agent" />
+  if (isLoading && !data) return <Loading text={t('conversations.loading')} />
+  if (!data) return <EmptyState title={t('empty.noConversations')} icon="agent" />
 
   const recent = data.recent ?? []
 
@@ -797,18 +812,18 @@ function ConversationsTab() {
           marginBottom: 16,
         }}
       >
-        <StatCard label="会话总数" value={data.total_conversations ?? 0} hint="Conversations" />
-        <StatCard label="消息总数" value={data.total_messages ?? 0} hint="Messages" accent="#3b82f6" />
-        <StatCard label="用户消息" value={data.user_messages ?? 0} hint="User" accent="#22c55e" />
-        <StatCard label="助手消息" value={data.assistant_messages ?? 0} hint="Assistant" accent="#a855f7" />
+        <StatCard label={t('conversations.totalConversations')} value={data.total_conversations ?? 0} hint={t('conversations.totalConversationsHint')} />
+        <StatCard label={t('conversations.totalMessages')} value={data.total_messages ?? 0} hint={t('conversations.totalMessagesHint')} accent="#3b82f6" />
+        <StatCard label={t('conversations.userMessages')} value={data.user_messages ?? 0} hint={t('conversations.userMessagesHint')} accent="#22c55e" />
+        <StatCard label={t('conversations.assistantMessages')} value={data.assistant_messages ?? 0} hint={t('conversations.assistantMessagesHint')} accent="#a855f7" />
       </div>
 
       <div className="admin-card">
         <div className="admin-card-header">
-          <span className="admin-card-title">最近 {recent.length} 条消息</span>
+          <span className="admin-card-title">{t('conversations.recentMessages', { count: recent.length })}</span>
         </div>
         {recent.length === 0 ? (
-          <EmptyState title="暂无消息" icon="agent" />
+          <EmptyState title={t('empty.noMessages')} icon="agent" />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {recent.slice(0, 20).map((m) => {
@@ -835,7 +850,7 @@ function ConversationsTab() {
                       textTransform: 'capitalize',
                     }}
                   >
-                    {m.role || 'unknown'}
+                    {m.role || t('conversations.unknownRole')}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '0.84rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -864,18 +879,19 @@ function ConversationsTab() {
 /* ------------------------------------------------------------------ */
 
 function ModulesTab() {
+  const { t } = useTranslation('adminRuntimeLogs')
   const { data, isLoading } = useQuery({
     queryKey: ['runtime-logs', 'modules'],
     queryFn: () => getModuleStatus().then((r) => r.data.data),
   })
 
-  if (isLoading && !data) return <Loading text="正在加载模块状态…" />
-  if (!data || !data.modules) return <EmptyState title="暂无模块状态数据" icon="audit" />
+  if (isLoading && !data) return <Loading text={t('modules.loading')} />
+  if (!data || !data.modules) return <EmptyState title={t('empty.noModules')} icon="audit" />
 
   return (
     <div>
       <div style={{ marginBottom: 12, fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
-        检查时间：{fmtTime(data.checked_at)}
+        {t('modules.checkedAt', { time: fmtTime(data.checked_at) })}
       </div>
       <div
         style={{
@@ -902,9 +918,9 @@ function ModulesTab() {
                   marginBottom: 10,
                 }}
               >
-                <ModuleStat label="总数" value={total} color="#3b82f6" />
-                <ModuleStat label="启用" value={active} color="#22c55e" />
-                <ModuleStat label="禁用" value={inactive} color="#ef4444" />
+                <ModuleStat label={t('modules.total')} value={total} color="#3b82f6" />
+                <ModuleStat label={t('modules.active')} value={active} color="#22c55e" />
+                <ModuleStat label={t('modules.inactive')} value={inactive} color="#ef4444" />
               </div>
               <div>
                 <div
@@ -916,7 +932,7 @@ function ModulesTab() {
                     marginBottom: 4,
                   }}
                 >
-                  <span>启用率</span>
+                  <span>{t('modules.activeRate')}</span>
                   <span style={{ fontFamily: 'var(--font-mono, monospace)' }}>
                     {rate.toFixed(1)}%
                   </span>
@@ -1002,6 +1018,7 @@ function useStats() {
 /* ------------------------------------------------------------------ */
 
 export default function RuntimeLogsPage() {
+  const { t } = useTranslation('adminRuntimeLogs')
   const [tab, setTab] = useState<Tab>('stats')
   const queryClient = useQueryClient()
   const { stats, isLoading: statsLoading, refresh } = useStats()
@@ -1051,12 +1068,12 @@ export default function RuntimeLogsPage() {
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        toast.success('导出成功', `共 ${data.count} 条记录`)
+        toast.success(t('toast.exportSuccess'), t('toast.exportSuccessDesc', { count: data.count }))
       } catch {
-        toast.success('导出成功', `共 ${data.count} 条记录`)
+        toast.success(t('toast.exportSuccess'), t('toast.exportSuccessDesc', { count: data.count }))
       }
     },
-    onError: (err: unknown) => toast.error('导出失败', getErrorMessage(err)),
+    onError: (err: unknown) => toast.error(t('toast.exportFailed'), getErrorMessage(err)),
   })
 
   const cleanMut = useMutation({
@@ -1066,16 +1083,16 @@ export default function RuntimeLogsPage() {
         before_days: cleanBeforeDays > 0 ? cleanBeforeDays : undefined,
       }).then((r) => r.data.data),
     onSuccess: (data) => {
-      toast.success('批量清理完成', `共删除 ${data?.deleted_count ?? 0} 条日志`)
+      toast.success(t('toast.cleanSuccess'), t('toast.cleanSuccessDesc', { count: data?.deleted_count ?? 0 }))
       setCleanOpen(false)
       void refresh()
     },
-    onError: (err: unknown) => toast.error('批量清理失败', getErrorMessage(err)),
+    onError: (err: unknown) => toast.error(t('toast.cleanFailed'), getErrorMessage(err)),
   })
 
   const handleRefresh = async () => {
     await queryClient.invalidateQueries({ queryKey: ['runtime-logs'] })
-    toast.success('已刷新')
+    toast.success(t('toast.refreshed'))
   }
 
   const handleBatchDelete = () => {
@@ -1086,16 +1103,19 @@ export default function RuntimeLogsPage() {
 
   const confirmBatchDelete = async () => {
     const ok = await confirm({
-      title: '确认批量清理',
+      title: t('confirm.batchCleanTitle'),
       message: (
         <div style={{ fontSize: '0.85rem' }}>
-          将删除
-          {cleanCategory ? <strong> 分类「{cleanCategory}」</strong> : ' 全部分类'}
-          {' '}中早于 <strong>{cleanBeforeDays}</strong> 天的日志，该操作不可恢复。
+          <Trans
+            i18nKey={cleanCategory ? 'confirm.batchCleanMessageCategory' : 'confirm.batchCleanMessageAll'}
+            ns="adminRuntimeLogs"
+            components={{ strong: <strong /> }}
+            values={{ category: cleanCategory, days: cleanBeforeDays }}
+          />
         </div>
       ),
       variant: 'danger',
-      confirmText: '执行清理',
+      confirmText: t('confirm.batchCleanConfirm'),
     })
     if (!ok) return
     cleanMut.mutate()
@@ -1115,28 +1135,28 @@ export default function RuntimeLogsPage() {
         }}
       >
         <div>
-          <h1 className="admin-page-title">运行记录</h1>
+          <h1 className="admin-page-title">{t('title')}</h1>
           <p className="admin-page-desc">
-            完整留存 API 调用、问答交互、模块启用状态，实时监测全流程运行状态
+            {t('description')}
           </p>
         </div>
         <div className="admin-actions">
           <button
             className="btn btn-secondary"
             onClick={() => void handleRefresh()}
-            title="刷新所有数据"
+            title={t('actions.refreshTitle')}
           >
             <ICONS.refresh size={14} />
-            刷新
+            {t('actions.refresh')}
           </button>
           <button
             className="btn btn-secondary"
             onClick={() => exportMut.mutate()}
             disabled={exportMut.isPending}
-            title="按当前筛选条件导出 JSON"
+            title={t('actions.exportTitle')}
           >
             <ICONS.download size={14} />
-            {exportMut.isPending ? '导出中…' : '导出'}
+            {exportMut.isPending ? t('actions.exporting') : t('actions.export')}
           </button>
           <button
             className="btn btn-danger"
@@ -1144,7 +1164,7 @@ export default function RuntimeLogsPage() {
             disabled={cleanMut.isPending}
           >
             <ICONS.empty size={14} />
-            批量清理
+            {t('actions.batchClean')}
           </button>
         </div>
       </div>
@@ -1155,25 +1175,25 @@ export default function RuntimeLogsPage() {
           className={`tab-item${tab === 'stats' ? ' active' : ''}`}
           onClick={() => setTab('stats')}
         >
-          总览
+          {t('tabs.stats')}
         </button>
         <button
           className={`tab-item${tab === 'logs' ? ' active' : ''}`}
           onClick={() => setTab('logs')}
         >
-          日志列表
+          {t('tabs.logs')}
         </button>
         <button
           className={`tab-item${tab === 'conversations' ? ' active' : ''}`}
           onClick={() => setTab('conversations')}
         >
-          问答交互
+          {t('tabs.conversations')}
         </button>
         <button
           className={`tab-item${tab === 'modules' ? ' active' : ''}`}
           onClick={() => setTab('modules')}
         >
-          模块状态
+          {t('tabs.modules')}
         </button>
       </div>
 
@@ -1194,7 +1214,7 @@ export default function RuntimeLogsPage() {
       {/* 批量清理配置弹窗 */}
       {cleanOpen && (
         <Modal
-          title="批量清理运行日志"
+          title={t('cleanModal.title')}
           onClose={() => setCleanOpen(false)}
           footer={
             <>
@@ -1203,33 +1223,33 @@ export default function RuntimeLogsPage() {
                 onClick={() => void confirmBatchDelete()}
                 disabled={cleanMut.isPending}
               >
-                {cleanMut.isPending ? '清理中…' : '执行清理'}
+                {cleanMut.isPending ? t('actions.cleaning') : t('actions.executeClean')}
               </button>
               <button
                 className="btn btn-secondary"
                 onClick={() => setCleanOpen(false)}
                 disabled={cleanMut.isPending}
               >
-                取消
+                {t('actions.cancel')}
               </button>
             </>
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="admin-form-row">
-              <label className="admin-form-label">分类（留空表示全部分类）</label>
+              <label className="admin-form-label">{t('cleanModal.categoryLabel')}</label>
               <select
                 className="admin-form-select"
                 value={cleanCategory}
                 onChange={(e) => setCleanCategory(e.target.value)}
               >
-                {CATEGORY_OPTIONS.map((o) => (
+                {categoryOptions(t).map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
             </div>
             <div className="admin-form-row">
-              <label className="admin-form-label">清理 N 天前的日志</label>
+              <label className="admin-form-label">{t('cleanModal.daysLabel')}</label>
               <input
                 type="number"
                 className="admin-form-input"
@@ -1238,7 +1258,7 @@ export default function RuntimeLogsPage() {
                 onChange={(e) => setCleanBeforeDays(Math.max(1, Number(e.target.value) || 7))}
               />
               <span className="admin-form-hint" style={{ marginTop: 4, display: 'block' }}>
-                将删除创建时间早于 {cleanBeforeDays} 天前的日志记录。
+                {t('cleanModal.daysHint', { days: cleanBeforeDays })}
               </span>
             </div>
           </div>

@@ -7,12 +7,18 @@ import zhCNAuth from './locales/zh-CN/auth.json'
 import zhCNDashboard from './locales/zh-CN/dashboard.json'
 import zhCNSecurity from './locales/zh-CN/security.json'
 import zhCNKpi from './locales/zh-CN/kpi.json'
+import zhCNAdmin from './locales/zh-CN/admin.json'
+import zhCNAdminSettings from './locales/zh-CN/admin-settings.json'
+import zhCNAdminRuntimeLogs from './locales/zh-CN/admin-runtime-logs.json'
 import enCommon from './locales/en/common.json'
 import enMenu from './locales/en/menu.json'
 import enAuth from './locales/en/auth.json'
 import enDashboard from './locales/en/dashboard.json'
 import enSecurity from './locales/en/security.json'
 import enKpi from './locales/en/kpi.json'
+import enAdmin from './locales/en/admin.json'
+import enAdminSettings from './locales/en/admin-settings.json'
+import enAdminRuntimeLogs from './locales/en/admin-runtime-logs.json'
 
 // brand / footer 文案内联在 auth.json 中（登录页专用），通过命名空间映射复用，
 // 避免为少量登录页文案单独建立文件。
@@ -51,6 +57,9 @@ i18n
         dashboard: zhCNDashboard,
         security: zhCNSecurity,
         kpi: zhCNKpi,
+        admin: zhCNAdmin,
+        adminSettings: zhCNAdminSettings,
+        adminRuntimeLogs: zhCNAdminRuntimeLogs,
         brand: zhCNBrand,
         footer: zhCNFooter,
       },
@@ -61,6 +70,9 @@ i18n
         dashboard: enDashboard,
         security: enSecurity,
         kpi: enKpi,
+        admin: enAdmin,
+        adminSettings: enAdminSettings,
+        adminRuntimeLogs: enAdminRuntimeLogs,
         brand: enBrand,
         footer: enFooter,
       },
@@ -68,7 +80,7 @@ i18n
     lng: getInitialLanguage(),
     fallbackLng: 'zh-CN',
     supportedLngs: ['zh-CN', 'en'],
-    ns: ['common', 'menu', 'auth', 'dashboard', 'security', 'kpi', 'brand', 'footer'],
+    ns: ['common', 'menu', 'auth', 'dashboard', 'security', 'kpi', 'admin', 'adminSettings', 'adminRuntimeLogs', 'brand', 'footer'],
     defaultNS: 'common',
     interpolation: {
       escapeValue: false,

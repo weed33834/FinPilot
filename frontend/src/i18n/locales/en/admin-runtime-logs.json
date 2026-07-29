@@ -1,0 +1,175 @@
+{
+  "title": "Runtime Logs",
+  "description": "Full retention of API calls, Q&A interactions, and module status, with real-time monitoring of the entire pipeline",
+  "tabs": {
+    "stats": "Overview",
+    "logs": "Logs",
+    "conversations": "Conversations",
+    "modules": "Modules"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "refreshTitle": "Refresh all data",
+    "export": "Export",
+    "exporting": "Exporting…",
+    "exportTitle": "Export JSON with current filters",
+    "batchClean": "Batch Clean",
+    "cleaning": "Cleaning…",
+    "cleanTitle": "Batch clean by category / days",
+    "search": "Search",
+    "searching": "Searching…",
+    "reset": "Reset",
+    "detail": "Detail",
+    "delete": "Delete",
+    "deleting": "Deleting…",
+    "close": "Close",
+    "cancel": "Cancel",
+    "executeClean": "Execute Clean"
+  },
+  "stats": {
+    "loading": "Loading statistics…",
+    "totalLogs": "Total Logs",
+    "totalLogsHint": "Total",
+    "todayNew": "Today New",
+    "todayNewHint": "Today",
+    "successRate": "Success Rate",
+    "successRateHint": "Success Rate",
+    "recentErrors": "Recent Errors",
+    "recentErrorsHint": "Recent Errors"
+  },
+  "distributions": {
+    "category": "Category Distribution",
+    "level": "Level Distribution",
+    "sourceTop": "Source Top 10",
+    "recentErrors": "Recent Errors (up to 10)"
+  },
+  "table": {
+    "time": "Time",
+    "category": "Category",
+    "level": "Level",
+    "source": "Source",
+    "event": "Event",
+    "eventMessage": "Event / Message",
+    "duration": "Duration",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "filters": {
+    "category": "Category",
+    "level": "Level",
+    "status": "Status",
+    "keyword": "Keyword",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "keywordPlaceholder": "Search event / message",
+    "allCategories": "All Categories",
+    "categories": {
+      "api": "API Call",
+      "llm": "LLM Call",
+      "tool": "Tool Call",
+      "mcp": "MCP Call",
+      "agent": "Agent Interaction",
+      "conversation": "Q&A Interaction",
+      "workflow": "Workflow",
+      "sandbox": "Sandbox",
+      "auth": "Auth"
+    },
+    "allLevels": "All Levels",
+    "levels": {
+      "debug": "DEBUG",
+      "info": "INFO",
+      "warning": "WARN",
+      "error": "ERROR",
+      "critical": "CRITICAL"
+    },
+    "allStatus": "All Status",
+    "status": {
+      "success": "Success",
+      "failed": "Failed"
+    }
+  },
+  "detail": {
+    "title": "Log Detail — {{id}}…",
+    "loading": "Loading detail…",
+    "time": "Time",
+    "category": "Category",
+    "source": "Source",
+    "event": "Event",
+    "level": "Level",
+    "status": "Status",
+    "duration": "Duration",
+    "statusCode": "Status Code",
+    "userId": "User ID",
+    "ip": "IP",
+    "sessionId": "Session ID",
+    "tenant": "Tenant",
+    "message": "Message",
+    "payload": "Payload"
+  },
+  "conversations": {
+    "loading": "Loading conversations…",
+    "totalConversations": "Total Conversations",
+    "totalConversationsHint": "Conversations",
+    "totalMessages": "Total Messages",
+    "totalMessagesHint": "Messages",
+    "userMessages": "User Messages",
+    "userMessagesHint": "User",
+    "assistantMessages": "Assistant Messages",
+    "assistantMessagesHint": "Assistant",
+    "recentMessages": "Latest {{count}} messages",
+    "unknownRole": "unknown"
+  },
+  "modules": {
+    "loading": "Loading module status…",
+    "checkedAt": "Checked at: {{time}}",
+    "total": "Total",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activeRate": "Active Rate"
+  },
+  "empty": {
+    "loading": "Loading…",
+    "noData": "No data",
+    "noStats": "No statistics available",
+    "noLogs": "No runtime logs",
+    "noLogFound": "Log not found",
+    "noErrors": "No error records",
+    "noConversations": "No conversation data",
+    "noMessages": "No messages",
+    "noModules": "No module status data"
+  },
+  "payload": {
+    "empty": "(none)"
+  },
+  "pagination": {
+    "info": "Page {{page}} / {{totalPages}} ({{total}} total)",
+    "prev": "Prev",
+    "next": "Next"
+  },
+  "toast": {
+    "deleted": "Log deleted",
+    "deleteFailed": "Delete failed",
+    "exportSuccess": "Export succeeded",
+    "exportSuccessDesc": "{{count}} records exported",
+    "exportFailed": "Export failed",
+    "cleanSuccess": "Batch clean completed",
+    "cleanSuccessDesc": "{{count}} logs deleted",
+    "cleanFailed": "Batch clean failed",
+    "refreshed": "Refreshed"
+  },
+  "confirm": {
+    "deleteTitle": "Delete Runtime Log",
+    "deleteMessage": "Delete log \"{{target}}\"? This action cannot be undone.",
+    "deleteConfirm": "Delete",
+    "batchCleanTitle": "Confirm Batch Clean",
+    "batchCleanConfirm": "Execute Clean",
+    "batchCleanMessageAll": "This will delete logs older than <strong>{{days}}</strong> days in All Categories. This action cannot be undone.",
+    "batchCleanMessageCategory": "This will delete logs older than <strong>{{days}}</strong> days in <strong>Category \"{{category}}\"</strong>. This action cannot be undone."
+  },
+  "cleanModal": {
+    "title": "Batch Clean Runtime Logs",
+    "categoryLabel": "Category (leave empty for all)",
+    "daysLabel": "Clean logs older than N days",
+    "daysHint": "Logs created earlier than {{days}} days ago will be deleted."
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "layout": {
+    "adminHome": "Admin Console",
+    "notifications": "Live Notifications",
+    "markAllRead": "Mark all read",
+    "clear": "Clear",
+    "noNotifications": "No notifications",
+    "breadcrumb": {
+      "models": "Models",
+      "prompts": "Prompts",
+      "prompt-deep": "Prompt Advanced",
+      "runtime-logs": "Runtime Logs",
+      "tools": "Tools",
+      "tool-monitoring": "Tool Monitoring",
+      "context-management": "Context",
+      "skills": "Skills",
+      "search-engines": "Search Engines",
+      "mcp-servers": "MCP Servers",
+      "sandbox-configs": "Sandbox",
+      "agents": "Agent Config",
+      "settings": "System Settings",
+      "eval-management": "Evaluation",
+      "factor-mining": "Factor Mining",
+      "backtesting": "Backtesting",
+      "workflow-editor": "Workflow Editor"
+    }
+  },
+  "notFound": {
+    "code": "404",
+    "title": "Page Not Found",
+    "description": "The page you are looking for does not exist or has been removed.",
+    "backHome": "Back to Home"
+  }
+}

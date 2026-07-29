@@ -1,0 +1,75 @@
+{
+  "title": "系统设置",
+  "subtitle": "管理系统全局配置、模型、搜索、会话与安全策略",
+  "loading": "加载设置中...",
+  "actions": {
+    "save": "保存设置",
+    "saving": "保存中...",
+    "reset": "重置",
+    "retry": "重试"
+  },
+  "sections": {
+    "general": "通用设置",
+    "llm": "LLM 设置",
+    "search": "搜索设置",
+    "session": "会话设置",
+    "security": "安全设置",
+    "sandbox": "沙箱设置"
+  },
+  "fields": {
+    "systemName": "系统名称",
+    "systemDescription": "系统描述",
+    "defaultModel": "默认模型",
+    "defaultSearchEngine": "默认搜索引擎",
+    "notSet": "未设置",
+    "maxConversationHistory": "最大对话历史条数",
+    "sessionTimeout": "会话超时（分钟）",
+    "rateLimit": "速率限制（次/分钟）",
+    "logLevel": "日志级别",
+    "enableTelemetry": "启用遥测",
+    "telemetryHint": "匿名使用数据收集",
+    "sandboxMode": "沙箱模式",
+    "sandboxModeLightweight": "轻量级",
+    "sandboxModeDocker": "Docker",
+    "maxFileUpload": "最大文件上传 (MB)"
+  },
+  "health": {
+    "title": "系统健康检查",
+    "refresh": "刷新",
+    "checking": "检查中...",
+    "overall": "总体: {{status}}",
+    "checkedAt": "检查时间",
+    "retry": "重试",
+    "columns": {
+      "component": "组件",
+      "status": "状态",
+      "latency": "延迟",
+      "detail": "详情"
+    },
+    "components": {
+      "database": "数据库",
+      "vectorStore": "向量库",
+      "llm": "LLM",
+      "sandbox": "沙箱",
+      "searchEngine": "搜索引擎"
+    },
+    "searchEnginesSummary": "{{active}} 活跃 / {{total}} 总计",
+    "status": {
+      "healthy": "正常",
+      "unhealthy": "异常",
+      "degraded": "降级",
+      "unconfigured": "未配置",
+      "unknown": "未知"
+    }
+  },
+  "toast": {
+    "saved": {
+      "title": "设置已保存",
+      "description": "系统设置已成功更新"
+    }
+  },
+  "errors": {
+    "saveFailed": "保存设置失败",
+    "healthFailed": "健康检查失败"
+  }
+}

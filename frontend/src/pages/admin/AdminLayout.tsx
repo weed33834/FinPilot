@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ICONS } from '../../components/ui/Icons.tsx'
 import RealtimeIndicator from '../../components/RealtimeIndicator.tsx'
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications.ts'
@@ -14,34 +15,27 @@ import { formatDateTime } from '../../utils/format.ts'
  * - 仅保留顶部条：面包屑 + 实时状态 + 通知铃铛 + Outlet
  * - 消除旧的"PrivateRoute/Layout + AdminLayout"双重 Sidebar 问题
  */
-function breadcrumbPath(pathname: string): { label: string; path?: string }[] {
-  const segments = pathname.split('/').filter(Boolean)
-  const crumbs: { label: string; path?: string }[] = [{ label: '管理后台', path: '/admin' }]
 
-  const labelMap: Record<string, string> = {
-    models: '模型管理',
-    prompts: '提示词管理',
-    'prompt-deep': '提示词进阶',
-    'runtime-logs': '运行记录',
-    tools: '工具管理',
-    'tool-monitoring': '工具监控',
-    'context-management': '上下文管理',
-    skills: '技能管理',
-    'search-engines': '搜索引擎',
-    'mcp-servers': 'MCP 服务器',
-    'sandbox-configs': '沙箱配置',
-    agents: 'Agent 配置',
-    settings: '系统设置',
-    'eval-management': '评估管理',
-    'factor-mining': '因子挖掘',
-    backtesting: '策略回测',
-    'workflow-editor': '工作流编辑器',
-  }
+// 路径 segment → 面包屑 i18n key（admin:layout.breadcrumb.*）。新增 admin 子路由时在此登记。
+const BREADCRUMB_SEGMENTS = [
+  'models', 'prompts', 'prompt-deep', 'runtime-logs', 'tools', 'tool-monitoring',
+  'context-management', 'skills', 'search-engines', 'mcp-servers', 'sandbox-configs',
+  'agents', 'settings', 'eval-management', 'factor-mining', 'backtesting', 'workflow-editor',
+] as const
+
+function useBreadcrumb(pathname: string) {
+  const { t } = useTranslation('admin')
+  const segments = pathname.split('/').filter(Boolean)
+  const crumbs: { label: string; path?: string }[] = [{ label: t('layout.adminHome'), path: '/admin' }]
 
   for (let i = 1; i < segments.length; i++) {
     const seg = segments[i]
+    // 已登记的 segment 走 i18n，未登记的回退到原始路径段，避免面包屑空白
+    const label = (BREADCRUMB_SEGMENTS as readonly string[]).includes(seg)
+      ? t(`layout.breadcrumb.${seg}`)
+      : seg
     crumbs.push({
-      label: labelMap[seg] || seg,
+      label,
       path: i < segments.length - 1 ? '/' + segments.slice(0, i + 1).join('/') : undefined,
     })
   }
@@ -51,7 +45,8 @@ function breadcrumbPath(pathname: string): { label: string; path?: string }[] {
 
 export default function AdminLayout() {
   const location = useLocation()
-  const crumbs = breadcrumbPath(location.pathname)
+  const { t } = useTranslation('admin')
+  const crumbs = useBreadcrumb(location.pathname)
   const { notifications, unreadCount, markRead, clear, status } = useRealtimeNotifications()
   const [bellOpen, setBellOpen] = useState(false)
 
@@ -72,7 +67,7 @@ export default function AdminLayout() {
                   {crumb.label}
                 </NavLink>
               ) : (
-                <span className="admin-breadcrumb-current">{crumb.label}</span>
+                <span className="admin-breadcrumb-current" aria-current="page">{crumb.label}</span>
               )}
             </span>
           ))}
@@ -86,8 +81,8 @@ export default function AdminLayout() {
               type="button"
               onClick={() => setBellOpen((v) => !v)}
               className="admin-bell-btn"
-              aria-label="实时通知"
-              title="实时通知"
+              aria-label={t('layout.notifications')}
+              title={t('layout.notifications')}
             >
               <ICONS.bell size={16} />
               {unreadCount > 0 && (
@@ -102,19 +97,19 @@ export default function AdminLayout() {
                 <div className="admin-bell-overlay" onClick={() => setBellOpen(false)} />
                 <div className="admin-bell-dropdown">
                   <div className="admin-bell-header">
-                    <strong>实时通知</strong>
+                    <strong>{t('layout.notifications')}</strong>
                     <span className="admin-bell-header-actions">
                       <button type="button" onClick={() => markRead()} className="admin-bell-mini-btn">
-                        全部已读
+                        {t('layout.markAllRead')}
                       </button>
                       <button type="button" onClick={() => clear()} className="admin-bell-mini-btn">
-                        清空
+                        {t('layout.clear')}
                       </button>
                     </span>
                   </div>
                   <div className="admin-bell-list">
                     {notifications.length === 0 ? (
-                      <div className="admin-bell-empty">暂无通知</div>
+                      <div className="admin-bell-empty">{t('layout.noNotifications')}</div>
                     ) : (
                       notifications.map((n) => (
                         <div key={n.id} className={`admin-bell-item${n.read ? ' read' : ''}`}>

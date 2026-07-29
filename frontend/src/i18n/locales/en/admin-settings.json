@@ -1,0 +1,75 @@
+{
+  "title": "System Settings",
+  "subtitle": "Manage global system configuration, models, search, sessions, and security policies",
+  "loading": "Loading settings...",
+  "actions": {
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "reset": "Reset",
+    "retry": "Retry"
+  },
+  "sections": {
+    "general": "General",
+    "llm": "LLM Settings",
+    "search": "Search",
+    "session": "Session",
+    "security": "Security",
+    "sandbox": "Sandbox"
+  },
+  "fields": {
+    "systemName": "System Name",
+    "systemDescription": "System Description",
+    "defaultModel": "Default Model",
+    "defaultSearchEngine": "Default Search Engine",
+    "notSet": "Not set",
+    "maxConversationHistory": "Max Conversation History",
+    "sessionTimeout": "Session Timeout (minutes)",
+    "rateLimit": "Rate Limit (per minute)",
+    "logLevel": "Log Level",
+    "enableTelemetry": "Enable Telemetry",
+    "telemetryHint": "Anonymous usage data collection",
+    "sandboxMode": "Sandbox Mode",
+    "sandboxModeLightweight": "Lightweight",
+    "sandboxModeDocker": "Docker",
+    "maxFileUpload": "Max File Upload (MB)"
+  },
+  "health": {
+    "title": "System Health Check",
+    "refresh": "Refresh",
+    "checking": "Checking...",
+    "overall": "Overall: {{status}}",
+    "checkedAt": "Checked at",
+    "retry": "Retry",
+    "columns": {
+      "component": "Component",
+      "status": "Status",
+      "latency": "Latency",
+      "detail": "Detail"
+    },
+    "components": {
+      "database": "Database",
+      "vectorStore": "Vector Store",
+      "llm": "LLM",
+      "sandbox": "Sandbox",
+      "searchEngine": "Search Engine"
+    },
+    "searchEnginesSummary": "{{active}} active / {{total}} total",
+    "status": {
+      "healthy": "Healthy",
+      "unhealthy": "Unhealthy",
+      "degraded": "Degraded",
+      "unconfigured": "Not configured",
+      "unknown": "Unknown"
+    }
+  },
+  "toast": {
+    "saved": {
+      "title": "Settings saved",
+      "description": "System settings have been updated successfully."
+    }
+  },
+  "errors": {
+    "saveFailed": "Failed to save settings",
+    "healthFailed": "Health check failed"
+  }
+}
