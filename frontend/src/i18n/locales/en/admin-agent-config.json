@@ -1,0 +1,105 @@
+{
+  "title": "Agent Configuration Management",
+  "toolbar": {
+    "create": "Create Agent"
+  },
+  "filters": {
+    "searchPlaceholder": "Search name or description...",
+    "allTypes": "All Types",
+    "allStatuses": "All Statuses"
+  },
+  "types": {
+    "chat": "Chat",
+    "analysis": "Analysis",
+    "report": "Report",
+    "sql_agent": "SQL"
+  },
+  "statuses": {
+    "active": "Enabled",
+    "inactive": "Disabled"
+  },
+  "table": {
+    "name": "Name",
+    "type": "Type",
+    "model": "Model",
+    "prompt": "Prompt",
+    "tools": "Tools",
+    "skills": "Skills",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "status": {
+    "active": "Enabled",
+    "inactive": "Disabled",
+    "loading": "Loading..."
+  },
+  "actions": {
+    "test": "Test",
+    "duplicate": "Duplicate",
+    "edit": "Edit",
+    "delete": "Delete",
+    "retry": "Retry"
+  },
+  "pagination": {
+    "info": "Total {{total}}",
+    "currentPage": "Page {{page}}",
+    "prev": "Prev",
+    "next": "Next"
+  },
+  "empty": {
+    "noConfigs": "No agent configurations"
+  },
+  "messages": {
+    "loadFailed": "Failed to load agent configurations"
+  },
+  "form": {
+    "editTitle": "Edit Agent Configuration",
+    "createTitle": "Create Agent Configuration",
+    "name": "Name",
+    "namePlaceholder": "Agent name",
+    "type": "Type",
+    "typeOptions": {
+      "chat": "Chat Agent",
+      "analysis": "Analysis Agent",
+      "report": "Report Agent",
+      "sql_agent": "SQL Agent"
+    },
+    "description": "Description",
+    "descriptionPlaceholder": "Description",
+    "model": "Linked Model",
+    "promptTemplate": "Linked Prompt Template",
+    "notLinked": "None",
+    "maxIterations": "Max Iterations",
+    "temperature": "Temperature",
+    "systemPrompt": "System Prompt",
+    "systemPromptPlaceholder": "Override default system prompt (optional)",
+    "tools": "Linked Tools (multi-select)",
+    "skills": "Linked Skills (multi-select)",
+    "multiSelectHint": "Hold Ctrl to multi-select",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "saving": "Saving...",
+    "validation": {
+      "required": "Required"
+    }
+  },
+  "test": {
+    "title": "Test: {{name}}",
+    "messageLabel": "Test message",
+    "messagePlaceholder": "Enter test message...",
+    "send": "Send Test",
+    "testing": "Testing...",
+    "defaultMessage": "Hello, please introduce yourself",
+    "thinking": "Thinking",
+    "answer": "Answer",
+    "duration": "Duration: {{ms}}ms"
+  },
+  "delete": {
+    "title": "Confirm Delete",
+    "message": "Are you sure you want to delete this agent configuration? This action cannot be undone.",
+    "cancel": "Cancel",
+    "deleting": "Deleting...",
+    "confirm": "Confirm Delete"
+  }
+}

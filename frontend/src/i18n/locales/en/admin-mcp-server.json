@@ -1,0 +1,101 @@
+{
+  "title": "MCP Server Management",
+  "subtitle": "Manage Model Context Protocol server connections and tool integrations",
+  "actions": {
+    "addServer": "Add Server",
+    "refresh": "Refresh",
+    "search": "Search",
+    "edit": "Edit",
+    "delete": "Delete",
+    "enable": "Enable",
+    "disable": "Disable",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "create": "Create",
+    "test": "Test",
+    "testing": "Testing…",
+    "retry": "Retry"
+  },
+  "status": {
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "success": "Success",
+    "failed": "Failed",
+    "empty": "No data"
+  },
+  "table": {
+    "name": "Name",
+    "displayName": "Display Name",
+    "transport": "Transport",
+    "status": "Status",
+    "lastStatus": "Last Status",
+    "actions": "Actions"
+  },
+  "badge": {
+    "builtin": "Built-in"
+  },
+  "transports": {
+    "stdio": "stdio",
+    "sse": "sse",
+    "streamable_http": "streamable_http"
+  },
+  "lastStatus": {
+    "connected": "Connected",
+    "ok": "OK",
+    "success": "Success",
+    "healthy": "Healthy",
+    "ready": "Ready",
+    "error": "Error",
+    "failed": "Failed",
+    "disconnected": "Disconnected",
+    "unreachable": "Unreachable",
+    "timeout": "Timeout",
+    "offline": "Offline"
+  },
+  "empty": {
+    "title": "No MCP Servers",
+    "description": "No MCP server configured yet. Click \"Add Server\" to start."
+  },
+  "errors": {
+    "loadFailed": "Failed to load MCP server list"
+  },
+  "form": {
+    "createTitle": "Add MCP Server",
+    "editTitle": "Edit MCP Server",
+    "name": "Name (name)",
+    "namePlaceholder": "Unique identifier, e.g. filesystem",
+    "displayName": "Display Name (display_name)",
+    "displayNamePlaceholder": "A recognizable name",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional",
+    "transport": "Transport (transport)",
+    "priority": "Priority (priority)",
+    "command": "Command (command)",
+    "commandPlaceholder": "e.g. npx -y @modelcontextprotocol/server-filesystem /tmp",
+    "url": "URL",
+    "urlPlaceholder": "https://example.com/mcp",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Optional, for remote service auth",
+    "envVars": "Environment Variables (env_vars, JSON)",
+    "envVarsPlaceholder": "{ \"FOO\": \"bar\" }",
+    "isActive": "Enable this server"
+  },
+  "validation": {
+    "nameRequired": "Please enter the server name",
+    "displayNameRequired": "Please enter the display name",
+    "transportRequired": "Please select a transport",
+    "envVarsInvalid": "Invalid environment variables JSON"
+  },
+  "toast": {
+    "created": "MCP server created",
+    "updated": "MCP server updated",
+    "deleted": "MCP server deleted",
+    "testSuccess": "Connection test succeeded",
+    "testSuccessDesc": "{{name}} ({{transport}}) status: {{status}}",
+    "testFailed": "Connection test failed"
+  },
+  "confirm": {
+    "deleteMessage": "Delete server \"<strong>{{name}}</strong>\"? This action cannot be undone."
+  }
+}

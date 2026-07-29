@@ -1,0 +1,103 @@
+{
+  "title": "模型管理",
+  "description": "管理 AI 模型配置，包括供应商、API 端点、密钥和默认模型设置。",
+  "search": {
+    "placeholder": "搜索模型名称..."
+  },
+  "filters": {
+    "allProviders": "全部供应商",
+    "allStatus": "全部状态",
+    "status": {
+      "active": "已启用",
+      "inactive": "已禁用"
+    }
+  },
+  "actions": {
+    "add": "添加模型",
+    "cancel": "取消",
+    "save": "保存",
+    "create": "创建",
+    "saving": "保存中...",
+    "edit": "编辑",
+    "delete": "删除",
+    "deleting": "删除中...",
+    "confirmDelete": "确认删除",
+    "testConnection": "测试连接",
+    "setAsDefault": "设为默认",
+    "retry": "重试"
+  },
+  "table": {
+    "displayName": "展示名称",
+    "provider": "供应商",
+    "modelName": "模型名称",
+    "apiBase": "API 端点",
+    "default": "默认",
+    "status": "状态",
+    "actions": "操作"
+  },
+  "status": {
+    "defaultModel": "默认模型",
+    "activeToggleOn": "已启用，点击禁用",
+    "activeToggleOff": "已禁用，点击启用"
+  },
+  "providers": {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "google": "Google",
+    "local": "Local",
+    "ollama": "Ollama",
+    "lmstudio": "LM Studio"
+  },
+  "empty": {
+    "noModels": "暂无模型配置"
+  },
+  "messages": {
+    "loadFailed": "加载模型列表失败",
+    "operationFailed": "操作失败",
+    "testFailed": "测试失败",
+    "deleteFailed": "删除失败"
+  },
+  "pagination": {
+    "prev": "上一页",
+    "next": "下一页",
+    "info": "{{page}} / {{totalPages}}（共 {{total}} 条）"
+  },
+  "form": {
+    "editTitle": "编辑模型配置",
+    "createTitle": "新建模型配置",
+    "provider": "供应商",
+    "displayName": "展示名称",
+    "displayNamePlaceholder": "如 GPT-4o",
+    "modelName": "模型名称",
+    "modelNamePlaceholder": "如 gpt-4o",
+    "apiBase": "API 端点",
+    "apiBasePlaceholder": "https://api.openai.com/v1",
+    "apiKey": "API Key",
+    "apiKeyKeepHint": "（留空表示不修改）",
+    "apiKeyKeepPlaceholder": "留空保持不变",
+    "apiKeyPlaceholder": "输入 API Key",
+    "parameters": "参数",
+    "temperature": "Temperature",
+    "maxTokens": "Max Tokens",
+    "topP": "Top P",
+    "setAsDefault": "设为默认模型",
+    "validation": {
+      "providerRequired": "请选择供应商",
+      "modelNameRequired": "请输入模型名称",
+      "displayNameRequired": "请输入展示名称",
+      "apiBaseRequired": "请输入 API 端点"
+    }
+  },
+  "test": {
+    "title": "测试连接 — {{name}}",
+    "providerLabel": "供应商：",
+    "modelLabel": "模型：",
+    "testing": "正在测试连接...",
+    "success": "连接成功",
+    "failed": "连接失败"
+  },
+  "confirm": {
+    "deleteTitle": "确认删除",
+    "deleteMessage": "确定要删除此模型配置吗？此操作不可撤销。"
+  }
+}

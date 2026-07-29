@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../i18n/config.ts'
+import zhCnResource from '../../i18n/locales/zh-CN/admin-tool-monitoring.json'
+import enResource from '../../i18n/locales/en/admin-tool-monitoring.json'
+import EmptyState from '../../components/ui/EmptyState.tsx'
+import Loading from '../../components/ui/Loading.tsx'
+import { ICONS } from '../../components/ui/Icons.tsx'
 import {
   getAuditTrail,
   getCircuitBreakers,
@@ -9,7 +16,16 @@ import {
   type ToolAuditRecord,
   type ToolHealthStat,
 } from '../../api/toolMonitoring.ts'
-import { ICONS } from '../../components/ui/Icons.tsx'
+
+// 命名空间未在 i18n/config.ts 中注册（按要求不修改该文件），这里在模块加载时
+// 同步注入资源，子组件通过 useTranslation('adminToolMonitoring') 消费。
+const NS = 'adminToolMonitoring'
+if (!i18n.hasResourceBundle('zh-CN', NS)) {
+  i18n.addResourceBundle('zh-CN', NS, zhCnResource)
+}
+if (!i18n.hasResourceBundle('en', NS)) {
+  i18n.addResourceBundle('en', NS, enResource)
+}
 
 type Tab = 'health' | 'breakers' | 'audit'
 
@@ -32,6 +48,7 @@ function truncate(v: unknown, max = 80): string {
 /* ------------------------------------------------------------------ */
 
 function HealthTab() {
+  const { t } = useTranslation(NS)
   const [stats, setStats] = useState<Record<string, ToolHealthStat>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,11 +61,11 @@ function HealthTab() {
       const res = await getToolHealth()
       setStats(res.data.data ?? {})
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(e instanceof Error ? e.message : t('health.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -61,7 +78,7 @@ function HealthTab() {
       await triggerHealthCheck(name)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '检查失败')
+      setError(e instanceof Error ? e.message : t('health.checkFailed'))
     } finally {
       setChecking(null)
     }
@@ -74,32 +91,48 @@ function HealthTab() {
       <div className="admin-toolbar-right" style={{ marginBottom: 14 }}>
         <button className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
           <ICONS.refresh size={14} />
-          刷新
+          {t('actions.refresh')}
         </button>
       </div>
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
-      <div className="admin-table-wrapper">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>工具</th>
-              <th style={{ width: 110 }}>状态</th>
-              <th style={{ width: 110 }}>成功率</th>
-              <th style={{ width: 120 }}>平均延迟</th>
-              <th style={{ width: 100 }}>调用数</th>
-              <th style={{ width: 170 }}>最近检查</th>
-              <th style={{ width: 110 }}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+      {error && (
+        <div
+          className="admin-error"
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button className="admin-action-btn" onClick={() => void load()} disabled={loading}>
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
+      {loading && rows.length === 0 ? (
+        <Loading text={t('loading')} />
+      ) : rows.length === 0 ? (
+        error ? null : (
+          <EmptyState title={t('health.empty')} description={t('health.emptyDesc')} />
+        )
+      ) : (
+        <div className="admin-table-wrapper">
+          <table className="admin-table">
+            <thead>
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                  {loading ? '加载中…' : '暂无工具健康数据'}
-                </td>
+                <th>{t('health.columns.tool')}</th>
+                <th style={{ width: 110 }}>{t('health.columns.status')}</th>
+                <th style={{ width: 110 }}>{t('health.columns.successRate')}</th>
+                <th style={{ width: 120 }}>{t('health.columns.avgLatency')}</th>
+                <th style={{ width: 100 }}>{t('health.columns.totalCalls')}</th>
+                <th style={{ width: 170 }}>{t('health.columns.lastCheck')}</th>
+                <th style={{ width: 110 }}>{t('health.columns.actions')}</th>
               </tr>
-            ) : (
-              rows.map(([name, s]) => {
+            </thead>
+            <tbody>
+              {rows.map(([name, s]) => {
                 const healthy = s.healthy ?? s.status === 'healthy'
                 const rate =
                   typeof s.success_rate === 'number'
@@ -118,7 +151,7 @@ function HealthTab() {
                           color: healthy ? '#22c55e' : '#ef4444',
                         }}
                       >
-                        {healthy ? '健康' : '异常'}
+                        {healthy ? t('health.healthy') : t('health.unhealthy')}
                       </span>
                     </td>
                     <td>{rate != null ? `${rate.toFixed(1)}%` : '-'}</td>
@@ -133,16 +166,16 @@ function HealthTab() {
                         onClick={() => void handleCheck(name)}
                         disabled={checking === name}
                       >
-                        {checking === name ? '检查中…' : '立即检查'}
+                        {checking === name ? t('actions.checking') : t('actions.check')}
                       </button>
                     </td>
                   </tr>
                 )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
@@ -151,13 +184,14 @@ function HealthTab() {
 /*  断路器状态                                                          */
 /* ------------------------------------------------------------------ */
 
-const CB_STATE_META: Record<string, { label: string; color: string; bg: string }> = {
-  CLOSED: { label: 'CLOSED', color: '#22c55e', bg: 'rgba(34,197,94,.15)' },
-  OPEN: { label: 'OPEN', color: '#ef4444', bg: 'rgba(239,68,68,.15)' },
-  HALF_OPEN: { label: 'HALF_OPEN', color: '#eab308', bg: 'rgba(234,179,8,.15)' },
+const CB_STATE_META: Record<string, { color: string; bg: string }> = {
+  CLOSED: { color: '#22c55e', bg: 'rgba(34,197,94,.15)' },
+  OPEN: { color: '#ef4444', bg: 'rgba(239,68,68,.15)' },
+  HALF_OPEN: { color: '#eab308', bg: 'rgba(234,179,8,.15)' },
 }
 
 function BreakersTab() {
+  const { t } = useTranslation(NS)
   const [breakers, setBreakers] = useState<Record<string, CircuitBreakerState>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -170,24 +204,24 @@ function BreakersTab() {
       const res = await getCircuitBreakers()
       setBreakers(res.data.data ?? {})
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(e instanceof Error ? e.message : t('breakers.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const handleReset = async (name: string) => {
-    if (!window.confirm(`确认重置工具 ${name} 的断路器？`)) return
+    if (!window.confirm(t('breakers.confirmReset', { name }))) return
     setResetting(name)
     try {
       await resetCircuitBreaker(name)
       await load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '重置失败')
+      setError(e instanceof Error ? e.message : t('breakers.resetFailed'))
     } finally {
       setResetting(null)
     }
@@ -200,45 +234,60 @@ function BreakersTab() {
       <div className="admin-toolbar-right" style={{ marginBottom: 14 }}>
         <button className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
           <ICONS.refresh size={14} />
-          刷新
+          {t('actions.refresh')}
         </button>
       </div>
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
-      <div className="admin-table-wrapper">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>工具</th>
-              <th style={{ width: 130 }}>状态</th>
-              <th style={{ width: 100 }}>失败次数</th>
-              <th style={{ width: 100 }}>成功次数</th>
-              <th style={{ width: 170 }}>最近失败</th>
-              <th style={{ width: 110 }}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
+      {error && (
+        <div
+          className="admin-error"
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button className="admin-action-btn" onClick={() => void load()} disabled={loading}>
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
+      {loading && rows.length === 0 ? (
+        <Loading text={t('loading')} />
+      ) : rows.length === 0 ? (
+        error ? null : (
+          <EmptyState title={t('breakers.empty')} description={t('breakers.emptyDesc')} />
+        )
+      ) : (
+        <div className="admin-table-wrapper">
+          <table className="admin-table">
+            <thead>
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                  {loading ? '加载中…' : '暂无断路器记录'}
-                </td>
+                <th>{t('breakers.columns.tool')}</th>
+                <th style={{ width: 130 }}>{t('breakers.columns.status')}</th>
+                <th style={{ width: 100 }}>{t('breakers.columns.failureCount')}</th>
+                <th style={{ width: 100 }}>{t('breakers.columns.successCount')}</th>
+                <th style={{ width: 170 }}>{t('breakers.columns.lastFailure')}</th>
+                <th style={{ width: 110 }}>{t('breakers.columns.actions')}</th>
               </tr>
-            ) : (
-              rows.map(([name, b]) => {
-                const meta = CB_STATE_META[String(b.state ?? '').toUpperCase()] || {
-                  label: b.state || '-',
-                  color: '#9aa',
-                  bg: 'rgba(127,127,127,.15)',
-                }
+            </thead>
+            <tbody>
+              {rows.map(([name, b]) => {
+                const stateKey = String(b.state ?? '').toUpperCase()
+                const meta = CB_STATE_META[stateKey]
+                const label = meta
+                  ? t(`breakers.states.${stateKey}`)
+                  : b.state || '-'
+                const color = meta?.color ?? '#9aa'
+                const bg = meta?.bg ?? 'rgba(127,127,127,.15)'
                 return (
                   <tr key={name}>
                     <td className="admin-table-mono">{name}</td>
                     <td>
-                      <span
-                        className="badge"
-                        style={{ background: meta.bg, color: meta.color }}
-                      >
-                        {meta.label}
+                      <span className="badge" style={{ background: bg, color }}>
+                        {label}
                       </span>
                     </td>
                     <td>{b.failure_count ?? 0}</td>
@@ -254,16 +303,16 @@ function BreakersTab() {
                         onClick={() => void handleReset(name)}
                         disabled={resetting === name}
                       >
-                        {resetting === name ? '重置中…' : '重置'}
+                        {resetting === name ? t('actions.resetting') : t('actions.reset')}
                       </button>
                     </td>
                   </tr>
                 )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
@@ -273,6 +322,7 @@ function BreakersTab() {
 /* ------------------------------------------------------------------ */
 
 function AuditTab() {
+  const { t } = useTranslation(NS)
   const [records, setRecords] = useState<ToolAuditRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -295,11 +345,11 @@ function AuditTab() {
       setRecords(res.data.data ?? [])
       setPage(1)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(e instanceof Error ? e.message : t('audit.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [toolName, startTime, endTime])
+  }, [toolName, startTime, endTime, t])
 
   useEffect(() => {
     void load()
@@ -320,7 +370,7 @@ function AuditTab() {
             className="admin-search-input"
             value={toolName}
             onChange={(e) => setToolName(e.target.value)}
-            placeholder="工具名筛选"
+            placeholder={t('audit.toolNamePlaceholder')}
             style={{ minWidth: 160 }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void load()
@@ -331,96 +381,118 @@ function AuditTab() {
             className="admin-filter-select"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            title="起始时间"
+            title={t('audit.startTimeTitle')}
           />
           <input
             type="datetime-local"
             className="admin-filter-select"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            title="结束时间"
+            title={t('audit.endTimeTitle')}
           />
         </div>
         <button className="btn btn-primary" onClick={() => void load()} disabled={loading}>
           <ICONS.search size={14} />
-          {loading ? '查询中…' : '查询'}
+          {loading ? t('actions.searching') : t('actions.search')}
         </button>
       </div>
 
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
-
-      <div className="admin-table-wrapper">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: 140 }}>工具</th>
-              <th>参数</th>
-              <th>结果</th>
-              <th style={{ width: 80 }}>状态</th>
-              <th style={{ width: 100 }}>延迟</th>
-              <th style={{ width: 160 }}>时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pageRecords.length === 0 ? (
-              <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#9aa' }}>
-                  {loading ? '加载中…' : '暂无审计记录'}
-                </td>
-              </tr>
-            ) : (
-              pageRecords.map((r, idx) => (
-                <tr key={r.id ?? idx}>
-                  <td className="admin-table-mono" style={{ fontSize: '0.74rem' }}>
-                    {r.tool_name ?? '-'}
-                  </td>
-                  <td
-                    style={{ maxWidth: 240, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.72rem' }}
-                    title={truncate(r.params, 500)}
-                  >
-                    {truncate(r.params)}
-                  </td>
-                  <td
-                    style={{ maxWidth: 240, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.72rem' }}
-                    title={truncate(r.result, 500)}
-                  >
-                    {truncate(r.result)}
-                  </td>
-                  <td>
-                    {r.success ? (
-                      <span className="badge success">成功</span>
-                    ) : (
-                      <span className="badge failed">失败</span>
-                    )}
-                  </td>
-                  <td>{r.latency_ms != null ? `${Math.round(r.latency_ms)} ms` : '-'}</td>
-                  <td style={{ fontSize: '0.72rem', color: '#9aa' }}>
-                    {(r.created_at || r.timestamp)
-                      ? new Date(String(r.created_at || r.timestamp)).toLocaleString()
-                      : '-'}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {records.length > pageSize && (
-        <div className="admin-pagination">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-            上一页
-          </button>
-          <span>
-            第 {page} / {totalPages} 页（共 {records.length} 条）
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            下一页
+      {error && (
+        <div
+          className="admin-error"
+          style={{
+            marginBottom: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button className="admin-action-btn" onClick={() => void load()} disabled={loading}>
+            {t('actions.retry')}
           </button>
         </div>
+      )}
+
+      {loading && records.length === 0 ? (
+        <Loading text={t('loading')} />
+      ) : records.length === 0 ? (
+        error ? null : (
+          <EmptyState title={t('audit.empty')} description={t('audit.emptyDesc')} />
+        )
+      ) : (
+        <>
+          <div className="admin-table-wrapper">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 140 }}>{t('audit.columns.tool')}</th>
+                  <th>{t('audit.columns.params')}</th>
+                  <th>{t('audit.columns.result')}</th>
+                  <th style={{ width: 80 }}>{t('audit.columns.status')}</th>
+                  <th style={{ width: 100 }}>{t('audit.columns.latency')}</th>
+                  <th style={{ width: 160 }}>{t('audit.columns.time')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRecords.map((r, idx) => (
+                  <tr key={r.id ?? idx}>
+                    <td className="admin-table-mono" style={{ fontSize: '0.74rem' }}>
+                      {r.tool_name ?? '-'}
+                    </td>
+                    <td
+                      style={{ maxWidth: 240, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.72rem' }}
+                      title={truncate(r.params, 500)}
+                    >
+                      {truncate(r.params)}
+                    </td>
+                    <td
+                      style={{ maxWidth: 240, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.72rem' }}
+                      title={truncate(r.result, 500)}
+                    >
+                      {truncate(r.result)}
+                    </td>
+                    <td>
+                      {r.success ? (
+                        <span className="badge success">{t('audit.success')}</span>
+                      ) : (
+                        <span className="badge failed">{t('audit.failed')}</span>
+                      )}
+                    </td>
+                    <td>{r.latency_ms != null ? `${Math.round(r.latency_ms)} ms` : '-'}</td>
+                    <td style={{ fontSize: '0.72rem', color: '#9aa' }}>
+                      {(r.created_at || r.timestamp)
+                        ? new Date(String(r.created_at || r.timestamp)).toLocaleString()
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {records.length > pageSize && (
+            <div className="admin-pagination">
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                {t('audit.pagination.prev')}
+              </button>
+              <span>
+                {t('audit.pagination.info', {
+                  page,
+                  totalPages,
+                  total: records.length,
+                })}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                {t('audit.pagination.next')}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -431,12 +503,13 @@ function AuditTab() {
 /* ------------------------------------------------------------------ */
 
 export default function ToolMonitoringPage() {
+  const { t } = useTranslation(NS)
   const [tab, setTab] = useState<Tab>('health')
   return (
     <div>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">工具监控</h1>
-        <p className="admin-page-desc">工具健康 / 断路器状态 / 执行审计</p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('description')}</p>
       </div>
 
       <div className="tabs">
@@ -444,19 +517,19 @@ export default function ToolMonitoringPage() {
           className={`tab-item${tab === 'health' ? ' active' : ''}`}
           onClick={() => setTab('health')}
         >
-          工具健康
+          {t('tabs.health')}
         </button>
         <button
           className={`tab-item${tab === 'breakers' ? ' active' : ''}`}
           onClick={() => setTab('breakers')}
         >
-          断路器状态
+          {t('tabs.breakers')}
         </button>
         <button
           className={`tab-item${tab === 'audit' ? ' active' : ''}`}
           onClick={() => setTab('audit')}
         >
-          执行审计
+          {t('tabs.audit')}
         </button>
       </div>
 

@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
+import i18n from '../../i18n/config.ts'
+import zhCNAdminModel from '../../i18n/locales/zh-CN/admin-model.json'
+import enAdminModel from '../../i18n/locales/en/admin-model.json'
 import Modal from '../../components/ui/Modal.tsx'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
@@ -20,15 +25,19 @@ import {
   type ModelConfigCreatePayload,
 } from '../../api/models.ts'
 
+// adminModel 命名空间按需注册（config.ts 不在本页改动范围内）
+i18n.addResourceBundle('zh-CN', 'adminModel', zhCNAdminModel)
+i18n.addResourceBundle('en', 'adminModel', enAdminModel)
+
 // --------------- Constants ---------------
 
 const PROVIDERS = [
-  { value: 'openai', label: 'OpenAI', apiBase: 'https://api.openai.com/v1' },
-  { value: 'anthropic', label: 'Anthropic', apiBase: 'https://api.anthropic.com' },
-  { value: 'google', label: 'Google', apiBase: 'https://generativelanguage.googleapis.com/v1beta' },
-  { value: 'local', label: 'Local', apiBase: 'http://localhost:8080/v1' },
-  { value: 'ollama', label: 'Ollama', apiBase: 'http://localhost:11434/v1' },
-  { value: 'lmstudio', label: 'LM Studio', apiBase: 'http://localhost:1234/v1' },
+  { value: 'openai', apiBase: 'https://api.openai.com/v1' },
+  { value: 'anthropic', apiBase: 'https://api.anthropic.com' },
+  { value: 'google', apiBase: 'https://generativelanguage.googleapis.com/v1beta' },
+  { value: 'local', apiBase: 'http://localhost:8080/v1' },
+  { value: 'ollama', apiBase: 'http://localhost:11434/v1' },
+  { value: 'lmstudio', apiBase: 'http://localhost:1234/v1' },
 ] as const
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -42,20 +51,21 @@ const PROVIDER_COLORS: Record<string, string> = {
 
 // --------------- Form Schema ---------------
 
-const modelFormSchema = z.object({
-  provider: z.string().min(1, '请选择供应商'),
-  model_name: z.string().min(1, '请输入模型名称'),
-  display_name: z.string().min(1, '请输入展示名称'),
-  api_base: z.string().min(1, '请输入 API 端点'),
-  api_key: z.string().optional(),
-  is_default: z.boolean().default(false),
-  is_active: z.boolean().default(true),
-  temperature: z.coerce.number().min(0).max(2).default(0.7),
-  max_tokens: z.coerce.number().min(1).max(128000).default(4096),
-  top_p: z.coerce.number().min(0).max(1).default(0.9),
-})
+const makeModelFormSchema = (t: TFunction) =>
+  z.object({
+    provider: z.string().min(1, t('form.validation.providerRequired')),
+    model_name: z.string().min(1, t('form.validation.modelNameRequired')),
+    display_name: z.string().min(1, t('form.validation.displayNameRequired')),
+    api_base: z.string().min(1, t('form.validation.apiBaseRequired')),
+    api_key: z.string().optional(),
+    is_default: z.boolean().default(false),
+    is_active: z.boolean().default(true),
+    temperature: z.coerce.number().min(0).max(2).default(0.7),
+    max_tokens: z.coerce.number().min(1).max(128000).default(4096),
+    top_p: z.coerce.number().min(0).max(1).default(0.9),
+  })
 
-type ModelFormValues = z.infer<typeof modelFormSchema>
+type ModelFormValues = z.infer<ReturnType<typeof makeModelFormSchema>>
 
 // Plain type matching what the form produces after defaults are applied
 interface ModelFormData {
@@ -87,6 +97,7 @@ const EMPTY_FORM: ModelFormData = {
 // --------------- Component ---------------
 
 export default function ModelManagement() {
+  const { t } = useTranslation('adminModel')
   const queryClient = useQueryClient()
 
   // Query params state
@@ -104,14 +115,18 @@ export default function ModelManagement() {
   const [testing, setTesting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
+  const modelFormSchema = useMemo(() => makeModelFormSchema(t), [t])
+
   const form = useForm<ModelFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(modelFormSchema) as any,
     defaultValues: EMPTY_FORM,
   })
 
+  const providerLabel = (value: string) => t(`providers.${value}`, { defaultValue: value })
+
   // Query
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['model-configs', search, providerFilter, statusFilter, page],
     queryFn: () =>
       listModelConfigs({
@@ -226,16 +241,16 @@ export default function ModelManagement() {
       const res = await testModelConfig(item.id)
       setTestResult(res.data.data)
     } catch (err) {
-      setTestResult({ success: false, message: getErrorMessage(err, '测试失败'), result: null })
+      setTestResult({ success: false, message: getErrorMessage(err, t('messages.testFailed')), result: null })
     } finally {
       setTesting(false)
     }
   }
 
-  const submitLabel = editingId ? '保存' : '创建'
+  const submitLabel = editingId ? t('actions.save') : t('actions.create')
   const mutError =
     createMut.error || updateMut.error
-      ? getErrorMessage(createMut.error || updateMut.error, '操作失败')
+      ? getErrorMessage(createMut.error || updateMut.error, t('messages.operationFailed'))
       : ''
 
   // Reset page on filter change
@@ -247,8 +262,8 @@ export default function ModelManagement() {
     <div className="admin-model-management">
       {/* Header */}
       <div className="admin-page-header">
-        <h1 className="admin-page-title">模型管理</h1>
-        <p className="admin-page-desc">管理 AI 模型配置，包括供应商、API 端点、密钥和默认模型设置。</p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('description')}</p>
       </div>
 
       {/* Toolbar */}
@@ -258,7 +273,7 @@ export default function ModelManagement() {
             <ICONS.search size={14} />
             <input
               type="text"
-              placeholder="搜索模型名称..."
+              placeholder={t('search.placeholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="admin-search-input"
@@ -269,10 +284,10 @@ export default function ModelManagement() {
             onChange={(e) => setProviderFilter(e.target.value)}
             className="admin-filter-select"
           >
-            <option value="">全部供应商</option>
+            <option value="">{t('filters.allProviders')}</option>
             {PROVIDERS.map((p) => (
               <option key={p.value} value={p.value}>
-                {p.label}
+                {providerLabel(p.value)}
               </option>
             ))}
           </select>
@@ -281,14 +296,14 @@ export default function ModelManagement() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="admin-filter-select"
           >
-            <option value="">全部状态</option>
-            <option value="active">已启用</option>
-            <option value="inactive">已禁用</option>
+            <option value="">{t('filters.allStatus')}</option>
+            <option value="active">{t('filters.status.active')}</option>
+            <option value="inactive">{t('filters.status.inactive')}</option>
           </select>
         </div>
         <div className="admin-toolbar-right">
           <button className="btn btn-primary" onClick={openCreate}>
-            <ICONS.dashboard size={14} /> 添加模型
+            <ICONS.dashboard size={14} /> {t('actions.add')}
           </button>
         </div>
       </div>
@@ -297,22 +312,35 @@ export default function ModelManagement() {
       {isLoading ? (
         <Loading />
       ) : isError ? (
-        <div className="admin-error">{getErrorMessage(error, '加载模型列表失败')}</div>
+        <div
+          className="admin-error"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{getErrorMessage(error, t('messages.loadFailed'))}</span>
+          <button className="admin-action-btn" onClick={() => void refetch()}>
+            <ICONS.refresh size={14} /> {t('actions.retry')}
+          </button>
+        </div>
       ) : items.length === 0 ? (
-        <EmptyState title="暂无模型配置" />
+        <EmptyState title={t('empty.noModels')} />
       ) : (
         <>
           <div className="admin-table-wrapper">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>展示名称</th>
-                  <th>供应商</th>
-                  <th>模型名称</th>
-                  <th>API 端点</th>
-                  <th style={{ width: 70, textAlign: 'center' }}>默认</th>
-                  <th style={{ width: 80, textAlign: 'center' }}>状态</th>
-                  <th style={{ width: 180, textAlign: 'right' }}>操作</th>
+                  <th>{t('table.displayName')}</th>
+                  <th>{t('table.provider')}</th>
+                  <th>{t('table.modelName')}</th>
+                  <th>{t('table.apiBase')}</th>
+                  <th style={{ width: 70, textAlign: 'center' }}>{t('table.default')}</th>
+                  <th style={{ width: 80, textAlign: 'center' }}>{t('table.status')}</th>
+                  <th style={{ width: 180, textAlign: 'right' }}>{t('table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -328,7 +356,7 @@ export default function ModelManagement() {
                           backgroundColor: PROVIDER_COLORS[item.provider] || '#6b7280',
                         }}
                       >
-                        {PROVIDERS.find((p) => p.value === item.provider)?.label || item.provider}
+                        {providerLabel(item.provider)}
                       </span>
                     </td>
                     <td className="admin-table-mono">{item.model_name}</td>
@@ -337,13 +365,13 @@ export default function ModelManagement() {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {item.is_default ? (
-                        <span title="默认模型" style={{ color: '#f59e0b', fontSize: 18 }}>
+                        <span title={t('status.defaultModel')} style={{ color: '#f59e0b', fontSize: 18 }}>
                           ★
                         </span>
                       ) : (
                         <button
                           className="admin-icon-btn"
-                          title="设为默认"
+                          title={t('actions.setAsDefault')}
                           onClick={() => setDefaultMut.mutate(item.id)}
                         >
                           <ICONS.check size={14} />
@@ -354,7 +382,7 @@ export default function ModelManagement() {
                       <button
                         className={`admin-toggle ${item.is_active ? 'active' : ''}`}
                         onClick={() => toggleMut.mutate(item.id)}
-                        title={item.is_active ? '已启用，点击禁用' : '已禁用，点击启用'}
+                        title={item.is_active ? t('status.activeToggleOn') : t('status.activeToggleOff')}
                       >
                         <span className="admin-toggle-knob" />
                       </button>
@@ -363,21 +391,21 @@ export default function ModelManagement() {
                       <div className="admin-actions">
                         <button
                           className="admin-action-btn"
-                          title="测试连接"
+                          title={t('actions.testConnection')}
                           onClick={() => handleTest(item)}
                         >
                           <ICONS.send size={14} />
                         </button>
                         <button
                           className="admin-action-btn"
-                          title="编辑"
+                          title={t('actions.edit')}
                           onClick={() => openEdit(item)}
                         >
                           <ICONS.settings size={14} />
                         </button>
                         <button
                           className="admin-action-btn danger"
-                          title="删除"
+                          title={t('actions.delete')}
                           onClick={() => setDeleteConfirm(item.id)}
                         >
                           <ICONS.close size={14} />
@@ -394,13 +422,11 @@ export default function ModelManagement() {
           {totalPages > 1 && (
             <div className="admin-pagination">
               <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                上一页
+                {t('pagination.prev')}
               </button>
-              <span>
-                {page} / {totalPages}（共 {total} 条）
-              </span>
+              <span>{t('pagination.info', { page, totalPages, total })}</span>
               <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                下一页
+                {t('pagination.next')}
               </button>
             </div>
           )}
@@ -410,19 +436,19 @@ export default function ModelManagement() {
       {/* Create/Edit Dialog */}
       {formOpen && (
         <Modal
-          title={editingId ? '编辑模型配置' : '新建模型配置'}
+          title={editingId ? t('form.editTitle') : t('form.createTitle')}
           onClose={() => setFormOpen(false)}
           footer={
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setFormOpen(false)}>
-                取消
+                {t('actions.cancel')}
               </button>
               <button
                 className="btn btn-primary"
                 onClick={form.handleSubmit(onSubmit)}
                 disabled={createMut.isPending || updateMut.isPending}
               >
-                {createMut.isPending || updateMut.isPending ? '保存中...' : submitLabel}
+                {createMut.isPending || updateMut.isPending ? t('actions.saving') : submitLabel}
               </button>
             </div>
           }
@@ -431,7 +457,7 @@ export default function ModelManagement() {
             {mutError && <div className="admin-form-error">{mutError}</div>}
 
             <div className="admin-form-row">
-              <label className="admin-form-label">供应商</label>
+              <label className="admin-form-label">{t('form.provider')}</label>
               <select
                 className="admin-form-select"
                 {...form.register('provider')}
@@ -439,44 +465,44 @@ export default function ModelManagement() {
               >
                 {PROVIDERS.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {providerLabel(p.value)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">展示名称</label>
-              <input className="admin-form-input" {...form.register('display_name')} placeholder="如 GPT-4o" />
+              <label className="admin-form-label">{t('form.displayName')}</label>
+              <input className="admin-form-input" {...form.register('display_name')} placeholder={t('form.displayNamePlaceholder')} />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">模型名称</label>
-              <input className="admin-form-input" {...form.register('model_name')} placeholder="如 gpt-4o" />
+              <label className="admin-form-label">{t('form.modelName')}</label>
+              <input className="admin-form-input" {...form.register('model_name')} placeholder={t('form.modelNamePlaceholder')} />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">API 端点</label>
-              <input className="admin-form-input" {...form.register('api_base')} placeholder="https://api.openai.com/v1" />
+              <label className="admin-form-label">{t('form.apiBase')}</label>
+              <input className="admin-form-input" {...form.register('api_base')} placeholder={t('form.apiBasePlaceholder')} />
             </div>
 
             <div className="admin-form-row">
               <label className="admin-form-label">
-                API Key {editingId && <span className="admin-form-hint">（留空表示不修改）</span>}
+                {t('form.apiKey')} {editingId && <span className="admin-form-hint">{t('form.apiKeyKeepHint')}</span>}
               </label>
               <input
                 className="admin-form-input"
                 type="password"
                 {...form.register('api_key')}
-                placeholder={editingId ? '留空保持不变' : '输入 API Key'}
+                placeholder={editingId ? t('form.apiKeyKeepPlaceholder') : t('form.apiKeyPlaceholder')}
               />
             </div>
 
             <div className="admin-form-row">
-              <label className="admin-form-label">参数</label>
+              <label className="admin-form-label">{t('form.parameters')}</label>
               <div className="admin-form-inline">
                 <div className="admin-form-field">
-                  <span>Temperature</span>
+                  <span>{t('form.temperature')}</span>
                   <input
                     type="number"
                     step="0.1"
@@ -487,7 +513,7 @@ export default function ModelManagement() {
                   />
                 </div>
                 <div className="admin-form-field">
-                  <span>Max Tokens</span>
+                  <span>{t('form.maxTokens')}</span>
                   <input
                     type="number"
                     min="1"
@@ -497,7 +523,7 @@ export default function ModelManagement() {
                   />
                 </div>
                 <div className="admin-form-field">
-                  <span>Top P</span>
+                  <span>{t('form.topP')}</span>
                   <input
                     type="number"
                     step="0.1"
@@ -513,7 +539,7 @@ export default function ModelManagement() {
             <div className="admin-form-row">
               <label className="admin-form-checkbox">
                 <input type="checkbox" {...form.register('is_default')} />
-                <span>设为默认模型</span>
+                <span>{t('form.setAsDefault')}</span>
               </label>
             </div>
           </form>
@@ -522,21 +548,21 @@ export default function ModelManagement() {
 
       {/* Test Connection Dialog */}
       {testOpen && testTarget && (
-        <Modal title={`测试连接 — ${testTarget.display_name}`} onClose={() => setTestOpen(false)}>
+        <Modal title={t('test.title', { name: testTarget.display_name })} onClose={() => setTestOpen(false)}>
           <div className="admin-test-body">
             <div className="admin-test-info">
-              <span className="admin-test-label">供应商：</span>
-              {PROVIDERS.find((p) => p.value === testTarget.provider)?.label || testTarget.provider}
+              <span className="admin-test-label">{t('test.providerLabel')}</span>
+              {providerLabel(testTarget.provider)}
             </div>
             <div className="admin-test-info">
-              <span className="admin-test-label">模型：</span>
+              <span className="admin-test-label">{t('test.modelLabel')}</span>
               {testTarget.model_name}
             </div>
 
             {testing ? (
               <div className="admin-test-loading">
                 <Loading />
-                <span>正在测试连接...</span>
+                <span>{t('test.testing')}</span>
               </div>
             ) : testResult ? (
               <div className={`admin-test-result ${testResult.success ? 'success' : 'error'}`}>
@@ -544,12 +570,12 @@ export default function ModelManagement() {
                   {testResult.success ? (
                     <>
                       <ICONS.check size={18} />
-                      <span style={{ color: '#16a34a' }}>连接成功</span>
+                      <span style={{ color: '#16a34a' }}>{t('test.success')}</span>
                     </>
                   ) : (
                     <>
                       <ICONS.close size={18} />
-                      <span style={{ color: '#dc2626' }}>连接失败</span>
+                      <span style={{ color: '#dc2626' }}>{t('test.failed')}</span>
                     </>
                   )}
                 </div>
@@ -565,23 +591,23 @@ export default function ModelManagement() {
 
       {/* Delete Confirm Dialog */}
       {deleteConfirm && (
-        <Modal title="确认删除" onClose={() => setDeleteConfirm(null)}>
-          <p style={{ marginBottom: 16 }}>确定要删除此模型配置吗？此操作不可撤销。</p>
+        <Modal title={t('confirm.deleteTitle')} onClose={() => setDeleteConfirm(null)}>
+          <p style={{ marginBottom: 16 }}>{t('confirm.deleteMessage')}</p>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>
-              取消
+              {t('actions.cancel')}
             </button>
             <button
               className="btn btn-danger"
               onClick={() => deleteMut.mutate(deleteConfirm)}
               disabled={deleteMut.isPending}
             >
-              {deleteMut.isPending ? '删除中...' : '确认删除'}
+              {deleteMut.isPending ? t('actions.deleting') : t('actions.confirmDelete')}
             </button>
           </div>
           {deleteMut.error && (
             <div className="admin-form-error" style={{ marginTop: 8 }}>
-              {getErrorMessage(deleteMut.error, '删除失败')}
+              {getErrorMessage(deleteMut.error, t('messages.deleteFailed'))}
             </div>
           )}
         </Modal>

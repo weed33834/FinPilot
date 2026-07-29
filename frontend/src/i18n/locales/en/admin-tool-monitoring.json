@@ -1,0 +1,80 @@
+{
+  "title": "Tool Monitoring",
+  "description": "Tool health / Circuit breaker status / Execution audit",
+  "loading": "Loading…",
+  "actions": {
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "check": "Check Now",
+    "checking": "Checking…",
+    "reset": "Reset",
+    "resetting": "Resetting…",
+    "search": "Search",
+    "searching": "Searching…"
+  },
+  "tabs": {
+    "health": "Tool Health",
+    "breakers": "Circuit Breakers",
+    "audit": "Execution Audit"
+  },
+  "health": {
+    "empty": "No tool health data",
+    "emptyDesc": "No tool health metrics have been collected yet.",
+    "loadFailed": "Failed to load",
+    "checkFailed": "Check failed",
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "columns": {
+      "tool": "Tool",
+      "status": "Status",
+      "successRate": "Success Rate",
+      "avgLatency": "Avg Latency",
+      "totalCalls": "Calls",
+      "lastCheck": "Last Check",
+      "actions": "Actions"
+    }
+  },
+  "breakers": {
+    "empty": "No circuit breaker records",
+    "emptyDesc": "There are no circuit breaker status records.",
+    "loadFailed": "Failed to load",
+    "resetFailed": "Reset failed",
+    "confirmReset": "Reset the circuit breaker for tool {{name}}?",
+    "states": {
+      "CLOSED": "Closed",
+      "OPEN": "Open",
+      "HALF_OPEN": "Half-Open"
+    },
+    "columns": {
+      "tool": "Tool",
+      "status": "Status",
+      "failureCount": "Failures",
+      "successCount": "Successes",
+      "lastFailure": "Last Failure",
+      "actions": "Actions"
+    }
+  },
+  "audit": {
+    "empty": "No audit records",
+    "emptyDesc": "No audit records match the current filters.",
+    "loadFailed": "Failed to load",
+    "toolNamePlaceholder": "Filter by tool name",
+    "startTimeTitle": "Start time",
+    "endTimeTitle": "End time",
+    "success": "Success",
+    "failed": "Failed",
+    "columns": {
+      "tool": "Tool",
+      "params": "Params",
+      "result": "Result",
+      "status": "Status",
+      "latency": "Latency",
+      "time": "Time"
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next",
+      "info": "Page {{page}} / {{totalPages}} ({{total}} records)"
+    }
+  }
+}

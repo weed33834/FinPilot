@@ -1,0 +1,80 @@
+{
+  "title": "工具监控",
+  "description": "工具健康 / 断路器状态 / 执行审计",
+  "loading": "加载中…",
+  "actions": {
+    "refresh": "刷新",
+    "retry": "重试",
+    "check": "立即检查",
+    "checking": "检查中…",
+    "reset": "重置",
+    "resetting": "重置中…",
+    "search": "查询",
+    "searching": "查询中…"
+  },
+  "tabs": {
+    "health": "工具健康",
+    "breakers": "断路器状态",
+    "audit": "执行审计"
+  },
+  "health": {
+    "empty": "暂无工具健康数据",
+    "emptyDesc": "尚未采集到任何工具的健康指标。",
+    "loadFailed": "加载失败",
+    "checkFailed": "检查失败",
+    "healthy": "健康",
+    "unhealthy": "异常",
+    "columns": {
+      "tool": "工具",
+      "status": "状态",
+      "successRate": "成功率",
+      "avgLatency": "平均延迟",
+      "totalCalls": "调用数",
+      "lastCheck": "最近检查",
+      "actions": "操作"
+    }
+  },
+  "breakers": {
+    "empty": "暂无断路器记录",
+    "emptyDesc": "当前没有断路器状态记录。",
+    "loadFailed": "加载失败",
+    "resetFailed": "重置失败",
+    "confirmReset": "确认重置工具 {{name}} 的断路器？",
+    "states": {
+      "CLOSED": "闭合",
+      "OPEN": "断开",
+      "HALF_OPEN": "半开"
+    },
+    "columns": {
+      "tool": "工具",
+      "status": "状态",
+      "failureCount": "失败次数",
+      "successCount": "成功次数",
+      "lastFailure": "最近失败",
+      "actions": "操作"
+    }
+  },
+  "audit": {
+    "empty": "暂无审计记录",
+    "emptyDesc": "当前筛选条件下没有审计记录。",
+    "loadFailed": "加载失败",
+    "toolNamePlaceholder": "工具名筛选",
+    "startTimeTitle": "起始时间",
+    "endTimeTitle": "结束时间",
+    "success": "成功",
+    "failed": "失败",
+    "columns": {
+      "tool": "工具",
+      "params": "参数",
+      "result": "结果",
+      "status": "状态",
+      "latency": "延迟",
+      "time": "时间"
+    },
+    "pagination": {
+      "prev": "上一页",
+      "next": "下一页",
+      "info": "第 {{page}} / {{totalPages}} 页（共 {{total}} 条）"
+    }
+  }
+}

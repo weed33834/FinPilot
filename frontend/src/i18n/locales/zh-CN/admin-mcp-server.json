@@ -1,0 +1,101 @@
+{
+  "title": "MCP 服务器管理",
+  "subtitle": "管理 Model Context Protocol 服务器连接与工具集成",
+  "actions": {
+    "addServer": "添加服务器",
+    "refresh": "刷新",
+    "search": "搜索",
+    "edit": "编辑",
+    "delete": "删除",
+    "enable": "启用",
+    "disable": "禁用",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "create": "新建",
+    "test": "测试",
+    "testing": "测试中...",
+    "retry": "重试"
+  },
+  "status": {
+    "loading": "加载中...",
+    "saving": "保存中...",
+    "success": "操作成功",
+    "failed": "操作失败",
+    "empty": "暂无数据"
+  },
+  "table": {
+    "name": "名称",
+    "displayName": "展示名",
+    "transport": "传输方式",
+    "status": "状态",
+    "lastStatus": "最近状态",
+    "actions": "操作"
+  },
+  "badge": {
+    "builtin": "内置"
+  },
+  "transports": {
+    "stdio": "stdio",
+    "sse": "sse",
+    "streamable_http": "streamable_http"
+  },
+  "lastStatus": {
+    "connected": "已连接",
+    "ok": "正常",
+    "success": "成功",
+    "healthy": "健康",
+    "ready": "就绪",
+    "error": "错误",
+    "failed": "失败",
+    "disconnected": "已断开",
+    "unreachable": "不可达",
+    "timeout": "超时",
+    "offline": "离线"
+  },
+  "empty": {
+    "title": "暂无 MCP 服务器",
+    "description": "尚未配置任何 MCP 服务器，点击「添加服务器」开始。"
+  },
+  "errors": {
+    "loadFailed": "加载 MCP 服务器列表失败"
+  },
+  "form": {
+    "createTitle": "添加 MCP 服务器",
+    "editTitle": "编辑 MCP 服务器",
+    "name": "名称 (name)",
+    "namePlaceholder": "唯一标识，如 filesystem",
+    "displayName": "展示名 (display_name)",
+    "displayNamePlaceholder": "便于识别的名称",
+    "description": "描述",
+    "descriptionPlaceholder": "可选",
+    "transport": "传输方式 (transport)",
+    "priority": "优先级 (priority)",
+    "command": "命令 (command)",
+    "commandPlaceholder": "例如：npx -y @modelcontextprotocol/server-filesystem /tmp",
+    "url": "URL",
+    "urlPlaceholder": "https://example.com/mcp",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "可选，用于远程服务鉴权",
+    "envVars": "环境变量 (env_vars, JSON)",
+    "envVarsPlaceholder": "{ \"FOO\": \"bar\" }",
+    "isActive": "启用此服务器"
+  },
+  "validation": {
+    "nameRequired": "请填写服务器名称",
+    "displayNameRequired": "请填写展示名称",
+    "transportRequired": "请选择传输方式",
+    "envVarsInvalid": "环境变量 JSON 格式错误"
+  },
+  "toast": {
+    "created": "MCP 服务器已创建",
+    "updated": "MCP 服务器已更新",
+    "deleted": "MCP 服务器已删除",
+    "testSuccess": "连接测试成功",
+    "testSuccessDesc": "{{name}}（{{transport}}）状态：{{status}}",
+    "testFailed": "连接测试失败"
+  },
+  "confirm": {
+    "deleteMessage": "确定要删除服务器「<strong>{{name}}</strong>」吗？此操作不可恢复。"
+  }
+}

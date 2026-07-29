@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
+import i18n from '../../i18n/config.ts'
+import zhCnResource from '../../i18n/locales/zh-CN/admin-mcp-server.json'
+import enResource from '../../i18n/locales/en/admin-mcp-server.json'
 import Modal from '../../components/ui/Modal.tsx'
 import Loading from '../../components/ui/Loading.tsx'
 import EmptyState from '../../components/ui/EmptyState.tsx'
@@ -20,6 +23,16 @@ import {
   type McpServerCreatePayload,
   type McpServerUpdatePayload,
 } from '../../api/mcpServers.ts'
+
+// 命名空间未在 i18n/config.ts 中注册（按要求不修改该文件），这里在模块加载时
+// 同步注入资源，子组件通过 useTranslation('adminMcpServer') 消费。
+const NS = 'adminMcpServer'
+if (!i18n.hasResourceBundle('zh-CN', NS)) {
+  i18n.addResourceBundle('zh-CN', NS, zhCnResource)
+}
+if (!i18n.hasResourceBundle('en', NS)) {
+  i18n.addResourceBundle('en', NS, enResource)
+}
 
 interface TransportOption {
   value: string
@@ -72,15 +85,173 @@ function transportBadgeClass(transport: string): string {
 }
 
 function LastStatusBadge({ status }: { status: string | null }) {
+  const { t } = useTranslation('adminMcpServer')
   if (!status) return <span className="text-muted">—</span>
   const ok = LAST_STATUS_OK.includes(status)
   const bad = LAST_STATUS_BAD.includes(status)
   const cls = ok ? 'badge success' : bad ? 'badge failed' : 'badge draft'
-  return <span className={cls}>{status}</span>
+  return <span className={cls}>{t(`lastStatus.${status}`, { defaultValue: status })}</span>
+}
+
+interface McpServerFormProps {
+  form: FormState
+  updateField: <K extends keyof FormState>(key: K, value: FormState[K]) => void
+  transportOptions: TransportOption[]
+  editingId: string | null
+  submitting: boolean
+  onClose: () => void
+  onSave: () => void
+}
+
+function McpServerForm({
+  form,
+  updateField,
+  transportOptions,
+  editingId,
+  submitting,
+  onClose,
+  onSave,
+}: McpServerFormProps) {
+  const { t } = useTranslation('adminMcpServer')
+  const isStdio = form.transport === 'stdio'
+
+  return (
+    <Modal
+      title={editingId ? t('form.editTitle') : t('form.createTitle')}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            {t('actions.cancel')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onSave}
+            disabled={submitting}
+          >
+            {submitting
+              ? t('status.saving')
+              : editingId
+                ? t('actions.save')
+                : t('actions.create')}
+          </button>
+        </>
+      }
+    >
+      <div className="admin-form-grid">
+        <div className="admin-form-group">
+          <label>{t('form.name')}</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => updateField('name', e.target.value)}
+            placeholder={t('form.namePlaceholder')}
+            disabled={!!editingId}
+          />
+        </div>
+        <div className="admin-form-group">
+          <label>{t('form.displayName')}</label>
+          <input
+            type="text"
+            value={form.display_name}
+            onChange={(e) => updateField('display_name', e.target.value)}
+            placeholder={t('form.displayNamePlaceholder')}
+          />
+        </div>
+
+        <div className="admin-form-group full-width">
+          <label>{t('form.description')}</label>
+          <textarea
+            value={form.description}
+            onChange={(e) => updateField('description', e.target.value)}
+            rows={2}
+            placeholder={t('form.descriptionPlaceholder')}
+          />
+        </div>
+
+        <div className="admin-form-group">
+          <label>{t('form.transport')}</label>
+          <select
+            value={form.transport}
+            onChange={(e) => updateField('transport', e.target.value)}
+          >
+            {transportOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t(`transports.${opt.value}`, { defaultValue: opt.label || opt.value })}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="admin-form-group">
+          <label>{t('form.priority')}</label>
+          <input
+            type="number"
+            value={form.priority}
+            onChange={(e) => updateField('priority', Number(e.target.value))}
+            min={0}
+          />
+        </div>
+
+        {isStdio ? (
+          <div className="admin-form-group full-width">
+            <label>{t('form.command')}</label>
+            <input
+              type="text"
+              value={form.command}
+              onChange={(e) => updateField('command', e.target.value)}
+              placeholder={t('form.commandPlaceholder')}
+            />
+          </div>
+        ) : (
+          <div className="admin-form-group full-width">
+            <label>{t('form.url')}</label>
+            <input
+              type="text"
+              value={form.url}
+              onChange={(e) => updateField('url', e.target.value)}
+              placeholder={t('form.urlPlaceholder')}
+            />
+          </div>
+        )}
+
+        <div className="admin-form-group full-width">
+          <label>{t('form.apiKey')}</label>
+          <input
+            type="password"
+            value={form.api_key}
+            onChange={(e) => updateField('api_key', e.target.value)}
+            placeholder={t('form.apiKeyPlaceholder')}
+          />
+        </div>
+
+        <div className="admin-form-group full-width">
+          <label>{t('form.envVars')}</label>
+          <textarea
+            value={form.env_vars}
+            onChange={(e) => updateField('env_vars', e.target.value)}
+            rows={5}
+            placeholder={t('form.envVarsPlaceholder')}
+          />
+        </div>
+
+        <div className="full-width">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) => updateField('is_active', e.target.checked)}
+            />
+            <span>{t('form.isActive')}</span>
+          </label>
+        </div>
+      </div>
+    </Modal>
+  )
 }
 
 export default function McpServerManagement() {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation('adminMcpServer')
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -89,7 +260,7 @@ export default function McpServerManagement() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [testingId, setTestingId] = useState<string | null>(null)
 
-  const { data: servers, isLoading } = useQuery({
+  const { data: servers, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['mcp-servers'],
     queryFn: () => listMcpServers().then((r) => r.data.data),
   })
@@ -115,14 +286,12 @@ export default function McpServerManagement() {
     )
   }, [servers, search])
 
-  const isStdio = form.transport === 'stdio'
-
   const createMut = useMutation({
     mutationFn: (payload: McpServerCreatePayload) => createMcpServer(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mcp-servers'] })
       setFormOpen(false)
-      toast.success(t('status.success'), 'MCP 服务器已创建')
+      toast.success(t('status.success'), t('toast.created'))
     },
     onError: (err: unknown) => toast.error(t('status.failed'), getErrorMessage(err)),
   })
@@ -134,7 +303,7 @@ export default function McpServerManagement() {
       queryClient.invalidateQueries({ queryKey: ['mcp-servers'] })
       setFormOpen(false)
       setEditingId(null)
-      toast.success(t('status.success'), 'MCP 服务器已更新')
+      toast.success(t('status.success'), t('toast.updated'))
     },
     onError: (err: unknown) => toast.error(t('status.failed'), getErrorMessage(err)),
   })
@@ -143,7 +312,7 @@ export default function McpServerManagement() {
     mutationFn: (id: string) => deleteMcpServer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mcp-servers'] })
-      toast.success(t('status.success'), 'MCP 服务器已删除')
+      toast.success(t('status.success'), t('toast.deleted'))
     },
     onError: (err: unknown) => toast.error(t('status.failed'), getErrorMessage(err)),
   })
@@ -162,9 +331,16 @@ export default function McpServerManagement() {
     onMutate: (id) => setTestingId(id),
     onSuccess: (res) => {
       const data = res.data.data
-      toast.success('连接测试成功', `${data.name}（${data.transport}）状态：${data.status}`)
+      toast.success(
+        t('toast.testSuccess'),
+        t('toast.testSuccessDesc', {
+          name: data.name,
+          transport: data.transport,
+          status: data.status,
+        }),
+      )
     },
-    onError: (err: unknown) => toast.error('连接测试失败', getErrorMessage(err)),
+    onError: (err: unknown) => toast.error(t('toast.testFailed'), getErrorMessage(err)),
     onSettled: () => setTestingId(null),
   })
 
@@ -205,15 +381,15 @@ export default function McpServerManagement() {
 
   const handleSave = () => {
     if (!form.name.trim()) {
-      toast.error('请填写服务器名称')
+      toast.error(t('validation.nameRequired'))
       return
     }
     if (!form.display_name.trim()) {
-      toast.error('请填写展示名称')
+      toast.error(t('validation.displayNameRequired'))
       return
     }
     if (!form.transport) {
-      toast.error('请选择传输方式')
+      toast.error(t('validation.transportRequired'))
       return
     }
 
@@ -226,7 +402,7 @@ export default function McpServerManagement() {
         }
         envVars = parsed as Record<string, string>
       } catch {
-        toast.error('环境变量 JSON 格式错误')
+        toast.error(t('validation.envVarsInvalid'))
         return
       }
     }
@@ -271,9 +447,12 @@ export default function McpServerManagement() {
     const ok = await confirm({
       title: t('actions.delete'),
       message: (
-        <>
-          确定要删除服务器「<strong>{server.display_name}</strong>」吗？此操作不可恢复。
-        </>
+        <Trans
+          i18nKey="confirm.deleteMessage"
+          ns="adminMcpServer"
+          values={{ name: server.display_name }}
+          components={{ strong: <strong /> }}
+        />
       ),
       confirmText: t('actions.confirm'),
       cancelText: t('actions.cancel'),
@@ -290,8 +469,8 @@ export default function McpServerManagement() {
       {/* 页头 */}
       <div className="page-header">
         <div>
-          <h1>MCP 服务器管理</h1>
-          <p className="text-muted">管理 Model Context Protocol 服务器连接与工具集成</p>
+          <h1>{t('title')}</h1>
+          <p className="text-muted">{t('subtitle')}</p>
         </div>
         <div className="action-group">
           <button
@@ -304,7 +483,7 @@ export default function McpServerManagement() {
             {t('actions.refresh')}
           </button>
           <button type="button" className="btn btn-primary" onClick={handleCreate}>
-            + 添加服务器
+            + {t('actions.addServer')}
           </button>
         </div>
       </div>
@@ -324,10 +503,21 @@ export default function McpServerManagement() {
       {/* 列表 */}
       {isLoading ? (
         <Loading text={t('status.loading')} />
+      ) : isError ? (
+        <EmptyState
+          title={t('errors.loadFailed')}
+          description={getErrorMessage(error)}
+          icon="empty"
+          action={
+            <button type="button" className="btn btn-secondary" onClick={() => refetch()}>
+              {t('actions.retry')}
+            </button>
+          }
+        />
       ) : filteredServers.length === 0 ? (
         <EmptyState
-          title={t('status.empty')}
-          description="尚未配置任何 MCP 服务器，点击「添加服务器」开始。"
+          title={t('empty.title')}
+          description={t('empty.description')}
           icon="empty"
         />
       ) : (
@@ -335,12 +525,12 @@ export default function McpServerManagement() {
           <table>
             <thead>
               <tr>
-                <th>名称</th>
-                <th>展示名</th>
-                <th>传输方式</th>
-                <th>状态</th>
-                <th>最近状态</th>
-                <th>操作</th>
+                <th>{t('table.name')}</th>
+                <th>{t('table.displayName')}</th>
+                <th>{t('table.transport')}</th>
+                <th>{t('table.status')}</th>
+                <th>{t('table.lastStatus')}</th>
+                <th>{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -350,14 +540,14 @@ export default function McpServerManagement() {
                     <span className="font-medium">{server.name}</span>
                     {server.is_builtin && (
                       <span className="badge draft" style={{ marginLeft: 6 }}>
-                        内置
+                        {t('badge.builtin')}
                       </span>
                     )}
                   </td>
                   <td>{server.display_name}</td>
                   <td>
                     <span className={transportBadgeClass(server.transport)}>
-                      {server.transport}
+                      {t(`transports.${server.transport}`, { defaultValue: server.transport })}
                     </span>
                   </td>
                   <td>
@@ -386,7 +576,7 @@ export default function McpServerManagement() {
                         onClick={() => testMut.mutate(server.id)}
                         disabled={testingId === server.id}
                       >
-                        {testingId === server.id ? '测试中...' : '测试'}
+                        {testingId === server.id ? t('actions.testing') : t('actions.test')}
                       </button>
                       <button
                         type="button"
@@ -416,137 +606,15 @@ export default function McpServerManagement() {
 
       {/* 创建 / 编辑表单 */}
       {formOpen && (
-        <Modal
-          title={editingId ? `${t('actions.edit')} MCP 服务器` : '添加 MCP 服务器'}
+        <McpServerForm
+          form={form}
+          updateField={updateField}
+          transportOptions={transportOptions}
+          editingId={editingId}
+          submitting={submitting}
           onClose={closeForm}
-          footer={
-            <>
-              <button type="button" className="btn btn-secondary" onClick={closeForm}>
-                {t('actions.cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSave}
-                disabled={submitting}
-              >
-                {submitting
-                  ? t('status.saving')
-                  : editingId
-                    ? t('actions.save')
-                    : t('actions.create')}
-              </button>
-            </>
-          }
-        >
-          <div className="admin-form-grid">
-            <div className="admin-form-group">
-              <label>名称 (name)</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => updateField('name', e.target.value)}
-                placeholder="唯一标识，如 filesystem"
-                disabled={!!editingId}
-              />
-            </div>
-            <div className="admin-form-group">
-              <label>展示名 (display_name)</label>
-              <input
-                type="text"
-                value={form.display_name}
-                onChange={(e) => updateField('display_name', e.target.value)}
-                placeholder="便于识别的名称"
-              />
-            </div>
-
-            <div className="admin-form-group full-width">
-              <label>描述</label>
-              <textarea
-                value={form.description}
-                onChange={(e) => updateField('description', e.target.value)}
-                rows={2}
-                placeholder="可选"
-              />
-            </div>
-
-            <div className="admin-form-group">
-              <label>传输方式 (transport)</label>
-              <select
-                value={form.transport}
-                onChange={(e) => updateField('transport', e.target.value)}
-              >
-                {transportOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="admin-form-group">
-              <label>优先级 (priority)</label>
-              <input
-                type="number"
-                value={form.priority}
-                onChange={(e) => updateField('priority', Number(e.target.value))}
-                min={0}
-              />
-            </div>
-
-            {isStdio ? (
-              <div className="admin-form-group full-width">
-                <label>命令 (command)</label>
-                <input
-                  type="text"
-                  value={form.command}
-                  onChange={(e) => updateField('command', e.target.value)}
-                  placeholder="例如：npx -y @modelcontextprotocol/server-filesystem /tmp"
-                />
-              </div>
-            ) : (
-              <div className="admin-form-group full-width">
-                <label>URL</label>
-                <input
-                  type="text"
-                  value={form.url}
-                  onChange={(e) => updateField('url', e.target.value)}
-                  placeholder="https://example.com/mcp"
-                />
-              </div>
-            )}
-
-            <div className="admin-form-group full-width">
-              <label>API Key</label>
-              <input
-                type="password"
-                value={form.api_key}
-                onChange={(e) => updateField('api_key', e.target.value)}
-                placeholder="可选，用于远程服务鉴权"
-              />
-            </div>
-
-            <div className="admin-form-group full-width">
-              <label>环境变量 (env_vars, JSON)</label>
-              <textarea
-                value={form.env_vars}
-                onChange={(e) => updateField('env_vars', e.target.value)}
-                rows={5}
-                placeholder='{ "FOO": "bar" }'
-              />
-            </div>
-
-            <div className="full-width">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={form.is_active}
-                  onChange={(e) => updateField('is_active', e.target.checked)}
-                />
-                <span>启用此服务器</span>
-              </label>
-            </div>
-          </div>
-        </Modal>
+          onSave={handleSave}
+        />
       )}
     </div>
   )

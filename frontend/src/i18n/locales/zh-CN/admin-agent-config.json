@@ -1,0 +1,105 @@
+{
+  "title": "Agent 配置管理",
+  "toolbar": {
+    "create": "创建 Agent"
+  },
+  "filters": {
+    "searchPlaceholder": "搜索名称或描述...",
+    "allTypes": "全部类型",
+    "allStatuses": "全部状态"
+  },
+  "types": {
+    "chat": "对话",
+    "analysis": "分析",
+    "report": "报告",
+    "sql_agent": "SQL"
+  },
+  "statuses": {
+    "active": "已启用",
+    "inactive": "已禁用"
+  },
+  "table": {
+    "name": "名称",
+    "type": "类型",
+    "model": "关联模型",
+    "prompt": "关联提示词",
+    "tools": "工具",
+    "skills": "技能",
+    "status": "状态",
+    "actions": "操作"
+  },
+  "status": {
+    "active": "启用",
+    "inactive": "禁用",
+    "loading": "加载中..."
+  },
+  "actions": {
+    "test": "测试",
+    "duplicate": "复制",
+    "edit": "编辑",
+    "delete": "删除",
+    "retry": "重试"
+  },
+  "pagination": {
+    "info": "共 {{total}} 条",
+    "currentPage": "第 {{page}} 页",
+    "prev": "上一页",
+    "next": "下一页"
+  },
+  "empty": {
+    "noConfigs": "暂无 Agent 配置"
+  },
+  "messages": {
+    "loadFailed": "加载 Agent 配置列表失败"
+  },
+  "form": {
+    "editTitle": "编辑 Agent 配置",
+    "createTitle": "创建 Agent 配置",
+    "name": "名称",
+    "namePlaceholder": "Agent 名称",
+    "type": "类型",
+    "typeOptions": {
+      "chat": "对话 Agent",
+      "analysis": "分析 Agent",
+      "report": "报告 Agent",
+      "sql_agent": "SQL Agent"
+    },
+    "description": "描述",
+    "descriptionPlaceholder": "描述",
+    "model": "关联模型",
+    "promptTemplate": "关联提示词模板",
+    "notLinked": "不关联",
+    "maxIterations": "最大迭代次数",
+    "temperature": "Temperature",
+    "systemPrompt": "System Prompt",
+    "systemPromptPlaceholder": "覆盖默认 system prompt（可选）",
+    "tools": "关联工具 (多选)",
+    "skills": "关联技能 (多选)",
+    "multiSelectHint": "按住 Ctrl 多选",
+    "cancel": "取消",
+    "save": "保存",
+    "create": "创建",
+    "saving": "保存中...",
+    "validation": {
+      "required": "必填"
+    }
+  },
+  "test": {
+    "title": "测试: {{name}}",
+    "messageLabel": "测试消息",
+    "messagePlaceholder": "输入测试消息...",
+    "send": "发送测试",
+    "testing": "测试中...",
+    "defaultMessage": "你好，请介绍一下你自己",
+    "thinking": "思考",
+    "answer": "回答",
+    "duration": "耗时: {{ms}}ms"
+  },
+  "delete": {
+    "title": "确认删除",
+    "message": "确定要删除此 Agent 配置吗？此操作不可撤销。",
+    "cancel": "取消",
+    "deleting": "删除中...",
+    "confirm": "确认删除"
+  }
+}

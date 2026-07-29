@@ -1,0 +1,103 @@
+{
+  "title": "Model Management",
+  "description": "Manage AI model configurations, including providers, API endpoints, keys, and default model settings.",
+  "search": {
+    "placeholder": "Search model name..."
+  },
+  "filters": {
+    "allProviders": "All Providers",
+    "allStatus": "All Status",
+    "status": {
+      "active": "Active",
+      "inactive": "Disabled"
+    }
+  },
+  "actions": {
+    "add": "Add Model",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "saving": "Saving...",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleting": "Deleting...",
+    "confirmDelete": "Confirm Delete",
+    "testConnection": "Test Connection",
+    "setAsDefault": "Set as Default",
+    "retry": "Retry"
+  },
+  "table": {
+    "displayName": "Display Name",
+    "provider": "Provider",
+    "modelName": "Model Name",
+    "apiBase": "API Endpoint",
+    "default": "Default",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "status": {
+    "defaultModel": "Default model",
+    "activeToggleOn": "Active, click to disable",
+    "activeToggleOff": "Disabled, click to enable"
+  },
+  "providers": {
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "google": "Google",
+    "local": "Local",
+    "ollama": "Ollama",
+    "lmstudio": "LM Studio"
+  },
+  "empty": {
+    "noModels": "No model configurations"
+  },
+  "messages": {
+    "loadFailed": "Failed to load model list",
+    "operationFailed": "Operation failed",
+    "testFailed": "Test failed",
+    "deleteFailed": "Delete failed"
+  },
+  "pagination": {
+    "prev": "Prev",
+    "next": "Next",
+    "info": "{{page}} / {{totalPages}} ({{total}} total)"
+  },
+  "form": {
+    "editTitle": "Edit Model Configuration",
+    "createTitle": "New Model Configuration",
+    "provider": "Provider",
+    "displayName": "Display Name",
+    "displayNamePlaceholder": "e.g. GPT-4o",
+    "modelName": "Model Name",
+    "modelNamePlaceholder": "e.g. gpt-4o",
+    "apiBase": "API Endpoint",
+    "apiBasePlaceholder": "https://api.openai.com/v1",
+    "apiKey": "API Key",
+    "apiKeyKeepHint": "(leave blank to keep unchanged)",
+    "apiKeyKeepPlaceholder": "Leave blank to keep unchanged",
+    "apiKeyPlaceholder": "Enter API Key",
+    "parameters": "Parameters",
+    "temperature": "Temperature",
+    "maxTokens": "Max Tokens",
+    "topP": "Top P",
+    "setAsDefault": "Set as default model",
+    "validation": {
+      "providerRequired": "Please select a provider",
+      "modelNameRequired": "Please enter a model name",
+      "displayNameRequired": "Please enter a display name",
+      "apiBaseRequired": "Please enter the API endpoint"
+    }
+  },
+  "test": {
+    "title": "Test Connection — {{name}}",
+    "providerLabel": "Provider: ",
+    "modelLabel": "Model: ",
+    "testing": "Testing connection...",
+    "success": "Connection succeeded",
+    "failed": "Connection failed"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "Are you sure you want to delete this model configuration? This action cannot be undone."
+  }
+}
