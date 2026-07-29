@@ -1,0 +1,94 @@
+{
+  "title": "Tool Management",
+  "subtitle": "Manage available tools and their invocation configurations",
+  "search": {
+    "placeholder": "Search tool name..."
+  },
+  "filters": {
+    "allTypes": "All Types",
+    "allStatus": "All Status",
+    "status": {
+      "active": "Enabled",
+      "inactive": "Disabled"
+    }
+  },
+  "actions": {
+    "add": "Create Tool",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "copy": "Copy",
+    "test": "Test",
+    "runTest": "Run Test",
+    "testing": "Testing...",
+    "retry": "Retry"
+  },
+  "table": {
+    "displayName": "Display Name",
+    "type": "Type",
+    "builtin": "Built-in",
+    "status": "Status",
+    "description": "Description",
+    "actions": "Actions"
+  },
+  "types": {
+    "python_function": "Python Function",
+    "http_api": "HTTP API",
+    "sql_query": "SQL Query",
+    "file_operation": "File Operation",
+    "search": "Search",
+    "web_search": "Web Search"
+  },
+  "badge": {
+    "builtin": "Built-in",
+    "custom": "Custom"
+  },
+  "status": {
+    "loading": "Loading..."
+  },
+  "empty": {
+    "title": "No tool data",
+    "description": "Click \"Create Tool\" to add"
+  },
+  "messages": {
+    "loadFailed": "Failed to load tool list",
+    "createFailed": "Create failed",
+    "updateFailed": "Update failed",
+    "deleteFailed": "Delete failed",
+    "toggleFailed": "Operation failed",
+    "duplicateFailed": "Copy failed"
+  },
+  "pagination": {
+    "total": "{{total}} tools in total",
+    "prev": "Previous",
+    "next": "Next",
+    "info": "Page {{page}}/{{totalPages}}"
+  },
+  "form": {
+    "createTitle": "Create Tool",
+    "editTitle": "Edit Tool",
+    "name": "Tool Name (name)",
+    "displayName": "Display Name",
+    "type": "Type",
+    "typePlaceholder": "Select type",
+    "apiKey": "API Key (optional)",
+    "description": "Description",
+    "config": "Config (JSON)",
+    "validation": {
+      "required": "Required"
+    }
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "This will remove the tool from the system and cannot be undone. Continue?"
+  },
+  "test": {
+    "title": "Test Tool: {{name}}",
+    "params": "Parameters (JSON)",
+    "success": "Success",
+    "failed": "Failed",
+    "duration": "Duration: {{ms}}ms"
+  }
+}

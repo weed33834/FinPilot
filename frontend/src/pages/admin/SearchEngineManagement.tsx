@@ -1,8 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
+import i18n from '../../i18n/config.ts'
+import zhCnResource from '../../i18n/locales/zh-CN/admin-search-engine.json'
+import enResource from '../../i18n/locales/en/admin-search-engine.json'
+import EmptyState from '../../components/ui/EmptyState.tsx'
 import { ICONS } from '../../components/ui/Icons.tsx'
 import { getErrorMessage } from '../../utils/errors.ts'
 import {
@@ -18,6 +24,16 @@ import {
   type SearchEngineUpdatePayload,
 } from '../../api/searchEngines.ts'
 
+// 命名空间未在 i18n/config.ts 中注册（按要求不修改该文件），这里在模块加载时
+// 同步注入资源，组件通过 useTranslation('adminSearchEngine') 消费。
+const NS = 'adminSearchEngine'
+if (!i18n.hasResourceBundle('zh-CN', NS)) {
+  i18n.addResourceBundle('zh-CN', NS, zhCnResource)
+}
+if (!i18n.hasResourceBundle('en', NS)) {
+  i18n.addResourceBundle('en', NS, enResource)
+}
+
 const ENGINE_BADGES: Record<string, string> = {
   google: 'bg-red-900/30 text-red-300 border-red-700',
   bing: 'bg-blue-900/30 text-blue-300 border-blue-700',
@@ -27,6 +43,7 @@ const ENGINE_BADGES: Record<string, string> = {
   searxng: 'bg-cyan-900/30 text-cyan-300 border-cyan-700',
 }
 
+// 枚举值（value）用于 API 提交保持原值，仅显示 label 走 i18n
 const ENGINE_TYPES = [
   { value: 'google', label: 'Google Custom Search' },
   { value: 'bing', label: 'Bing' },
@@ -36,21 +53,29 @@ const ENGINE_TYPES = [
   { value: 'searxng', label: 'SearXNG' },
 ]
 
-const formSchema = z.object({
-  name: z.string().min(1, '必填'),
-  engine_type: z.string().min(1, '必填'),
-  api_base: z.string().nullable().optional(),
-  api_key: z.string().nullable().optional(),
-  extra_params: z.object({
-    cx: z.string().optional(),
-    region: z.string().optional(),
-    safe_search: z.string().optional(),
-    max_results: z.number().optional(),
-  }).optional(),
-  priority: z.coerce.number().min(0).default(0),
-})
+const SAFE_SEARCH_OPTIONS = [
+  { value: '', key: 'default' },
+  { value: 'off', key: 'off' },
+  { value: 'medium', key: 'medium' },
+  { value: 'high', key: 'high' },
+]
 
-type FormValues = z.infer<typeof formSchema>
+const makeFormSchema = (t: TFunction) =>
+  z.object({
+    name: z.string().min(1, t('form.validation.nameRequired')),
+    engine_type: z.string().min(1, t('form.validation.engineTypeRequired')),
+    api_base: z.string().nullable().optional(),
+    api_key: z.string().nullable().optional(),
+    extra_params: z.object({
+      cx: z.string().optional(),
+      region: z.string().optional(),
+      safe_search: z.string().optional(),
+      max_results: z.number().optional(),
+    }).optional(),
+    priority: z.coerce.number().min(0).default(0),
+  })
+
+type FormValues = z.infer<ReturnType<typeof makeFormSchema>>
 
 interface ExtraParamRow {
   key: string
@@ -58,6 +83,7 @@ interface ExtraParamRow {
 }
 
 export default function SearchEngineManagement() {
+  const { t } = useTranslation('adminSearchEngine')
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -75,7 +101,10 @@ export default function SearchEngineManagement() {
   } | null>(null)
   const [testLoading, setTestLoading] = useState(false)
 
+  const formSchema = useMemo(() => makeFormSchema(t), [t])
+
   const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
       name: '',
@@ -87,8 +116,8 @@ export default function SearchEngineManagement() {
     },
   })
 
-  const { data: enginesData, isLoading } = useQuery({
-    queryKey: ['admin-search-engines', search],
+  const { data: enginesData, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['admin-search-engines'],
     queryFn: () => listSearchEngines().then((r) => r.data),
   })
 
@@ -98,7 +127,7 @@ export default function SearchEngineManagement() {
       queryClient.invalidateQueries({ queryKey: ['admin-search-engines'] })
       setFormOpen(false)
     },
-    onError: (err: unknown) => alert(`创建失败: ${getErrorMessage(err)}`),
+    onError: (err: unknown) => alert(t('messages.createFailed', { error: getErrorMessage(err) })),
   })
 
   const updateMut = useMutation({
@@ -109,7 +138,7 @@ export default function SearchEngineManagement() {
       setFormOpen(false)
       setEditingId(null)
     },
-    onError: (err: unknown) => alert(`更新失败: ${getErrorMessage(err)}`),
+    onError: (err: unknown) => alert(t('messages.updateFailed', { error: getErrorMessage(err) })),
   })
 
   const deleteMut = useMutation({
@@ -118,7 +147,7 @@ export default function SearchEngineManagement() {
       queryClient.invalidateQueries({ queryKey: ['admin-search-engines'] })
       setDeleteConfirmId(null)
     },
-    onError: (err: unknown) => alert(`删除失败: ${getErrorMessage(err)}`),
+    onError: (err: unknown) => alert(t('messages.deleteFailed', { error: getErrorMessage(err) })),
   })
 
   const toggleMut = useMutation({
@@ -129,7 +158,7 @@ export default function SearchEngineManagement() {
   const setDefaultMut = useMutation({
     mutationFn: (id: string) => setDefaultEngine(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-search-engines'] }),
-    onError: (err: unknown) => alert(`操作失败: ${getErrorMessage(err)}`),
+    onError: (err: unknown) => alert(t('messages.operationFailed', { error: getErrorMessage(err) })),
   })
 
   const handleCreate = () => {
@@ -208,23 +237,35 @@ export default function SearchEngineManagement() {
       const res = await testSearchEngine(testTarget.id)
       setTestResult(res.data.data)
     } catch (err: unknown) {
-      setTestResult({ success: false, message: getErrorMessage(err), result_count: null, first_snippet: null })
+      setTestResult({ success: false, message: getErrorMessage(err, t('messages.testFailed')), result_count: null, first_snippet: null })
     } finally {
       setTestLoading(false)
     }
   }
 
-  const items: SearchEngineItem[] = enginesData?.data ?? []
+  const engineTypeLabel = (value: string) =>
+    t(`engineTypes.${value}`, { defaultValue: ENGINE_TYPES.find((o) => o.value === value)?.label || value })
+
+  const allItems: SearchEngineItem[] = enginesData?.data ?? []
+  const items = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return allItems
+    return allItems.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.engine_type.toLowerCase().includes(q),
+    )
+  }, [allItems, search])
 
   return (
     <div className="space-y-4 p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">搜索引擎管理</h2>
+        <h2 className="text-xl font-semibold text-white">{t('title')}</h2>
         <button
           onClick={handleCreate}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
         >
-          + 添加搜索引擎
+          + {t('actions.add')}
         </button>
       </div>
 
@@ -232,7 +273,7 @@ export default function SearchEngineManagement() {
       <div className="flex items-center gap-3">
         <input
           type="text"
-          placeholder="搜索..."
+          placeholder={t('search.placeholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-56 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white placeholder-slate-400 focus:border-blue-500 focus:outline-none"
@@ -243,25 +284,37 @@ export default function SearchEngineManagement() {
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-slate-400">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent mr-2" />
-          加载中...
+          {t('status.loading')}
         </div>
+      ) : isError ? (
+        <EmptyState
+          title={t('errors.loadFailed')}
+          description={getErrorMessage(error)}
+          icon="empty"
+          action={
+            <button
+              onClick={() => void refetch()}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+            >
+              <ICONS.refresh size={14} className="inline mr-1" />
+              {t('actions.retry')}
+            </button>
+          }
+        />
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-          <ICONS.empty size={48} className="mb-3 opacity-40" />
-          <p>暂无搜索引擎配置</p>
-        </div>
+        <EmptyState title={t('empty.noEngines')} icon="empty" />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-700/50">
           <table className="w-full text-sm">
             <thead className="bg-slate-800/60 text-left text-slate-300">
               <tr>
-                <th className="px-4 py-3 font-medium">名称</th>
-                <th className="px-4 py-3 font-medium">类型</th>
-                <th className="px-4 py-3 font-medium">API Base</th>
-                <th className="px-4 py-3 font-medium">默认</th>
-                <th className="px-4 py-3 font-medium">优先级</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th className="px-4 py-3 font-medium">{t('table.name')}</th>
+                <th className="px-4 py-3 font-medium">{t('table.type')}</th>
+                <th className="px-4 py-3 font-medium">{t('table.apiBase')}</th>
+                <th className="px-4 py-3 font-medium">{t('table.default')}</th>
+                <th className="px-4 py-3 font-medium">{t('table.priority')}</th>
+                <th className="px-4 py-3 font-medium">{t('table.status')}</th>
+                <th className="px-4 py-3 font-medium">{t('table.actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/30">
@@ -270,7 +323,7 @@ export default function SearchEngineManagement() {
                   <td className="px-4 py-3 font-medium text-white">{engine.name}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded border px-2 py-0.5 text-xs ${ENGINE_BADGES[engine.engine_type] || 'bg-slate-700 text-slate-300 border-slate-600'}`}>
-                      {engine.engine_type}
+                      {engineTypeLabel(engine.engine_type)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-400 max-w-[200px] truncate">
@@ -278,7 +331,7 @@ export default function SearchEngineManagement() {
                   </td>
                   <td className="px-4 py-3">
                     {engine.is_default ? (
-                      <span className="text-yellow-400" title="默认搜索引擎">
+                      <span className="text-yellow-400" title={t('status.defaultEngine')}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
@@ -287,7 +340,7 @@ export default function SearchEngineManagement() {
                       <button
                         onClick={() => setDefaultMut.mutate(engine.id)}
                         className="text-slate-600 hover:text-yellow-400 transition-colors"
-                        title="设为默认"
+                        title={t('actions.setAsDefault')}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
@@ -315,21 +368,21 @@ export default function SearchEngineManagement() {
                       <button
                         onClick={() => { setTestTarget(engine); setTestQuery(''); setTestResult(null); setTestOpen(true) }}
                         className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-blue-400 transition-colors"
-                        title="测试搜索"
+                        title={t('actions.testSearch')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
                       </button>
                       <button
                         onClick={() => handleEdit(engine)}
                         className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-amber-400 transition-colors"
-                        title="编辑"
+                        title={t('actions.edit')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(engine.id)}
                         className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-red-400 transition-colors"
-                        title="删除"
+                        title={t('actions.delete')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
                       </button>
@@ -348,7 +401,7 @@ export default function SearchEngineManagement() {
           <div className="w-[600px] max-h-[85vh] overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
               <h3 className="text-lg font-semibold text-white">
-                {editingId ? '编辑搜索引擎' : '添加搜索引擎'}
+                {editingId ? t('form.editTitle') : t('form.createTitle')}
               </h3>
               <button onClick={() => { setFormOpen(false); setEditingId(null) }} className="text-slate-400 hover:text-white">
                 <ICONS.close size={18} />
@@ -357,35 +410,35 @@ export default function SearchEngineManagement() {
             <form onSubmit={handleSave} className="space-y-4 px-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">名称</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">{t('form.name')}</label>
                   <input
                     {...form.register('name')}
                     className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">引擎类型</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">{t('form.engineType')}</label>
                   <select
                     {...form.register('engine_type')}
                     className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                   >
-                    <option value="">选择类型</option>
-                    {ENGINE_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
+                    <option value="">{t('form.selectType')}</option>
+                    {ENGINE_TYPES.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{engineTypeLabel(opt.value)}</option>
                     ))}
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">API Base</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">{t('form.apiBase')}</label>
                   <input
                     {...form.register('api_base')}
                     className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">API Key</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">{t('form.apiKey')}</label>
                   <input
                     {...form.register('api_key')}
                     type="password"
@@ -396,36 +449,35 @@ export default function SearchEngineManagement() {
 
               {/* Extra Params */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">内置参数</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">{t('form.builtinParams')}</label>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div>
-                    <label className="text-xs text-slate-400">CX (Google)</label>
+                    <label className="text-xs text-slate-400">{t('form.cx')}</label>
                     <input
                       {...form.register('extra_params.cx')}
                       className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400">Region</label>
+                    <label className="text-xs text-slate-400">{t('form.region')}</label>
                     <input
                       {...form.register('extra_params.region')}
                       className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400">Safe Search</label>
+                    <label className="text-xs text-slate-400">{t('form.safeSearch')}</label>
                     <select
                       {...form.register('extra_params.safe_search')}
                       className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                     >
-                      <option value="">默认</option>
-                      <option value="off">Off</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
+                      {SAFE_SEARCH_OPTIONS.map((opt) => (
+                        <option key={opt.key} value={opt.value}>{t(`safeSearchOptions.${opt.key}`)}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400">Max Results</label>
+                    <label className="text-xs text-slate-400">{t('form.maxResults')}</label>
                     <input
                       {...form.register('extra_params.max_results', { valueAsNumber: true })}
                       type="range"
@@ -439,7 +491,7 @@ export default function SearchEngineManagement() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">优先级</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">{t('form.priority')}</label>
                 <input
                   {...form.register('priority', { valueAsNumber: true })}
                   type="number"
@@ -451,13 +503,13 @@ export default function SearchEngineManagement() {
               {/* Custom Extra Params KV Editor */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-slate-300">自定义额外参数</label>
+                  <label className="text-sm font-medium text-slate-300">{t('form.customParams')}</label>
                   <button
                     type="button"
                     onClick={() => setExtraRows([...extraRows, { key: '', value: '' }])}
                     className="rounded px-2 py-1 text-xs text-blue-400 hover:bg-slate-800"
                   >
-                    + 添加参数
+                    + {t('actions.addParam')}
                   </button>
                 </div>
                 {extraRows.map((row, idx) => (
@@ -469,7 +521,7 @@ export default function SearchEngineManagement() {
                         updated[idx] = { ...row, key: e.target.value }
                         setExtraRows(updated)
                       }}
-                      placeholder="Key"
+                      placeholder={t('form.paramKeyPlaceholder')}
                       className="w-1/3 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
                     />
                     <input
@@ -479,7 +531,7 @@ export default function SearchEngineManagement() {
                         updated[idx] = { ...row, value: e.target.value }
                         setExtraRows(updated)
                       }}
-                      placeholder="Value"
+                      placeholder={t('form.paramValuePlaceholder')}
                       className="flex-1 rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-1.5 text-sm text-white focus:border-blue-500 focus:outline-none"
                     />
                     <button
@@ -501,14 +553,14 @@ export default function SearchEngineManagement() {
                   onClick={() => { setFormOpen(false); setEditingId(null) }}
                   className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
                 >
-                  取消
+                  {t('actions.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={createMut.isPending || updateMut.isPending}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
                 >
-                  {editingId ? '保存' : '创建'}
+                  {editingId ? t('actions.save') : t('actions.create')}
                 </button>
               </div>
             </form>
@@ -520,18 +572,18 @@ export default function SearchEngineManagement() {
       {deleteConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-[400px] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-2">确认删除</h3>
-            <p className="text-sm text-slate-400">此操作将移除该搜索引擎配置，不可恢复。</p>
+            <h3 className="text-lg font-semibold text-white mb-2">{t('confirm.deleteTitle')}</h3>
+            <p className="text-sm text-slate-400">{t('confirm.deleteMessage')}</p>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setDeleteConfirmId(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">
-                取消
+                {t('actions.cancel')}
               </button>
               <button
                 onClick={() => deleteMut.mutate(deleteConfirmId)}
                 disabled={deleteMut.isPending}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors"
               >
-                删除
+                {t('actions.confirmDelete')}
               </button>
             </div>
           </div>
@@ -544,7 +596,7 @@ export default function SearchEngineManagement() {
           <div className="w-[500px] rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
               <h3 className="text-lg font-semibold text-white">
-                测试搜索: {testTarget.name}
+                {t('test.title', { name: testTarget.name })}
               </h3>
               <button onClick={() => setTestOpen(false)} className="text-slate-400 hover:text-white">
                 <ICONS.close size={18} />
@@ -552,11 +604,11 @@ export default function SearchEngineManagement() {
             </div>
             <div className="space-y-4 px-6 py-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">搜索查询</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">{t('test.queryLabel')}</label>
                 <input
                   value={testQuery}
                   onChange={(e) => setTestQuery(e.target.value)}
-                  placeholder="输入测试查询..."
+                  placeholder={t('test.queryPlaceholder')}
                   className="w-full rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -565,13 +617,13 @@ export default function SearchEngineManagement() {
                 disabled={testLoading}
                 className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 transition-colors"
               >
-                {testLoading ? '搜索中...' : '测试搜索'}
+                {testLoading ? t('status.testing') : t('test.button')}
               </button>
               {testResult && (
                 <div className={`rounded-lg p-4 text-sm ${testResult.success ? 'bg-green-900/30 border border-green-700 text-green-300' : 'bg-red-900/30 border border-red-700 text-red-300'}`}>
-                  <div className="font-medium mb-1">{testResult.success ? '成功' : '失败'}: {testResult.message}</div>
+                  <div className="font-medium mb-1">{testResult.success ? t('test.success') : t('test.failed')}: {testResult.message}</div>
                   {testResult.success && (
-                    <div className="mt-1 text-xs opacity-80">返回 {testResult.result_count} 条结果</div>
+                    <div className="mt-1 text-xs opacity-80">{t('test.resultCount', { count: testResult.result_count })}</div>
                   )}
                   {testResult.first_snippet && (
                     <pre className="mt-2 whitespace-pre-wrap text-xs opacity-80 max-h-40 overflow-y-auto">{testResult.first_snippet}</pre>
@@ -585,4 +637,3 @@ export default function SearchEngineManagement() {
     </div>
   )
 }
-

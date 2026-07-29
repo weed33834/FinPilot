@@ -1,0 +1,95 @@
+{
+  "title": "Search Engine Management",
+  "actions": {
+    "add": "Add Search Engine",
+    "cancel": "Cancel",
+    "save": "Save",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Delete",
+    "testSearch": "Test Search",
+    "setAsDefault": "Set as Default",
+    "addParam": "Add Parameter",
+    "retry": "Retry"
+  },
+  "search": {
+    "placeholder": "Search..."
+  },
+  "status": {
+    "loading": "Loading...",
+    "defaultEngine": "Default search engine",
+    "testing": "Searching..."
+  },
+  "table": {
+    "name": "Name",
+    "type": "Type",
+    "apiBase": "API Base",
+    "default": "Default",
+    "priority": "Priority",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "empty": {
+    "noEngines": "No search engine configurations"
+  },
+  "errors": {
+    "loadFailed": "Failed to load search engine list"
+  },
+  "messages": {
+    "createFailed": "Create failed: {{error}}",
+    "updateFailed": "Update failed: {{error}}",
+    "deleteFailed": "Delete failed: {{error}}",
+    "operationFailed": "Operation failed: {{error}}",
+    "testFailed": "Test failed"
+  },
+  "engineTypes": {
+    "google": "Google Custom Search",
+    "bing": "Bing",
+    "duckduckgo": "DuckDuckGo",
+    "serpapi": "SerpAPI",
+    "tavily": "Tavily",
+    "searxng": "SearXNG"
+  },
+  "safeSearchOptions": {
+    "default": "Default",
+    "off": "Off",
+    "medium": "Medium",
+    "high": "High"
+  },
+  "form": {
+    "editTitle": "Edit Search Engine",
+    "createTitle": "Add Search Engine",
+    "name": "Name",
+    "engineType": "Engine Type",
+    "selectType": "Select type",
+    "apiBase": "API Base",
+    "apiKey": "API Key",
+    "builtinParams": "Built-in Parameters",
+    "cx": "CX (Google)",
+    "region": "Region",
+    "safeSearch": "Safe Search",
+    "maxResults": "Max Results",
+    "priority": "Priority",
+    "customParams": "Custom Extra Parameters",
+    "paramKeyPlaceholder": "Key",
+    "paramValuePlaceholder": "Value",
+    "validation": {
+      "nameRequired": "Required",
+      "engineTypeRequired": "Required"
+    }
+  },
+  "test": {
+    "title": "Test Search: {{name}}",
+    "queryLabel": "Search Query",
+    "queryPlaceholder": "Enter a test query...",
+    "button": "Test Search",
+    "success": "Success",
+    "failed": "Failed",
+    "resultCount": "Returned {{count}} results"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "This will remove the search engine configuration and cannot be undone."
+  }
+}

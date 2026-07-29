@@ -1,0 +1,73 @@
+{
+  "title": "上下文管理",
+  "description": "Token 计数、长期记忆与上下文使用统计",
+  "tabs": {
+    "tokens": "Token 计数器",
+    "memories": "长期记忆",
+    "stats": "上下文统计"
+  },
+  "actions": {
+    "retry": "重试",
+    "confirm": "确认",
+    "cancel": "取消"
+  },
+  "token": {
+    "modelLabel": "模型",
+    "models": {
+      "default": "默认模型"
+    },
+    "placeholder": "粘贴或输入文本，实时计算 Token 数量…",
+    "tokenCount": "Token 数",
+    "charCount": "字符数",
+    "estimatedModel": "估算模型",
+    "calcFailed": "计算失败"
+  },
+  "memories": {
+    "searchPlaceholder": "语义搜索记忆内容…",
+    "actions": {
+      "search": "查询",
+      "searching": "查询中…",
+      "delete": "删除"
+    },
+    "categories": {
+      "all": "全部分类",
+      "preference": "偏好",
+      "fact": "事实",
+      "instruction": "指令",
+      "summary": "摘要",
+      "other": "其他"
+    },
+    "table": {
+      "content": "内容",
+      "category": "分类",
+      "importance": "重要性",
+      "sourceConversation": "来源会话",
+      "createdAt": "创建时间",
+      "actions": "操作"
+    },
+    "empty": "暂无长期记忆",
+    "messages": {
+      "loadFailed": "加载失败",
+      "deleteFailed": "删除失败"
+    },
+    "confirm": {
+      "deleteTitle": "确认删除",
+      "deleteMessage": "确认删除该长期记忆？"
+    }
+  },
+  "stats": {
+    "actions": {
+      "refresh": "刷新"
+    },
+    "loading": "加载中…",
+    "empty": "暂无统计数据",
+    "cards": {
+      "total_memories": "记忆总数",
+      "total_conversations": "会话总数",
+      "avg_tokens_per_conversation": "平均 Token / 会话"
+    },
+    "messages": {
+      "loadFailed": "加载失败"
+    }
+  }
+}

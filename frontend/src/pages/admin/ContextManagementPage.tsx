@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../i18n/config.ts'
+import zhCNAdminContext from '../../i18n/locales/zh-CN/admin-context.json'
+import enAdminContext from '../../i18n/locales/en/admin-context.json'
+import EmptyState from '../../components/ui/EmptyState.tsx'
+import { confirm } from '../../components/ui/ConfirmDialog.tsx'
+import { ICONS } from '../../components/ui/Icons.tsx'
+import { getErrorMessage } from '../../utils/errors.ts'
 import {
   countTokens,
   deleteMemory,
@@ -9,19 +17,23 @@ import {
   type MemoryItem,
   type TokenCountResult,
 } from '../../api/contextManager.ts'
-import { ICONS } from '../../components/ui/Icons.tsx'
+
+// adminContext 命名空间未在 i18n/config.ts 中注册（按要求不修改该文件），
+// 在模块加载时同步注入资源，子组件通过 useTranslation('adminContext') 消费。
+const NS = 'adminContext'
+if (!i18n.hasResourceBundle('zh-CN', NS)) {
+  i18n.addResourceBundle('zh-CN', NS, zhCNAdminContext)
+}
+if (!i18n.hasResourceBundle('en', NS)) {
+  i18n.addResourceBundle('en', NS, enAdminContext)
+}
 
 type Tab = 'tokens' | 'memories' | 'stats'
 
-const MODELS = [
-  { value: '', label: '默认模型' },
-  { value: 'gpt-4o', label: 'gpt-4o' },
-  { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
-  { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo' },
-  { value: 'claude-3-5-sonnet', label: 'claude-3-5-sonnet' },
-  { value: 'deepseek-chat', label: 'deepseek-chat' },
-]
+// 模型标识为专有名词，仅「默认模型」需翻译；枚举值原样提交给 API。
+const MODELS = ['', 'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo', 'claude-3-5-sonnet', 'deepseek-chat']
 
+// 分类枚举值原样提交给 API，仅展示 label 走 i18n。
 const CATEGORIES = ['', 'preference', 'fact', 'instruction', 'summary', 'other']
 
 /* ------------------------------------------------------------------ */
@@ -29,11 +41,13 @@ const CATEGORIES = ['', 'preference', 'fact', 'instruction', 'summary', 'other']
 /* ------------------------------------------------------------------ */
 
 function TokenCounter() {
+  const { t } = useTranslation(NS)
   const [text, setText] = useState('')
   const [model, setModel] = useState('')
   const [result, setResult] = useState<TokenCountResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryTick, setRetryTick] = useState(0)
   const reqId = useRef(0)
 
   useEffect(() => {
@@ -53,19 +67,19 @@ function TokenCounter() {
         }
       } catch (e) {
         if (current === reqId.current) {
-          setError(e instanceof Error ? e.message : '计算失败')
+          setError(getErrorMessage(e, t('token.calcFailed')))
         }
       } finally {
         if (current === reqId.current) setLoading(false)
       }
     }, 400)
     return () => window.clearTimeout(timer)
-  }, [text, model])
+  }, [text, model, retryTick, t])
 
   return (
     <div className="admin-card" style={{ padding: 20, maxWidth: 820 }}>
       <div className="admin-form-row" style={{ marginBottom: 12 }}>
-        <label className="admin-form-label">模型</label>
+        <label className="admin-form-label">{t('token.modelLabel')}</label>
         <select
           className="admin-form-select"
           value={model}
@@ -73,8 +87,8 @@ function TokenCounter() {
           style={{ maxWidth: 260 }}
         >
           {MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
+            <option key={m} value={m}>
+              {m === '' ? t('token.models.default') : m}
             </option>
           ))}
         </select>
@@ -84,32 +98,44 @@ function TokenCounter() {
         className="admin-form-textarea"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="粘贴或输入文本，实时计算 Token 数量…"
+        placeholder={t('token.placeholder')}
         style={{ minHeight: 200, fontFamily: 'var(--font-mono, monospace)' }}
       />
 
       <div style={{ display: 'flex', gap: 24, marginTop: 16, alignItems: 'center' }}>
         <div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted,#9aa)' }}>Token 数</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted,#9aa)' }}>{t('token.tokenCount')}</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--color-primary,#3b82f6)' }}>
             {loading ? '…' : result?.token_count ?? 0}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted,#9aa)' }}>字符数</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted,#9aa)' }}>{t('token.charCount')}</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 700 }}>
             {result?.char_count ?? text.length}
           </div>
         </div>
         {result?.model && (
           <div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted,#9aa)' }}>估算模型</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted,#9aa)' }}>{t('token.estimatedModel')}</div>
             <div style={{ fontSize: '0.9rem', marginTop: 6 }}>{String(result.model)}</div>
           </div>
         )}
       </div>
 
-      {error && <div className="admin-error" style={{ marginTop: 12 }}>{error}</div>}
+      {error && (
+        <div className="admin-error" style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+            onClick={() => setRetryTick((n) => n + 1)}
+          >
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -147,6 +173,7 @@ function importanceBadge(v: number | null | undefined) {
 }
 
 function MemoriesPanel() {
+  const { t } = useTranslation(NS)
   const [memories, setMemories] = useState<MemoryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -166,23 +193,30 @@ function MemoriesPanel() {
       const list = env.data ?? []
       setMemories(list)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(getErrorMessage(e, t('memories.messages.loadFailed')))
     } finally {
       setLoading(false)
     }
-  }, [query, category])
+  }, [query, category, t])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('确认删除该长期记忆？')) return
+    const ok = await confirm({
+      title: t('memories.confirm.deleteTitle'),
+      message: t('memories.confirm.deleteMessage'),
+      confirmText: t('actions.confirm'),
+      cancelText: t('actions.cancel'),
+      variant: 'danger',
+    })
+    if (!ok) return
     try {
       await deleteMemory(id)
       setMemories((prev) => prev.filter((m) => m.id !== id))
     } catch (e) {
-      setError(e instanceof Error ? e.message : '删除失败')
+      setError(getErrorMessage(e, t('memories.messages.deleteFailed')))
     }
   }
 
@@ -201,7 +235,7 @@ function MemoriesPanel() {
           className="admin-form-input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="语义搜索记忆内容…"
+          placeholder={t('memories.searchPlaceholder')}
           style={{ maxWidth: 320 }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') void load()
@@ -218,64 +252,81 @@ function MemoriesPanel() {
         >
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
-              {c === '' ? '全部分类' : c}
+              {c === '' ? t('memories.categories.all') : t(`memories.categories.${c}`, { defaultValue: c })}
             </option>
           ))}
         </select>
         <button className="btn btn-primary" onClick={() => void load()} disabled={loading}>
           <ICONS.search size={14} />
-          {loading ? '查询中…' : '查询'}
+          {loading ? t('memories.actions.searching') : t('memories.actions.search')}
         </button>
       </div>
 
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="admin-error" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+            onClick={() => void load()}
+          >
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
 
       <div className="admin-table-wrapper">
         <table className="admin-table">
           <thead>
             <tr>
-              <th>内容</th>
-              <th style={{ width: 110 }}>分类</th>
-              <th style={{ width: 90 }}>重要性</th>
-              <th style={{ width: 150 }}>来源会话</th>
-              <th style={{ width: 160 }}>创建时间</th>
-              <th style={{ width: 80 }}>操作</th>
+              <th>{t('memories.table.content')}</th>
+              <th style={{ width: 110 }}>{t('memories.table.category')}</th>
+              <th style={{ width: 90 }}>{t('memories.table.importance')}</th>
+              <th style={{ width: 150 }}>{t('memories.table.sourceConversation')}</th>
+              <th style={{ width: 160 }}>{t('memories.table.createdAt')}</th>
+              <th style={{ width: 80 }}>{t('memories.table.actions')}</th>
             </tr>
           </thead>
           <tbody>
             {memories.length === 0 && !loading ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: 32, color: '#9aa' }}>
-                  暂无长期记忆
+                <td colSpan={6}>
+                  <EmptyState title={t('memories.empty')} size="sm" />
                 </td>
               </tr>
             ) : (
-              memories.map((m) => (
-                <tr key={m.id}>
-                  <td style={{ maxWidth: 360, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {String(m.content ?? '')}
-                  </td>
-                  <td>
-                    <span className="badge">{String(m.category ?? '-')}</span>
-                  </td>
-                  <td>{importanceBadge(m.importance)}</td>
-                  <td className="admin-table-mono" style={{ fontSize: '0.72rem' }}>
-                    {m.source_conversation_id ? String(m.source_conversation_id).slice(0, 8) : '-'}
-                  </td>
-                  <td style={{ fontSize: '0.72rem', color: '#9aa' }}>
-                    {m.created_at ? new Date(String(m.created_at)).toLocaleString() : '-'}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-danger"
-                      style={{ padding: '2px 8px', fontSize: '0.72rem' }}
-                      onClick={() => void handleDelete(m.id)}
-                    >
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              ))
+              memories.map((m) => {
+                const cat = m.category ?? null
+                return (
+                  <tr key={m.id}>
+                    <td style={{ maxWidth: 360, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {String(m.content ?? '')}
+                    </td>
+                    <td>
+                      <span className="badge">
+                        {cat ? t(`memories.categories.${cat}`, { defaultValue: cat }) : '-'}
+                      </span>
+                    </td>
+                    <td>{importanceBadge(m.importance)}</td>
+                    <td className="admin-table-mono" style={{ fontSize: '0.72rem' }}>
+                      {m.source_conversation_id ? String(m.source_conversation_id).slice(0, 8) : '-'}
+                    </td>
+                    <td style={{ fontSize: '0.72rem', color: '#9aa' }}>
+                      {m.created_at ? new Date(String(m.created_at)).toLocaleString() : '-'}
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-danger"
+                        style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+                        onClick={() => void handleDelete(m.id)}
+                      >
+                        {t('memories.actions.delete')}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
@@ -289,6 +340,7 @@ function MemoriesPanel() {
 /* ------------------------------------------------------------------ */
 
 function StatsPanel() {
+  const { t } = useTranslation(NS)
   const [stats, setStats] = useState<ContextStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -300,11 +352,11 @@ function StatsPanel() {
       const env = await getContextStats()
       setStats(env.data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+      setError(getErrorMessage(e, t('stats.messages.loadFailed')))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -313,19 +365,19 @@ function StatsPanel() {
   const cards: { label: string; value: string | number }[] = []
   if (stats) {
     if (stats.total_memories != null)
-      cards.push({ label: '记忆总数', value: stats.total_memories })
+      cards.push({ label: t('stats.cards.total_memories'), value: stats.total_memories })
     if (stats.total_conversations != null)
-      cards.push({ label: '会话总数', value: stats.total_conversations })
+      cards.push({ label: t('stats.cards.total_conversations'), value: stats.total_conversations })
     if (stats.avg_tokens_per_conversation != null)
       cards.push({
-        label: '平均 Token / 会话',
+        label: t('stats.cards.avg_tokens_per_conversation'),
         value: Math.round(Number(stats.avg_tokens_per_conversation)),
       })
     // 渲染其余数值字段
     for (const [k, v] of Object.entries(stats)) {
       if (['total_memories', 'total_conversations', 'avg_tokens_per_conversation'].includes(k))
         continue
-      if (typeof v === 'number') cards.push({ label: k, value: v })
+      if (typeof v === 'number') cards.push({ label: t(`stats.cards.${k}`, { defaultValue: k }), value: v })
     }
   }
 
@@ -334,12 +386,24 @@ function StatsPanel() {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <button className="btn btn-secondary" onClick={() => void load()} disabled={loading}>
           <ICONS.refresh size={14} />
-          刷新
+          {t('stats.actions.refresh')}
         </button>
       </div>
-      {error && <div className="admin-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div className="admin-error" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '2px 8px', fontSize: '0.72rem' }}
+            onClick={() => void load()}
+          >
+            {t('actions.retry')}
+          </button>
+        </div>
+      )}
       {loading && !stats ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#9aa' }}>加载中…</div>
+        <div style={{ padding: 32, textAlign: 'center', color: '#9aa' }}>{t('stats.loading')}</div>
       ) : (
         <div
           style={{
@@ -349,7 +413,7 @@ function StatsPanel() {
           }}
         >
           {cards.length === 0 ? (
-            <div style={{ color: '#9aa' }}>暂无统计数据</div>
+            <EmptyState title={t('stats.empty')} size="sm" />
           ) : (
             cards.map((c) => (
               <div
@@ -375,12 +439,13 @@ function StatsPanel() {
 /* ------------------------------------------------------------------ */
 
 export default function ContextManagementPage() {
+  const { t } = useTranslation(NS)
   const [tab, setTab] = useState<Tab>('tokens')
   return (
     <div>
       <div className="admin-page-header">
-        <h1 className="admin-page-title">上下文管理</h1>
-        <p className="admin-page-desc">Token 计数、长期记忆与上下文使用统计</p>
+        <h1 className="admin-page-title">{t('title')}</h1>
+        <p className="admin-page-desc">{t('description')}</p>
       </div>
 
       <div className="tabs">
@@ -388,19 +453,19 @@ export default function ContextManagementPage() {
           className={`tab-item${tab === 'tokens' ? ' active' : ''}`}
           onClick={() => setTab('tokens')}
         >
-          Token 计数器
+          {t('tabs.tokens')}
         </button>
         <button
           className={`tab-item${tab === 'memories' ? ' active' : ''}`}
           onClick={() => setTab('memories')}
         >
-          长期记忆
+          {t('tabs.memories')}
         </button>
         <button
           className={`tab-item${tab === 'stats' ? ' active' : ''}`}
           onClick={() => setTab('stats')}
         >
-          上下文统计
+          {t('tabs.stats')}
         </button>
       </div>
 

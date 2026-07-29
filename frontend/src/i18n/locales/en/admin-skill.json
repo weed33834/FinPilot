@@ -1,0 +1,97 @@
+{
+  "title": "Skill Management",
+  "subtitle": "Manage skills that agents can invoke, configure associated tools and prompt templates",
+  "actions": {
+    "create": "Create Skill",
+    "edit": "Edit",
+    "delete": "Delete",
+    "test": "Test",
+    "cancel": "Cancel",
+    "save": "Save",
+    "submitCreate": "Create",
+    "confirmDelete": "Delete",
+    "runTest": "Run Test",
+    "retry": "Retry"
+  },
+  "search": {
+    "placeholder": "Search skill name..."
+  },
+  "filters": {
+    "allCategories": "All Categories",
+    "allStatus": "All Status",
+    "status": {
+      "active": "Active",
+      "inactive": "Disabled"
+    }
+  },
+  "table": {
+    "displayName": "Display Name",
+    "category": "Category",
+    "tools": "Tools",
+    "prompt": "Prompt",
+    "status": "Status",
+    "actions": "Actions",
+    "toolCount": "{{count}} tools"
+  },
+  "status": {
+    "loading": "Loading...",
+    "testing": "Testing...",
+    "success": "Success",
+    "failed": "Failed"
+  },
+  "empty": {
+    "title": "No skills yet"
+  },
+  "errors": {
+    "loadFailed": "Failed to load skill list",
+    "createFailed": "Create failed",
+    "updateFailed": "Update failed",
+    "deleteFailed": "Delete failed"
+  },
+  "pagination": {
+    "total": "{{total}} skills in total",
+    "prev": "Prev",
+    "next": "Next",
+    "info": "Page {{page}}/{{totalPages}}"
+  },
+  "form": {
+    "createTitle": "Create Skill",
+    "editTitle": "Edit Skill",
+    "name": "Skill Name (name)",
+    "displayName": "Display Name",
+    "category": "Category",
+    "noCategory": "No Category",
+    "promptTemplate": "Prompt Template",
+    "none": "None",
+    "icon": "Icon",
+    "description": "Description",
+    "systemPromptOverride": "System Prompt Override",
+    "tools": "Associated Tools",
+    "availableTools": "Available Tools",
+    "noAvailableTools": "No tools available",
+    "selectedTools": "Selected Tools",
+    "remove": "Remove",
+    "clickToAdd": "Click left to add",
+    "validation": {
+      "nameRequired": "Required",
+      "displayNameRequired": "Required"
+    }
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "This will remove the skill from the system and cannot be undone. Are you sure you want to continue?"
+  },
+  "test": {
+    "title": "Test Skill: {{name}}",
+    "queryLabel": "Test Query",
+    "queryPlaceholder": "Enter a test query..."
+  },
+  "toolTypes": {
+    "python_function": "Python",
+    "http_api": "HTTP",
+    "sql_query": "SQL",
+    "file_operation": "File",
+    "search": "Search",
+    "web_search": "Web"
+  }
+}

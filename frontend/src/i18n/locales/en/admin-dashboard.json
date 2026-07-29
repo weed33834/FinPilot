@@ -1,0 +1,60 @@
+{
+  "title": "Overview",
+  "subtitle": "FinPilot admin overview: monitor models, conversations, tools, and system health",
+  "actions": {
+    "refresh": "Refresh",
+    "retry": "Retry"
+  },
+  "loading": "Loading dashboard data…",
+  "errors": {
+    "loadFailed": "Failed to load dashboard data"
+  },
+  "statCards": {
+    "models": {
+      "label": "Models",
+      "sub": "Default: {{name}}"
+    },
+    "conversations": {
+      "label": "Today's Chats",
+      "sub": "Total conversations"
+    },
+    "tools": {
+      "label": "Tools",
+      "sub": "Built-in {{builtin}} · Custom {{custom}}"
+    },
+    "system": {
+      "label": "System Status"
+    }
+  },
+  "status": {
+    "healthy": "Healthy",
+    "degraded": "Degraded"
+  },
+  "health": {
+    "title": "System Health",
+    "checkedAt": "Checked at: {{time}}",
+    "active": "active",
+    "table": {
+      "component": "Component",
+      "status": "Status",
+      "latency": "Latency",
+      "detail": "Detail"
+    },
+    "components": {
+      "database": "Database",
+      "vectorStore": "Vector Store",
+      "llm": "LLM",
+      "sandbox": "Sandbox",
+      "searchEngines": "Search Engines"
+    }
+  },
+  "recent": {
+    "title": "Recent Conversations",
+    "unnamed": "Untitled conversation",
+    "empty": "No recent conversations",
+    "table": {
+      "title": "Title",
+      "time": "Time"
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "title": "Context Management",
+  "description": "Token counting, long-term memory, and context usage statistics",
+  "tabs": {
+    "tokens": "Token Counter",
+    "memories": "Long-term Memory",
+    "stats": "Context Statistics"
+  },
+  "actions": {
+    "retry": "Retry",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "token": {
+    "modelLabel": "Model",
+    "models": {
+      "default": "Default Model"
+    },
+    "placeholder": "Paste or type text to count tokens in real time…",
+    "tokenCount": "Token Count",
+    "charCount": "Characters",
+    "estimatedModel": "Estimated Model",
+    "calcFailed": "Calculation failed"
+  },
+  "memories": {
+    "searchPlaceholder": "Semantic search memory content…",
+    "actions": {
+      "search": "Search",
+      "searching": "Searching…",
+      "delete": "Delete"
+    },
+    "categories": {
+      "all": "All Categories",
+      "preference": "Preference",
+      "fact": "Fact",
+      "instruction": "Instruction",
+      "summary": "Summary",
+      "other": "Other"
+    },
+    "table": {
+      "content": "Content",
+      "category": "Category",
+      "importance": "Importance",
+      "sourceConversation": "Source Conversation",
+      "createdAt": "Created At",
+      "actions": "Actions"
+    },
+    "empty": "No long-term memories",
+    "messages": {
+      "loadFailed": "Failed to load",
+      "deleteFailed": "Failed to delete"
+    },
+    "confirm": {
+      "deleteTitle": "Confirm Delete",
+      "deleteMessage": "Are you sure you want to delete this long-term memory?"
+    }
+  },
+  "stats": {
+    "actions": {
+      "refresh": "Refresh"
+    },
+    "loading": "Loading…",
+    "empty": "No statistics data",
+    "cards": {
+      "total_memories": "Total Memories",
+      "total_conversations": "Total Conversations",
+      "avg_tokens_per_conversation": "Avg Tokens / Conversation"
+    },
+    "messages": {
+      "loadFailed": "Failed to load"
+    }
+  }
+}

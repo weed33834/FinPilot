@@ -1,0 +1,60 @@
+{
+  "title": "概览",
+  "subtitle": "FinPilot 后台总览：监控模型、对话、工具与系统健康状态",
+  "actions": {
+    "refresh": "刷新",
+    "retry": "重试"
+  },
+  "loading": "加载 Dashboard 数据…",
+  "errors": {
+    "loadFailed": "加载 Dashboard 数据失败"
+  },
+  "statCards": {
+    "models": {
+      "label": "模型",
+      "sub": "默认: {{name}}"
+    },
+    "conversations": {
+      "label": "今日对话",
+      "sub": "总对话数"
+    },
+    "tools": {
+      "label": "工具",
+      "sub": "内置 {{builtin}} · 自定义 {{custom}}"
+    },
+    "system": {
+      "label": "系统状态"
+    }
+  },
+  "status": {
+    "healthy": "Healthy",
+    "degraded": "Degraded"
+  },
+  "health": {
+    "title": "系统健康状态",
+    "checkedAt": "检查时间: {{time}}",
+    "active": "活跃",
+    "table": {
+      "component": "组件",
+      "status": "状态",
+      "latency": "延迟",
+      "detail": "详情"
+    },
+    "components": {
+      "database": "数据库",
+      "vectorStore": "向量库",
+      "llm": "LLM",
+      "sandbox": "沙箱",
+      "searchEngines": "搜索引擎"
+    }
+  },
+  "recent": {
+    "title": "最近对话",
+    "unnamed": "未命名对话",
+    "empty": "暂无最近对话",
+    "table": {
+      "title": "标题",
+      "time": "时间"
+    }
+  }
+}

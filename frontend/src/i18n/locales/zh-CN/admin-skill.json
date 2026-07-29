@@ -1,0 +1,97 @@
+{
+  "title": "技能管理",
+  "subtitle": "管理 Agent 可调用的技能，配置关联工具与 Prompt 模板",
+  "actions": {
+    "create": "创建技能",
+    "edit": "编辑",
+    "delete": "删除",
+    "test": "测试",
+    "cancel": "取消",
+    "save": "保存",
+    "submitCreate": "创建",
+    "confirmDelete": "删除",
+    "runTest": "运行测试",
+    "retry": "重试"
+  },
+  "search": {
+    "placeholder": "搜索技能名..."
+  },
+  "filters": {
+    "allCategories": "所有分类",
+    "allStatus": "所有状态",
+    "status": {
+      "active": "已启用",
+      "inactive": "已禁用"
+    }
+  },
+  "table": {
+    "displayName": "展示名",
+    "category": "分类",
+    "tools": "关联工具",
+    "prompt": "Prompt",
+    "status": "状态",
+    "actions": "操作",
+    "toolCount": "{{count}} 个工具"
+  },
+  "status": {
+    "loading": "加载中...",
+    "testing": "测试中...",
+    "success": "成功",
+    "failed": "失败"
+  },
+  "empty": {
+    "title": "暂无技能数据"
+  },
+  "errors": {
+    "loadFailed": "加载技能列表失败",
+    "createFailed": "创建失败",
+    "updateFailed": "更新失败",
+    "deleteFailed": "删除失败"
+  },
+  "pagination": {
+    "total": "共 {{total}} 个技能",
+    "prev": "上一页",
+    "next": "下一页",
+    "info": "第 {{page}}/{{totalPages}} 页"
+  },
+  "form": {
+    "createTitle": "创建技能",
+    "editTitle": "编辑技能",
+    "name": "技能名 (name)",
+    "displayName": "展示名",
+    "category": "分类",
+    "noCategory": "无分类",
+    "promptTemplate": "Prompt 模板",
+    "none": "无",
+    "icon": "图标",
+    "description": "描述",
+    "systemPromptOverride": "System Prompt Override",
+    "tools": "关联工具",
+    "availableTools": "可用工具",
+    "noAvailableTools": "无可用工具",
+    "selectedTools": "已选工具",
+    "remove": "移除",
+    "clickToAdd": "点击左侧添加",
+    "validation": {
+      "nameRequired": "必填",
+      "displayNameRequired": "必填"
+    }
+  },
+  "confirm": {
+    "deleteTitle": "确认删除",
+    "deleteMessage": "此操作将从系统中移除该技能，不可恢复。确定要继续吗？"
+  },
+  "test": {
+    "title": "测试技能: {{name}}",
+    "queryLabel": "测试查询",
+    "queryPlaceholder": "输入测试查询..."
+  },
+  "toolTypes": {
+    "python_function": "Python",
+    "http_api": "HTTP",
+    "sql_query": "SQL",
+    "file_operation": "文件",
+    "search": "搜索",
+    "web_search": "网络"
+  }
+}
