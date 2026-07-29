@@ -273,7 +273,7 @@ export default function ConversationsPage() {
             type="button"
             className="link"
             onClick={() => setSearchTerm('')}
-            title="清除"
+            title={t('conversations.clearSearch')}
             style={{ padding: '0 0.5rem' }}
           >
             <ICONS.close size={14} />
@@ -281,7 +281,7 @@ export default function ConversationsPage() {
         )}
         {!isLoading && total > 0 && (
           <span className="text-muted text-sm" style={{ whiteSpace: 'nowrap', padding: '0 0.5rem' }}>
-            共 {total} 条
+            {t('conversations.totalCount', { count: total })}
           </span>
         )}
       </div>
@@ -332,7 +332,7 @@ export default function ConversationsPage() {
                         onClick={() => setSelectedId(conv.id)}
                         title={t('conversations.view')}
                       >
-                        {conv.title || <span className="text-muted">（未命名）</span>}
+                        {conv.title || <span className="text-muted">{t('conversations.unnamed')}</span>}
                       </button>
                       {conv.is_archived && (
                         <span className="badge draft" style={{ marginLeft: 8 }}>
@@ -380,7 +380,7 @@ export default function ConversationsPage() {
                           title={t('conversations.export')}
                         >
                           <ICONS.download size={14} />
-                          {exportingId === conv.id ? '...' : t('conversations.export')}
+                          {exportingId === conv.id ? t('conversations.exporting') : t('conversations.export')}
                         </button>
                         <button
                           type="button"
@@ -405,7 +405,7 @@ export default function ConversationsPage() {
                 onClick={() => fetchNextPage()}
                 disabled={isFetchingNextPage}
               >
-                {isFetchingNextPage ? '加载中...' : '加载更多'}
+                {isFetchingNextPage ? t('conversations.loadingMoreInProgress') : t('conversations.loadingMore')}
               </button>
             </div>
           )}

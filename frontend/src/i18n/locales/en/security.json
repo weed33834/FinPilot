@@ -1,0 +1,102 @@
+{
+  "title": "Security Settings",
+  "loading": "Loading security settings...",
+  "loadFailed": "Load failed",
+  "actions": {
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "enable": "Enable 2FA",
+    "confirmEnable": "Confirm Enable",
+    "enabling": "Enabling...",
+    "disabling": "Disabling...",
+    "confirmDisable": "Confirm Disable",
+    "regenerate": "Regenerate",
+    "regenerating": "Regenerating...",
+    "regenerateSecret": "Regenerate Secret",
+    "changing": "Changing..."
+  },
+  "fields": {
+    "currentPassword": {
+      "label": "Current Password",
+      "placeholder": "Current password"
+    },
+    "newPassword": {
+      "label": "New Password"
+    },
+    "confirmPassword": {
+      "label": "Confirm New Password"
+    },
+    "code": {
+      "placeholder": "6-digit code"
+    }
+  },
+  "twoFA": {
+    "title": "Two-Factor Authentication (2FA)",
+    "enabledHint": "A verification code is required at sign-in.",
+    "disabledHint": "Once enabled, an additional verification code is required at sign-in.",
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "setupInProgress": "Setting up"
+    },
+    "backupCodes": {
+      "savePrompt": "Save the following backup codes now (they cannot be viewed again after leaving this page):",
+      "copyAll": "Copy all",
+      "usageHint": "Each backup code can only be used once. Save them offline (password manager or print)."
+    },
+    "setup": {
+      "step1": "1. Scan the QR code below with an Authenticator app, or enter the secret manually.",
+      "manualSecret": "Manual entry secret: ",
+      "step2": "2. Enter the 6-digit code shown in the app"
+    },
+    "regenerate": {
+      "title": "Regenerate Backup Codes",
+      "hint": "Once new backup codes are generated, the old ones become invalid immediately."
+    },
+    "disable": {
+      "title": "Disable 2FA",
+      "hint": "After disabling, sign-in only requires a password, reducing security.",
+      "confirmTitle": "Confirm Disabling 2FA",
+      "confirmMessage": "After disabling, sign-in only requires a password, which reduces security.",
+      "confirmHint": "It is recommended to re-enable it as soon as possible to protect your account."
+    }
+  },
+  "changePassword": {
+    "title": "Change Password",
+    "hint": "Password must be at least 8 characters and include uppercase, lowercase, and digits."
+  },
+  "validation": {
+    "codeRequired": "Please enter the verification code.",
+    "passwordRequired": "Please enter your current password.",
+    "passwordMismatch": "The two new passwords do not match."
+  },
+  "toast": {
+    "enabled": {
+      "title": "2FA enabled",
+      "description": "Please save your backup codes properly."
+    },
+    "disabled": {
+      "title": "2FA disabled",
+      "description": "Sign-in security has been reduced. It is recommended to re-enable it soon."
+    },
+    "regenerated": {
+      "title": "Backup codes regenerated",
+      "description": "Previous codes are now invalid."
+    },
+    "passwordChanged": {
+      "title": "Password changed successfully"
+    },
+    "codesCopied": {
+      "title": "Backup codes copied to clipboard"
+    }
+  },
+  "errors": {
+    "fetchStatusFailed": "Failed to fetch 2FA status",
+    "setupFailed": "Failed to generate 2FA secret",
+    "enableFailed": "Failed to enable 2FA",
+    "disableFailed": "Failed to disable 2FA",
+    "regenerateFailed": "Failed to regenerate backup codes",
+    "changePasswordFailed": "Failed to change password",
+    "copyFailed": "Copy failed, please save manually."
+  }
+}

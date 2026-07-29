@@ -1,0 +1,73 @@
+{
+  "title": "Financial KPI Dashboard",
+  "subtitle": "Visual analysis of financial metrics, supporting YoY/QoQ, trends, comparison and drill-down.",
+  "actions": {
+    "refresh": {
+      "label": "Refresh",
+      "ariaLabel": "Refresh"
+    },
+    "retry": "Retry"
+  },
+  "filters": {
+    "year": { "label": "Year" },
+    "period": { "label": "Period" },
+    "metric": { "label": "Metric" }
+  },
+  "periodLabels": {
+    "Q1": "Q1 (First Quarter)",
+    "Q2": "Q2 (Second Quarter)",
+    "Q3": "Q3 (Third Quarter)",
+    "Q4": "Q4 (Fourth Quarter)",
+    "H1": "H1 (First Half)",
+    "H2": "H2 (Second Half)",
+    "annual": "Annual"
+  },
+  "sections": {
+    "overview": "Key Metrics ({{period}})",
+    "trend": "Annual Trend",
+    "comparison": "Quarterly Comparison",
+    "drill": "Drill-down Details"
+  },
+  "meta": {
+    "updatedAt": "Updated {{time}}",
+    "itemCount": "{{count}} items",
+    "drillCurrent": "Current: {{metric}}",
+    "drillHint": "Click a metric card above to view period breakdown"
+  },
+  "drillTable": {
+    "period": "Period",
+    "value": "Value",
+    "ratio": "Share",
+    "total": "Total"
+  },
+  "empty": {
+    "overview": {
+      "title": "No KPI data",
+      "description": "No financial metrics available for the selected year and period. Try a different time range or import financial data."
+    },
+    "trend": { "title": "No data" },
+    "comparison": { "title": "No data" },
+    "drill": {
+      "noSelection": {
+        "title": "No metric selected",
+        "description": "Click any KPI card above to view the metric's share by period."
+      },
+      "noData": {
+        "title": "No data for this metric this year",
+        "description": "Try switching the metric or year."
+      }
+    }
+  },
+  "errors": {
+    "loadOverviewFailed": "Failed to load KPI overview",
+    "loadTrendFailed": "Failed to load trend",
+    "loadComparisonFailed": "Failed to load comparison",
+    "loadDrillFailed": "Failed to load drill-down"
+  },
+  "fallbackMetrics": {
+    "revenue": "Revenue"
+  },
+  "units": {
+    "yuan": "CNY"
+  }
+}

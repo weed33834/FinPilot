@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../components/ui/Modal.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
+import { ICONS } from '../components/ui/Icons.tsx'
 import { useCrudResource } from '../hooks/useCrudResource.ts'
 import { formatDateTime } from '../utils/format.ts'
 import type {
@@ -12,24 +14,24 @@ import type {
   ReportTemplateUpdate,
 } from '../types/report.ts'
 
-const REPORT_TYPES: { value: ReportTemplateCreate['report_type']; label: string }[] = [
-  { value: 'profit', label: '利润表' },
-  { value: 'balance', label: '资产负债表' },
-  { value: 'cash', label: '现金流量表' },
-  { value: 'custom', label: '自定义' },
-  { value: 'comparison', label: '多期对比' },
+const REPORT_TYPES: { value: ReportTemplateCreate['report_type']; labelKey: string }[] = [
+  { value: 'profit', labelKey: 'reportTemplates.typeProfit' },
+  { value: 'balance', labelKey: 'reportTemplates.typeBalance' },
+  { value: 'cash', labelKey: 'reportTemplates.typeCash' },
+  { value: 'custom', labelKey: 'reportTemplates.typeCustom' },
+  { value: 'comparison', labelKey: 'reportTemplates.typeComparison' },
 ]
 
 // 常用指标预设，便于多选；后端按 metric 字段名取 FinancialReport 数据
-const METRIC_PRESETS: { metric: string; name: string }[] = [
-  { metric: 'revenue', name: '营业收入' },
-  { metric: 'operating_cost', name: '营业成本' },
-  { metric: 'operating_profit', name: '营业利润' },
-  { metric: 'net_profit', name: '净利润' },
-  { metric: 'total_assets', name: '总资产' },
-  { metric: 'total_liabilities', name: '总负债' },
-  { metric: 'owner_equity', name: '所有者权益' },
-  { metric: 'cash_flow_operating', name: '经营活动现金流' },
+const METRIC_PRESETS: { metric: string; labelKey: string }[] = [
+  { metric: 'revenue', labelKey: 'reportTemplates.metricRevenue' },
+  { metric: 'operating_cost', labelKey: 'reportTemplates.metricOperatingCost' },
+  { metric: 'operating_profit', labelKey: 'reportTemplates.metricOperatingProfit' },
+  { metric: 'net_profit', labelKey: 'reportTemplates.metricNetProfit' },
+  { metric: 'total_assets', labelKey: 'reportTemplates.metricTotalAssets' },
+  { metric: 'total_liabilities', labelKey: 'reportTemplates.metricTotalLiabilities' },
+  { metric: 'owner_equity', labelKey: 'reportTemplates.metricOwnerEquity' },
+  { metric: 'cash_flow_operating', labelKey: 'reportTemplates.metricCashFlowOperating' },
 ]
 
 interface FormState {
@@ -51,29 +53,39 @@ const emptyForm: FormState = {
 }
 
 export default function ReportTemplatesPage() {
+  const { t } = useTranslation()
   const {
     items: templates,
     loading,
     error,
     actingId,
+    refresh,
     create,
     update,
     remove,
   } = useCrudResource<ReportTemplate>({
     baseUrl: '/report-templates',
-    fetchErrorMessage: '加载模板列表失败',
-    createErrorMessage: '创建模板失败',
-    updateErrorMessage: '更新模板失败',
-    deleteErrorMessage: '删除模板失败',
-    createSuccessMessage: '模板创建成功',
-    updateSuccessMessage: '模板更新成功',
-    deleteSuccessMessage: '模板删除成功',
+    fetchErrorMessage: t('reportTemplates.loadFailed'),
+    createErrorMessage: t('reportTemplates.createFailed'),
+    updateErrorMessage: t('reportTemplates.updateFailed'),
+    deleteErrorMessage: t('reportTemplates.deleteFailed'),
+    createSuccessMessage: t('reportTemplates.createSuccess'),
+    updateSuccessMessage: t('reportTemplates.updateSuccess'),
+    deleteSuccessMessage: t('reportTemplates.deleteSuccess'),
   })
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editing, setEditing] = useState<ReportTemplate | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [deleteTarget, setDeleteTarget] = useState<ReportTemplate | null>(null)
+  const [keyword, setKeyword] = useState('')
+
+  // 客户端关键词过滤（按 name 匹配）
+  const filteredTemplates = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return templates
+    return templates.filter((tpl) => (tpl.name || '').toLowerCase().includes(kw))
+  }, [templates, keyword])
 
   const openCreate = () => {
     setForm(emptyForm)
@@ -131,57 +143,93 @@ export default function ReportTemplatesPage() {
     await update(tpl.id, { is_active: next })
   }
 
-  const toggleMetric = (preset: { metric: string; name: string }) => {
+  const toggleMetric = (preset: { metric: string; labelKey: string }) => {
     setForm((prev) => {
       const exists = prev.sections.some((s) => s.metric === preset.metric)
       const sections = exists
         ? prev.sections.filter((s) => s.metric !== preset.metric)
-        : [...prev.sections, { name: preset.name, metric: preset.metric }]
+        : [...prev.sections, { name: t(preset.labelKey), metric: preset.metric }]
       return { ...prev, sections }
     })
+  }
+
+  const reportTypeLabel = (value: string) => {
+    const found = REPORT_TYPES.find((rt) => rt.value === value)
+    return found ? t(found.labelKey) : value
   }
 
   return (
     <div className="container">
       <div className="page-header">
-        <h1>报告模板</h1>
-        <button type="button" onClick={openCreate}>新建模板</button>
+        <h1>{t('reportTemplates.title')}</h1>
+        <button type="button" onClick={openCreate}>{t('reportTemplates.create')}</button>
       </div>
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={refresh}>
+            {t('reportTemplates.retry')}
+          </button>
+        </div>
+      )}
+
+      {templates.length > 0 && (
+        <div className="toolbar">
+          <div className="search-inline">
+            <ICONS.search size={14} />
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder={t('reportTemplates.searchPlaceholder')}
+              aria-label={t('reportTemplates.searchPlaceholder')}
+            />
+          </div>
         </div>
       )}
 
       {loading ? (
-        <Loading text="加载模板中..." />
+        <Loading text={t('reportTemplates.loading')} />
       ) : templates.length === 0 ? (
-        <EmptyState title="暂无报告模板" description="点击「新建模板」配置自定义标题、摘要与指标 sections。" />
+        <EmptyState
+          icon="templates"
+          title={t('reportTemplates.emptyTitle')}
+          description={t('reportTemplates.emptyDesc')}
+          action={
+            <button type="button" onClick={openCreate}>{t('reportTemplates.create')}</button>
+          }
+        />
+      ) : filteredTemplates.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title={t('reportTemplates.emptySearchTitle')}
+          description={t('reportTemplates.emptySearchDesc')}
+        />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>名称</th>
-                <th>报告类型</th>
-                <th>sections</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th>操作</th>
+                <th>{t('reportTemplates.colName')}</th>
+                <th>{t('reportTemplates.colType')}</th>
+                <th>{t('reportTemplates.colSections')}</th>
+                <th>{t('reportTemplates.colStatus')}</th>
+                <th>{t('reportTemplates.colCreated')}</th>
+                <th>{t('reportTemplates.colActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {templates.map((tpl) => (
+              {filteredTemplates.map((tpl) => (
                 <tr key={tpl.id}>
                   <td>{tpl.name}</td>
-                  <td>{REPORT_TYPES.find((t) => t.value === tpl.report_type)?.label || tpl.report_type}</td>
+                  <td>{reportTypeLabel(tpl.report_type)}</td>
                   <td>{tpl.sections?.length || 0}</td>
                   <td>
                     {tpl.is_active === 'Y' ? (
-                      <span className="badge success">启用</span>
+                      <span className="badge success">{t('reportTemplates.statusActive')}</span>
                     ) : (
-                      <span className="badge rejected">已停用</span>
+                      <span className="badge rejected">{t('reportTemplates.statusInactive')}</span>
                     )}
                   </td>
                   <td>
@@ -197,7 +245,7 @@ export default function ReportTemplatesPage() {
                         onClick={() => openEdit(tpl)}
                         disabled={actingId === tpl.id}
                       >
-                        编辑
+                        {t('reportTemplates.edit')}
                       </button>
                       <button
                         type="button"
@@ -205,7 +253,7 @@ export default function ReportTemplatesPage() {
                         onClick={() => handleToggle(tpl)}
                         disabled={actingId === tpl.id}
                       >
-                        {tpl.is_active === 'Y' ? '停用' : '启用'}
+                        {tpl.is_active === 'Y' ? t('reportTemplates.disable') : t('reportTemplates.enable')}
                       </button>
                       <button
                         type="button"
@@ -213,7 +261,7 @@ export default function ReportTemplatesPage() {
                         onClick={() => setDeleteTarget(tpl)}
                         disabled={actingId === tpl.id}
                       >
-                        删除
+                        {t('reportTemplates.delete')}
                       </button>
                     </div>
                   </td>
@@ -226,31 +274,31 @@ export default function ReportTemplatesPage() {
 
       {createOpen && (
         <Modal
-          title={editing ? '编辑模板' : '新建模板'}
+          title={editing ? t('reportTemplates.editTitle') : t('reportTemplates.createTitle')}
           onClose={() => setCreateOpen(false)}
           footer={
             <>
               <button type="button" className="secondary" onClick={() => setCreateOpen(false)}>
-                取消
+                {t('reportTemplates.cancel')}
               </button>
               <button type="button" onClick={handleSubmit} disabled={!!actingId || !form.name}>
-                {actingId ? '保存中...' : '保存'}
+                {actingId ? t('reportTemplates.saving') : t('reportTemplates.save')}
               </button>
             </>
           }
         >
           {error && <div className="alert alert-error mb-3">{error}</div>}
           <div className="form-group">
-            <label htmlFor="tpl-name">模板名称</label>
+            <label htmlFor="tpl-name">{t('reportTemplates.name')}</label>
             <input
               id="tpl-name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="便于识别用途，如「自定义利润表」"
+              placeholder={t('reportTemplates.namePlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label htmlFor="tpl-report-type">报告类型</label>
+            <label htmlFor="tpl-report-type">{t('reportTemplates.reportType')}</label>
             <select
               id="tpl-report-type"
               value={form.report_type}
@@ -259,16 +307,16 @@ export default function ReportTemplatesPage() {
               }
               disabled={!!editing}
             >
-              {REPORT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+              {REPORT_TYPES.map((rt) => (
+                <option key={rt.value} value={rt.value}>{t(rt.labelKey)}</option>
               ))}
             </select>
             {editing && (
-              <small className="text-muted">报告类型创建后不可修改</small>
+              <small className="text-muted">{t('reportTemplates.reportTypeLocked')}</small>
             )}
           </div>
           <div className="form-group">
-            <span className="detail-label">sections（指标多选）</span>
+            <span className="detail-label">{t('reportTemplates.sectionsLabel')}</span>
             <div className="checkbox-group">
               {METRIC_PRESETS.map((preset) => (
                 <label key={preset.metric} className="checkbox-label">
@@ -277,45 +325,45 @@ export default function ReportTemplatesPage() {
                     checked={form.sections.some((s) => s.metric === preset.metric)}
                     onChange={() => toggleMetric(preset)}
                   />
-                  {preset.name}
+                  {t(preset.labelKey)}
                 </label>
               ))}
             </div>
             {form.sections.length > 0 && (
               <small className="text-muted">
-                已选：{form.sections.map((s) => s.name).join('、')}
+                {t('reportTemplates.sectionsSelected', { sections: form.sections.map((s) => s.name).join(', ') })}
               </small>
             )}
           </div>
           <div className="form-group">
-            <label htmlFor="tpl-title">标题模板</label>
+            <label htmlFor="tpl-title">{t('reportTemplates.titleTemplate')}</label>
             <input
               id="tpl-title"
               value={form.title_template}
               onChange={(e) => setForm({ ...form, title_template: e.target.value })}
-              placeholder="${year}年${period_label}自定义报告（留空用内置）"
+              placeholder={t('reportTemplates.titleTemplatePlaceholder')}
             />
-            <small className="text-muted">支持 string.Template 语法：${'{year}'} ${'{period_label}'} ${'{revenue}'}</small>
+            <small className="text-muted">{t('reportTemplates.titleTemplateHint')}</small>
           </div>
           <div className="form-group">
-            <label htmlFor="tpl-summary">摘要模板</label>
+            <label htmlFor="tpl-summary">{t('reportTemplates.summaryTemplate')}</label>
             <textarea
               id="tpl-summary"
               rows={4}
               value={form.summary_template}
               onChange={(e) => setForm({ ...form, summary_template: e.target.value })}
-              placeholder="${year}年${period_label}，营业收入 ${revenue} 元。"
+              placeholder={t('reportTemplates.summaryTemplatePlaceholder')}
             />
-            <small className="text-muted">支持 string.Template 语法，留空用内置摘要</small>
+            <small className="text-muted">{t('reportTemplates.summaryTemplateHint')}</small>
           </div>
         </Modal>
       )}
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="确认删除"
-        message={deleteTarget ? <>确定要删除模板「<strong>{deleteTarget.name}</strong>」吗？关联报告将回退到默认模板。</> : null}
-        confirmText="确认删除"
+        title={t('reportTemplates.confirmDeleteTitle')}
+        message={deleteTarget ? <>{t('reportTemplates.confirmDeleteMsg', { name: deleteTarget.name })}</> : null}
+        confirmText={t('reportTemplates.confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteTarget) {

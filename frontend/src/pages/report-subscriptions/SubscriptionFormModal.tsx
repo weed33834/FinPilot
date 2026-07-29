@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type {
   SubscriptionChannel,
   SubscriptionExportFormat,
@@ -37,35 +38,36 @@ export default function SubscriptionFormModal({
   toggleChannel,
   error,
 }: SubscriptionFormModalProps) {
+  const { t } = useTranslation()
   if (!open) return null
 
   return (
     <Modal
-      title={editing ? '编辑订阅' : '新建订阅'}
+      title={editing ? t('reportSubscriptions.editTitle') : t('reportSubscriptions.createTitle')}
       onClose={onCancel}
       footer={
         <>
           <button type="button" className="secondary" onClick={onCancel}>
-            取消
+            {t('actions.cancel')}
           </button>
           <button type="button" onClick={onSubmit} disabled={submitting || !form.name}>
-            {submitting ? '保存中...' : '保存'}
+            {submitting ? t('status.saving') : t('actions.save')}
           </button>
         </>
       }
     >
       {error && <div className="alert alert-error mb-3">{error}</div>}
       <div className="form-group">
-        <label htmlFor="sub-name">订阅名称</label>
+        <label htmlFor="sub-name">{t('reportSubscriptions.name')}</label>
         <input
           id="sub-name"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="便于识别用途，如「月度利润报表」"
+          placeholder={t('reportSubscriptions.namePlaceholder')}
         />
       </div>
       <div className="form-group">
-        <label htmlFor="sub-report-type">报告类型</label>
+        <label htmlFor="sub-report-type">{t('reportSubscriptions.reportType')}</label>
         <select
           id="sub-report-type"
           value={form.report_type}
@@ -74,17 +76,17 @@ export default function SubscriptionFormModal({
           }
           disabled={editing}
         >
-          {REPORT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+          {REPORT_TYPES.map((rt) => (
+            <option key={rt.value} value={rt.value}>{t(rt.labelKey)}</option>
           ))}
         </select>
         {editing && (
-          <small className="text-muted">报告类型创建后不可修改</small>
+          <small className="text-muted">{t('reportSubscriptions.reportTypeLocked')}</small>
         )}
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="sub-year">年份</label>
+          <label htmlFor="sub-year">{t('reportSubscriptions.year')}</label>
           <input
             id="sub-year"
             type="number"
@@ -93,7 +95,7 @@ export default function SubscriptionFormModal({
           />
         </div>
         <div className="form-group">
-          <label htmlFor="sub-period">周期</label>
+          <label htmlFor="sub-period">{t('reportSubscriptions.period')}</label>
           <select
             id="sub-period"
             value={form.period}
@@ -105,12 +107,12 @@ export default function SubscriptionFormModal({
             <option value="Q4">Q4</option>
             <option value="H1">H1</option>
             <option value="H2">H2</option>
-            <option value="annual">全年</option>
+            <option value="annual">{t('reportSubscriptions.periodAnnual')}</option>
           </select>
         </div>
       </div>
       <div className="form-group">
-        <label htmlFor="sub-frequency">频率</label>
+        <label htmlFor="sub-frequency">{t('reportSubscriptions.frequency')}</label>
         <select
           id="sub-frequency"
           value={form.frequency}
@@ -119,13 +121,13 @@ export default function SubscriptionFormModal({
           }
         >
           {FREQUENCIES.map((f) => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+            <option key={f.value} value={f.value}>{t(f.labelKey)}</option>
           ))}
         </select>
       </div>
       <div className="form-row">
         <div className="form-group">
-          <label htmlFor="sub-hour">执行小时（UTC）</label>
+          <label htmlFor="sub-hour">{t('reportSubscriptions.atHour')}</label>
           <input
             id="sub-hour"
             type="number"
@@ -136,7 +138,7 @@ export default function SubscriptionFormModal({
           />
         </div>
         <div className="form-group">
-          <label htmlFor="sub-minute">执行分钟</label>
+          <label htmlFor="sub-minute">{t('reportSubscriptions.atMinute')}</label>
           <input
             id="sub-minute"
             type="number"
@@ -149,21 +151,21 @@ export default function SubscriptionFormModal({
       </div>
       {form.frequency === 'weekly' && (
         <div className="form-group">
-          <label htmlFor="sub-dow">周几</label>
+          <label htmlFor="sub-dow">{t('reportSubscriptions.dayOfWeek')}</label>
           <select
             id="sub-dow"
             value={form.day_of_week}
             onChange={(e) => setForm({ ...form, day_of_week: e.target.value })}
           >
-            {WEEKDAYS.map((label, idx) => (
-              <option key={idx} value={idx}>{label}</option>
+            {WEEKDAYS.map((key, idx) => (
+              <option key={idx} value={idx}>{t(key)}</option>
             ))}
           </select>
         </div>
       )}
       {form.frequency === 'monthly' && (
         <div className="form-group">
-          <label htmlFor="sub-dom">几号（1-28）</label>
+          <label htmlFor="sub-dom">{t('reportSubscriptions.dayOfMonth')}</label>
           <input
             id="sub-dom"
             type="number"
@@ -175,7 +177,7 @@ export default function SubscriptionFormModal({
         </div>
       )}
       <div className="form-group">
-        <label htmlFor="sub-export">导出格式</label>
+        <label htmlFor="sub-export">{t('reportSubscriptions.exportFormat')}</label>
         <select
           id="sub-export"
           value={form.export_format}
@@ -184,12 +186,12 @@ export default function SubscriptionFormModal({
           }
         >
           {EXPORT_FORMATS.map((f) => (
-            <option key={f.value} value={f.value}>{f.label}</option>
+            <option key={f.value} value={f.value}>{t(f.labelKey)}</option>
           ))}
         </select>
       </div>
       <div className="form-group">
-        <span className="detail-label">通知渠道</span>
+        <span className="detail-label">{t('reportSubscriptions.channels')}</span>
         <div className="checkbox-group">
           {CHANNELS.map((ch) => (
             <label key={ch.value} className="checkbox-label">
@@ -198,18 +200,18 @@ export default function SubscriptionFormModal({
                 checked={form.channels.includes(ch.value)}
                 onChange={() => toggleChannel(ch.value)}
               />
-              {ch.label}
+              {t(ch.labelKey)}
             </label>
           ))}
         </div>
       </div>
       <div className="form-group">
-        <label htmlFor="sub-recipients">接收方</label>
+        <label htmlFor="sub-recipients">{t('reportSubscriptions.recipients')}</label>
         <input
           id="sub-recipients"
           value={form.recipients}
           onChange={(e) => setForm({ ...form, recipients: e.target.value })}
-          placeholder="逗号分隔的用户 ID / 邮箱 / IM ID"
+          placeholder={t('reportSubscriptions.recipientsPlaceholder')}
         />
       </div>
     </Modal>

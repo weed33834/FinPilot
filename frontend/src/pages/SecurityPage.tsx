@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import DOMPurify from 'dompurify'
 import Loading from '../components/ui/Loading.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
@@ -9,6 +10,7 @@ import type { DataResponse } from '../types/report.ts'
 import type { BackupCodesResponse, TwoFASetup, TwoFAStatus } from '../types/twoFactor.ts'
 
 export default function SecurityPage() {
+  const { t } = useTranslation('security')
   const [status, setStatus] = useState<TwoFAStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -34,7 +36,7 @@ export default function SecurityPage() {
       const resp = await api.get<DataResponse<TwoFAStatus>>('/auth/2fa/status')
       setStatus(resp.data.data)
     } catch (err) {
-      setError(getErrorMessage(err, '获取 2FA 状态失败'))
+      setError(getErrorMessage(err, t('errors.fetchStatusFailed')))
     } finally {
       setLoading(false)
     }
@@ -56,7 +58,7 @@ export default function SecurityPage() {
       const resp = await api.post<DataResponse<TwoFASetup>>('/auth/2fa/setup')
       setSetupData(resp.data.data)
     } catch (err) {
-      setError(getErrorMessage(err, '生成 2FA 密钥失败'))
+      setError(getErrorMessage(err, t('errors.setupFailed')))
     } finally {
       setLoading(false)
     }
@@ -66,11 +68,11 @@ export default function SecurityPage() {
     e.preventDefault()
     clearMessages()
     if (!enableCode) {
-      setError('请输入验证码')
+      toast.warning(t('validation.codeRequired'))
       return
     }
     if (!enablePassword) {
-      setError('请输入当前密码')
+      toast.warning(t('validation.passwordRequired'))
       return
     }
     setLoading(true)
@@ -83,10 +85,11 @@ export default function SecurityPage() {
       setSetupData(null)
       setEnableCode('')
       setEnablePassword('')
-      setSuccess('2FA 已启用，请妥善保存备份码')
+      setSuccess(t('toast.enabled.title'))
+      toast.success(t('toast.enabled.title'), t('toast.enabled.description'))
       await fetchStatus()
     } catch (err) {
-      setError(getErrorMessage(err, '启用 2FA 失败'))
+      setError(getErrorMessage(err, t('errors.enableFailed')))
     } finally {
       setLoading(false)
     }
@@ -95,7 +98,7 @@ export default function SecurityPage() {
   const handleDisable = async () => {
     clearMessages()
     if (!disablePassword) {
-      setError('请输入当前密码')
+      toast.warning(t('validation.passwordRequired'))
       return
     }
     setDisableConfirmOpen(true)
@@ -108,11 +111,11 @@ export default function SecurityPage() {
       await api.post('/auth/2fa/disable', { password: disablePassword })
       setDisablePassword('')
       setGeneratedCodes(null)
-      setSuccess('2FA 已关闭')
-      toast.success('2FA 已关闭', '登录安全性已降低，建议尽快重新启用。')
+      setSuccess(t('toast.disabled.title'))
+      toast.success(t('toast.disabled.title'), t('toast.disabled.description'))
       await fetchStatus()
     } catch (err) {
-      const msg = getErrorMessage(err, '关闭 2FA 失败')
+      const msg = getErrorMessage(err, t('errors.disableFailed'))
       setError(msg)
       toast.error(msg)
     } finally {
@@ -123,7 +126,7 @@ export default function SecurityPage() {
   const handleRegenerate = async () => {
     clearMessages()
     if (!regenPassword) {
-      setError('请输入当前密码')
+      toast.warning(t('validation.passwordRequired'))
       return
     }
     setLoading(true)
@@ -134,9 +137,10 @@ export default function SecurityPage() {
       )
       setGeneratedCodes(resp.data.data.backup_codes)
       setRegenPassword('')
-      setSuccess('备份码已重新生成，旧码已失效')
+      setSuccess(t('toast.regenerated.title'))
+      toast.success(t('toast.regenerated.title'), t('toast.regenerated.description'))
     } catch (err) {
-      setError(getErrorMessage(err, '重新生成备份码失败'))
+      setError(getErrorMessage(err, t('errors.regenerateFailed')))
     } finally {
       setLoading(false)
     }
@@ -146,7 +150,7 @@ export default function SecurityPage() {
     e.preventDefault()
     clearMessages()
     if (changePwNew !== changePwConfirm) {
-      setError('两次输入的新密码不一致')
+      toast.warning(t('validation.passwordMismatch'))
       return
     }
     setLoading(true)
@@ -158,9 +162,10 @@ export default function SecurityPage() {
       setChangePwCurrent('')
       setChangePwNew('')
       setChangePwConfirm('')
-      setSuccess('密码修改成功')
+      setSuccess(t('toast.passwordChanged.title'))
+      toast.success(t('toast.passwordChanged.title'))
     } catch (err) {
-      setError(getErrorMessage(err, '密码修改失败'))
+      setError(getErrorMessage(err, t('errors.changePasswordFailed')))
     } finally {
       setLoading(false)
     }
@@ -170,9 +175,10 @@ export default function SecurityPage() {
     if (!generatedCodes) return
     try {
       await navigator.clipboard.writeText(generatedCodes.join('\n'))
-      setSuccess('备份码已复制到剪贴板')
+      setSuccess(t('toast.codesCopied.title'))
+      toast.success(t('toast.codesCopied.title'))
     } catch {
-      setError('复制失败，请手动保存')
+      setError(t('errors.copyFailed'))
     }
   }
 
@@ -184,11 +190,13 @@ export default function SecurityPage() {
     return (
       <div className="container">
         <div className="page-header">
-          <h1>安全设置</h1>
+          <h1>{t('title')}</h1>
         </div>
         <div className="empty-state">
-          <p className="text-muted text-sm">加载失败</p>
-          <button type="button" className="secondary mt-2" onClick={fetchStatus}>重试</button>
+          <p className="text-muted text-sm">{t('loadFailed')}</p>
+          <button type="button" className="secondary mt-2" onClick={fetchStatus}>
+            {t('actions.retry')}
+          </button>
         </div>
       </div>
     )
@@ -197,7 +205,7 @@ export default function SecurityPage() {
   return (
     <div className="container">
       <div className="page-header">
-        <h1>安全设置</h1>
+        <h1>{t('title')}</h1>
       </div>
 
       {error && (
@@ -212,22 +220,22 @@ export default function SecurityPage() {
       )}
 
       {loading && !status ? (
-        <Loading text="加载安全设置中..." />
+        <Loading text={t('loading')} />
       ) : (
         <>
           <div className="card mb-4">
-            <h3 className="card-title">双因素认证（2FA）</h3>
+            <h3 className="card-title">{t('twoFA.title')}</h3>
 
             {enabled ? (
               <div>
                 <p className="text-sm">
-                  <span className="badge success">已启用</span>
-                  <span className="ml-2">登录时需输入验证码</span>
+                  <span className="badge success">{t('twoFA.status.enabled')}</span>
+                  <span className="ml-2">{t('twoFA.enabledHint')}</span>
                 </p>
 
                 {generatedCodes && (
                   <div className="alert alert-warning mt-4" role="alert">
-                    <strong>请立即保存以下备份码（关闭页面后无法再次查看）：</strong>
+                    <strong>{t('twoFA.backupCodes.savePrompt')}</strong>
                     <div className="backup-codes-grid mt-2">
                       {generatedCodes.map((code) => (
                         <code key={code}>{code}</code>
@@ -235,73 +243,69 @@ export default function SecurityPage() {
                     </div>
                     <div className="mt-2">
                       <button type="button" className="link" onClick={copyAllCodes}>
-                        复制全部
+                        {t('twoFA.backupCodes.copyAll')}
                       </button>
                     </div>
-                    <p className="text-sm mt-2">
-                      每个备份码仅可用一次，请离线保存（密码管理器或打印）。
-                    </p>
+                    <p className="text-sm mt-2">{t('twoFA.backupCodes.usageHint')}</p>
                   </div>
                 )}
 
                 <div className="mt-4">
-                  <h4>重新生成备份码</h4>
-                  <p className="text-sm text-muted">生成新备份码后，旧备份码立即失效。</p>
+                  <h4>{t('twoFA.regenerate.title')}</h4>
+                  <p className="text-sm text-muted">{t('twoFA.regenerate.hint')}</p>
                   <div className="form-group">
-                    <label htmlFor="regen-pw">当前密码</label>
+                    <label htmlFor="regen-pw">{t('fields.currentPassword.label')}</label>
                     <input
                       id="regen-pw"
                       type="password"
-                      placeholder="当前密码"
+                      placeholder={t('fields.currentPassword.placeholder')}
                       value={regenPassword}
                       onChange={(e) => setRegenPassword(e.target.value)}
                       autoComplete="current-password"
                     />
                   </div>
                   <button type="button" onClick={handleRegenerate} disabled={loading}>
-                    {loading ? '重新生成中...' : '重新生成'}
+                    {loading ? t('actions.regenerating') : t('actions.regenerate')}
                   </button>
                 </div>
 
                 <div className="mt-4">
-                  <h4>关闭 2FA</h4>
-                  <p className="text-sm text-muted">关闭后登录仅需密码，安全性降低。</p>
+                  <h4>{t('twoFA.disable.title')}</h4>
+                  <p className="text-sm text-muted">{t('twoFA.disable.hint')}</p>
                   <div className="form-group">
-                    <label htmlFor="disable-pw">当前密码</label>
+                    <label htmlFor="disable-pw">{t('fields.currentPassword.label')}</label>
                     <input
                       id="disable-pw"
                       type="password"
-                      placeholder="当前密码"
+                      placeholder={t('fields.currentPassword.placeholder')}
                       value={disablePassword}
                       onChange={(e) => setDisablePassword(e.target.value)}
                       autoComplete="current-password"
                     />
                   </div>
                   <button type="button" onClick={handleDisable} disabled={loading} className="danger">
-                    {loading ? '关闭中...' : '关闭 2FA'}
+                    {loading ? t('actions.disabling') : t('twoFA.disable.title')}
                   </button>
                 </div>
               </div>
             ) : setupData ? (
               <div>
-                <p className="text-sm">
-                  1. 用 Authenticator App 扫描下方二维码，或手动输入密钥。
-                </p>
+                <p className="text-sm">{t('twoFA.setup.step1')}</p>
                 <div
                   className="qr-display"
                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(setupData.qr_svg) }}
                 />
                 <p className="text-sm text-muted mt-2">
-                  手动输入密钥：<code>{setupData.secret}</code>
+                  {t('twoFA.setup.manualSecret')}<code>{setupData.secret}</code>
                 </p>
                 <form onSubmit={handleEnable} className="mt-4">
                   <div className="form-group">
-                    <label htmlFor="enable-code">2. 输入 App 显示的 6 位验证码</label>
+                    <label htmlFor="enable-code">{t('twoFA.setup.step2')}</label>
                     <input
                       id="enable-code"
                       value={enableCode}
                       onChange={(e) => setEnableCode(e.target.value)}
-                      placeholder="6 位验证码"
+                      placeholder={t('fields.code.placeholder')}
                       inputMode="numeric"
                       maxLength={8}
                       autoComplete="one-time-code"
@@ -309,11 +313,11 @@ export default function SecurityPage() {
                     />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="enable-pw">当前密码</label>
+                    <label htmlFor="enable-pw">{t('fields.currentPassword.label')}</label>
                     <input
                       id="enable-pw"
                       type="password"
-                      placeholder="当前密码"
+                      placeholder={t('fields.currentPassword.placeholder')}
                       value={enablePassword}
                       onChange={(e) => setEnablePassword(e.target.value)}
                       autoComplete="current-password"
@@ -322,14 +326,14 @@ export default function SecurityPage() {
                   </div>
                   <div className="form-row">
                     <button type="submit" disabled={loading}>
-                      {loading ? '启用中...' : '确认启用'}
+                      {loading ? t('actions.enabling') : t('actions.confirmEnable')}
                     </button>
                     <button
                       type="button"
                       className="secondary"
                       onClick={() => setSetupData(null)}
                     >
-                      取消
+                      {t('actions.cancel')}
                     </button>
                   </div>
                 </form>
@@ -338,23 +342,23 @@ export default function SecurityPage() {
               <div>
                 <p className="text-sm">
                   <span className="badge draft">
-                    {setupInProgress ? '设置中' : '未启用'}
+                    {setupInProgress ? t('twoFA.status.setupInProgress') : t('twoFA.status.disabled')}
                   </span>
-                  <span className="ml-2">启用后登录需额外输入验证码</span>
+                  <span className="ml-2">{t('twoFA.disabledHint')}</span>
                 </p>
                 <button type="button" onClick={handleSetup} disabled={loading} className="mt-2">
-                  {setupInProgress ? '重新生成密钥' : '启用 2FA'}
+                  {setupInProgress ? t('actions.regenerateSecret') : t('actions.enable')}
                 </button>
               </div>
             )}
           </div>
 
           <div className="card">
-            <h3 className="card-title">修改密码</h3>
-            <p className="text-sm text-muted mb-4">密码至少 8 位，需含大小写字母与数字。</p>
+            <h3 className="card-title">{t('changePassword.title')}</h3>
+            <p className="text-sm text-muted mb-4">{t('changePassword.hint')}</p>
             <form onSubmit={handleChangePassword}>
               <div className="form-group">
-                <label htmlFor="current-pw">当前密码</label>
+                <label htmlFor="current-pw">{t('fields.currentPassword.label')}</label>
                 <input
                   id="current-pw"
                   type="password"
@@ -365,7 +369,7 @@ export default function SecurityPage() {
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="new-pw">新密码</label>
+                <label htmlFor="new-pw">{t('fields.newPassword.label')}</label>
                 <input
                   id="new-pw"
                   type="password"
@@ -376,7 +380,7 @@ export default function SecurityPage() {
                 />
               </div>
               <div className="form-group">
-                <label htmlFor="confirm-pw">确认新密码</label>
+                <label htmlFor="confirm-pw">{t('fields.confirmPassword.label')}</label>
                 <input
                   id="confirm-pw"
                   type="password"
@@ -387,7 +391,7 @@ export default function SecurityPage() {
                 />
               </div>
               <button type="submit" disabled={loading}>
-                {loading ? '修改中...' : '修改密码'}
+                {loading ? t('actions.changing') : t('changePassword.title')}
               </button>
             </form>
           </div>
@@ -396,17 +400,17 @@ export default function SecurityPage() {
 
       <ConfirmDialog
         open={disableConfirmOpen}
-        title="确认关闭 2FA"
+        title={t('twoFA.disable.confirmTitle')}
         message={
           <>
-            关闭后登录仅需密码，安全性将降低。
+            {t('twoFA.disable.confirmMessage')}
             <br />
             <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>
-              建议尽快重新启用以保护账户安全。
+              {t('twoFA.disable.confirmHint')}
             </span>
           </>
         }
-        confirmText="确认关闭"
+        confirmText={t('actions.confirmDisable')}
         variant="warning"
         onConfirm={confirmDisable}
         onCancel={() => setDisableConfirmOpen(false)}

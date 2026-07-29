@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import type {
   ReportSubscription,
   SubscriptionChannel,
@@ -6,33 +7,42 @@ import type {
   SubscriptionReportType,
 } from '../../types/reportSubscription.ts'
 
-export const REPORT_TYPES: { value: SubscriptionReportType; label: string }[] = [
-  { value: 'profit', label: '利润表' },
-  { value: 'balance', label: '资产负债表' },
-  { value: 'cash', label: '现金流量表' },
-  { value: 'custom', label: '自定义' },
+export const REPORT_TYPES: { value: SubscriptionReportType; labelKey: string }[] = [
+  { value: 'profit', labelKey: 'reportSubscriptions.typeProfit' },
+  { value: 'balance', labelKey: 'reportSubscriptions.typeBalance' },
+  { value: 'cash', labelKey: 'reportSubscriptions.typeCash' },
+  { value: 'custom', labelKey: 'reportSubscriptions.typeCustom' },
 ]
 
-export const FREQUENCIES: { value: SubscriptionFrequency; label: string }[] = [
-  { value: 'daily', label: '每日' },
-  { value: 'weekly', label: '每周' },
-  { value: 'monthly', label: '每月' },
+export const FREQUENCIES: { value: SubscriptionFrequency; labelKey: string }[] = [
+  { value: 'daily', labelKey: 'reportSubscriptions.freqDaily' },
+  { value: 'weekly', labelKey: 'reportSubscriptions.freqWeekly' },
+  { value: 'monthly', labelKey: 'reportSubscriptions.freqMonthly' },
 ]
 
-export const EXPORT_FORMATS: { value: SubscriptionExportFormat; label: string }[] = [
-  { value: 'pdf', label: 'PDF' },
-  { value: 'xlsx', label: 'Excel' },
-  { value: 'markdown', label: 'Markdown' },
-  { value: 'json', label: 'JSON' },
+export const EXPORT_FORMATS: { value: SubscriptionExportFormat; labelKey: string }[] = [
+  { value: 'pdf', labelKey: 'reportSubscriptions.formatPdf' },
+  { value: 'xlsx', labelKey: 'reportSubscriptions.formatXlsx' },
+  { value: 'markdown', labelKey: 'reportSubscriptions.formatMarkdown' },
+  { value: 'json', labelKey: 'reportSubscriptions.formatJson' },
 ]
 
-export const CHANNELS: { value: SubscriptionChannel; label: string }[] = [
-  { value: 'in_app', label: '站内信' },
-  { value: 'email', label: '邮件' },
-  { value: 'im', label: 'IM' },
+export const CHANNELS: { value: SubscriptionChannel; labelKey: string }[] = [
+  { value: 'in_app', labelKey: 'reportSubscriptions.channelInApp' },
+  { value: 'email', labelKey: 'reportSubscriptions.channelEmail' },
+  { value: 'im', labelKey: 'reportSubscriptions.channelIm' },
 ]
 
-export const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+// 周几 i18n key 数组（索引 0 = 周一）
+export const WEEKDAYS: string[] = [
+  'reportSubscriptions.weekdayMon',
+  'reportSubscriptions.weekdayTue',
+  'reportSubscriptions.weekdayWed',
+  'reportSubscriptions.weekdayThu',
+  'reportSubscriptions.weekdayFri',
+  'reportSubscriptions.weekdaySat',
+  'reportSubscriptions.weekdaySun',
+]
 
 export interface FormState {
   name: string
@@ -64,13 +74,14 @@ export const emptyForm: FormState = {
   recipients: '',
 }
 
-export function formatFrequency(sub: ReportSubscription): string {
+export function formatFrequency(sub: ReportSubscription, t: TFunction): string {
   const time = `${String(sub.at_hour).padStart(2, '0')}:${String(sub.at_minute).padStart(2, '0')}`
   if (sub.frequency === 'weekly') {
-    return `每周${WEEKDAYS[sub.day_of_week ?? 0]} ${time}`
+    const day = t(WEEKDAYS[sub.day_of_week ?? 0])
+    return t('reportSubscriptions.scheduleWeekly', { day, time })
   }
   if (sub.frequency === 'monthly') {
-    return `每月${sub.day_of_month ?? 1}日 ${time}`
+    return t('reportSubscriptions.scheduleMonthly', { day: sub.day_of_month ?? 1, time })
   }
-  return `每日 ${time}`
+  return t('reportSubscriptions.scheduleDaily', { time })
 }

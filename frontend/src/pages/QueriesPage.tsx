@@ -198,7 +198,7 @@ export default function QueriesPage() {
                 <div className="query-meta">
                   {result.sql && (
                     <span className="badge success">
-                      {backendLabel(result.backend)}
+                      {backendLabel(result.backend ?? undefined)}
                     </span>
                   )}
                   {confidencePct != null && (

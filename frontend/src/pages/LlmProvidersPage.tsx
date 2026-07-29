@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../components/ui/Modal.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
+import { ICONS } from '../components/ui/Icons.tsx'
 import { toast } from '../components/ui/Toaster.tsx'
 import { api } from '../api/client.ts'
 import { getErrorMessage } from '../utils/errors.ts'
@@ -35,6 +37,7 @@ const EMPTY_MODEL_FORM: ModelForm = {
 
 // 常用厂商快捷预设：点击后自动填充表单
 // 用户无需手动查找 base_url，提升配置体验
+// label / hint / default_name / sample_model 视作厂商数据，保留字面量
 const VENDOR_PRESETS: Array<{
   key: string
   label: string
@@ -118,6 +121,7 @@ const VENDOR_PRESETS: Array<{
 ]
 
 export default function LlmProvidersPage() {
+  const { t } = useTranslation()
   const [providers, setProviders] = useState<LlmProvider[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -129,6 +133,7 @@ export default function LlmProvidersPage() {
   const [deleteProviderTarget, setDeleteProviderTarget] = useState<LlmProvider | null>(null)
   // 模型管理弹窗
   const [modelsProvider, setModelsProvider] = useState<LlmProvider | null>(null)
+  const [keyword, setKeyword] = useState('')
 
   const fetchProviders = async () => {
     setLoading(true)
@@ -140,7 +145,7 @@ export default function LlmProvidersPage() {
       )
       setProviders(response.data.data?.items || [])
     } catch (err) {
-      setError(getErrorMessage(err, '加载供应商列表失败'))
+      setError(getErrorMessage(err, t('common:llmProviders.loadFailed')))
     } finally {
       setLoading(false)
     }
@@ -148,7 +153,20 @@ export default function LlmProvidersPage() {
 
   useEffect(() => {
     fetchProviders()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 客户端关键词过滤：按 name / base_url / provider_type 匹配
+  const filteredProviders = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return providers
+    return providers.filter(
+      (p) =>
+        (p.name || '').toLowerCase().includes(kw) ||
+        (p.base_url || '').toLowerCase().includes(kw) ||
+        (p.provider_type || '').toLowerCase().includes(kw),
+    )
+  }, [providers, keyword])
 
   const openCreateProvider = () => {
     setEditingProvider(null)
@@ -195,16 +213,20 @@ export default function LlmProvidersPage() {
             prev.map((p) => (p.id === editingProvider.id ? { ...p, ...updated } : p)),
           )
         }
+        toast.success(t('common:llmProviders.toastUpdated'))
       } else {
         const response = await api.post<DataResponse<LlmProvider>>('/llm-providers', payload)
         const created = response.data.data
         if (created) {
           setProviders((prev) => [created, ...prev])
         }
+        toast.success(t('common:llmProviders.toastCreated'))
       }
       setProviderModalOpen(false)
     } catch (err) {
-      setError(getErrorMessage(err, '保存供应商失败'))
+      const msg = getErrorMessage(err, t('common:llmProviders.saveFailed'))
+      setError(msg)
+      toast.error(t('common:llmProviders.saveFailed'), msg)
     } finally {
       setSubmitting(false)
     }
@@ -216,10 +238,15 @@ export default function LlmProvidersPage() {
     try {
       await api.delete(`/llm-providers/${provider.id}`)
       setProviders((prev) => prev.filter((p) => p.id !== provider.id))
-      toast.success('供应商已删除', `「${provider.name}」及其所有模型已删除。`)
+      toast.success(
+        t('common:llmProviders.toastDeleted'),
+        t('common:llmProviders.toastDeletedDesc', { name: provider.name }),
+      )
       setDeleteProviderTarget(null)
     } catch (err) {
-      setError(getErrorMessage(err, '删除供应商失败'))
+      const msg = getErrorMessage(err, t('common:llmProviders.deleteFailed'))
+      setError(msg)
+      toast.error(t('common:llmProviders.deleteFailed'), msg)
     } finally {
       setActingId(null)
     }
@@ -246,9 +273,23 @@ export default function LlmProvidersPage() {
               : p,
           ),
         )
+        if (result.ok) {
+          toast.success(
+            t('common:llmProviders.toastTestOk'),
+            t('common:llmProviders.toastTestOkDesc', { name: provider.name }),
+          )
+        } else {
+          toast.error(
+            t('common:llmProviders.toastTestFail'),
+            result.message ||
+              t('common:llmProviders.toastTestFailDesc', { name: provider.name }),
+          )
+        }
       }
     } catch (err) {
-      setError(getErrorMessage(err, '连通性测试失败'))
+      const msg = getErrorMessage(err, t('common:llmProviders.testFailed'))
+      setError(msg)
+      toast.error(t('common:llmProviders.toastTestFail'), msg)
     } finally {
       setActingId(null)
     }
@@ -257,66 +298,112 @@ export default function LlmProvidersPage() {
   return (
     <div className="container">
       <div className="page-header">
-        <h1>模型供应商管理</h1>
-        <button type="button" onClick={openCreateProvider}>新建供应商</button>
+        <h1>{t('common:llmProviders.title')}</h1>
+        <button type="button" onClick={openCreateProvider}>
+          {t('common:llmProviders.create')}
+        </button>
       </div>
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={fetchProviders}>
+            {t('common:llmProviders.retry')}
+          </button>
+        </div>
+      )}
+
+      {providers.length > 0 && (
+        <div className="toolbar">
+          <div className="search-inline">
+            <ICONS.search size={14} />
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder={t('common:llmProviders.searchPlaceholder')}
+              aria-label={t('common:llmProviders.searchPlaceholder')}
+            />
+          </div>
         </div>
       )}
 
       {loading ? (
-        <Loading text="加载供应商中..." />
+        <Loading text={t('common:llmProviders.loading')} />
       ) : providers.length === 0 ? (
         <EmptyState
-          title="暂无模型供应商"
-          description="点击「新建供应商」添加第一个 LLM 服务。未配置时系统回退到 .env 默认配置。"
+          icon="llm"
+          title={t('common:llmProviders.emptyTitle')}
+          description={t('common:llmProviders.emptyDesc')}
+          action={
+            <button type="button" onClick={openCreateProvider}>
+              {t('common:llmProviders.create')}
+            </button>
+          }
+        />
+      ) : filteredProviders.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title={t('common:llmProviders.emptySearchTitle')}
+          description={t('common:llmProviders.emptySearchDesc')}
         />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>名称</th>
-                <th>类型</th>
-                <th>服务地址</th>
-                <th>API Key</th>
-                <th>状态</th>
-                <th>连通性</th>
-                <th>操作</th>
+                <th>{t('common:llmProviders.colName')}</th>
+                <th>{t('common:llmProviders.colType')}</th>
+                <th>{t('common:llmProviders.colBaseUrl')}</th>
+                <th>{t('common:llmProviders.colApiKey')}</th>
+                <th>{t('common:llmProviders.colStatus')}</th>
+                <th>{t('common:llmProviders.colConnectivity')}</th>
+                <th>{t('common:llmProviders.colActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {providers.map((provider) => (
+              {filteredProviders.map((provider) => (
                 <tr key={provider.id}>
                   <td>
                     {provider.name}
-                    {provider.is_default && <span className="badge success ml-2">默认</span>}
+                    {provider.is_default && (
+                      <span className="badge success ml-2">
+                        {t('common:llmProviders.defaultBadge')}
+                      </span>
+                    )}
                   </td>
-                  <td>{provider.provider_type === 'ollama' ? 'Ollama' : 'OpenAI 兼容'}</td>
+                  <td>
+                    {provider.provider_type === 'ollama'
+                      ? t('common:llmProviders.typeOllama')
+                      : t('common:llmProviders.typeOpenAi')}
+                  </td>
                   <td className="text-sm text-muted">{provider.base_url}</td>
                   <td>
                     {provider.has_api_key ? (
-                      <span className="badge success">已配置</span>
+                      <span className="badge success">
+                        {t('common:llmProviders.apiKeyConfigured')}
+                      </span>
                     ) : (
                       <span className="text-muted">—</span>
                     )}
                   </td>
                   <td>
                     {provider.is_active ? (
-                      <span className="badge success">启用</span>
+                      <span className="badge success">{t('common:llmProviders.statusActive')}</span>
                     ) : (
-                      <span className="badge rejected">停用</span>
+                      <span className="badge rejected">
+                        {t('common:llmProviders.statusInactive')}
+                      </span>
                     )}
                   </td>
                   <td>
                     {provider.last_test_ok === null ? (
-                      <span className="text-muted">未测试</span>
+                      <span className="text-muted">
+                        {t('common:llmProviders.connectivityUntested')}
+                      </span>
                     ) : provider.last_test_ok ? (
                       <span className="text-sm" title={provider.last_test_message || ''}>
-                        正常
+                        {t('common:llmProviders.connectivityOk')}
                       </span>
                     ) : (
                       <span
@@ -324,7 +411,7 @@ export default function LlmProvidersPage() {
                         style={{ color: 'var(--color-danger)' }}
                         title={provider.last_test_message || ''}
                       >
-                        异常
+                        {t('common:llmProviders.connectivityFail')}
                       </span>
                     )}
                   </td>
@@ -336,21 +423,23 @@ export default function LlmProvidersPage() {
                         onClick={() => handleTestProvider(provider)}
                         disabled={actingId === provider.id}
                       >
-                        {actingId === provider.id ? '测试中...' : '测试'}
+                        {actingId === provider.id
+                          ? t('common:llmProviders.testing')
+                          : t('common:llmProviders.test')}
                       </button>
                       <button
                         type="button"
                         className="secondary"
                         onClick={() => setModelsProvider(provider)}
                       >
-                        模型
+                        {t('common:llmProviders.models')}
                       </button>
                       <button
                         type="button"
                         className="secondary"
                         onClick={() => openEditProvider(provider)}
                       >
-                        编辑
+                        {t('common:llmProviders.edit')}
                       </button>
                       <button
                         type="button"
@@ -358,7 +447,7 @@ export default function LlmProvidersPage() {
                         onClick={() => setDeleteProviderTarget(provider)}
                         disabled={actingId === provider.id}
                       >
-                        删除
+                        {t('common:llmProviders.delete')}
                       </button>
                     </div>
                   </td>
@@ -381,27 +470,24 @@ export default function LlmProvidersPage() {
       )}
 
       {modelsProvider && (
-        <ModelsModal
-          provider={modelsProvider}
-          onClose={() => setModelsProvider(null)}
-        />
+        <ModelsModal provider={modelsProvider} onClose={() => setModelsProvider(null)} />
       )}
 
       <ConfirmDialog
         open={!!deleteProviderTarget}
-        title="确认删除供应商"
+        title={t('common:llmProviders.confirmDeleteTitle')}
         message={
           deleteProviderTarget ? (
             <>
-              确定要删除供应商「<strong>{deleteProviderTarget.name}</strong>」吗？
+              {t('common:llmProviders.confirmDeleteMsg', { name: deleteProviderTarget.name })}
               <br />
               <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}>
-                其下所有模型将一并删除，此操作不可恢复。
+                {t('common:llmProviders.confirmDeleteNote')}
               </span>
             </>
           ) : null
         }
-        confirmText="确认删除"
+        confirmText={t('common:llmProviders.confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteProviderTarget) {
@@ -435,6 +521,7 @@ function ProviderModal({
   onClose,
   submitting,
 }: ProviderModalProps) {
+  const { t } = useTranslation()
   // 当前选中的预设 key（用于高亮）—— 根据 base_url+provider_type 反推
   const activePresetKey = VENDOR_PRESETS.find(
     (p) => p.base_url && p.base_url === form.base_url && p.provider_type === form.provider_type,
@@ -451,26 +538,26 @@ function ProviderModal({
 
   return (
     <Modal
-      title={editing ? '编辑供应商' : '新建供应商'}
+      title={editing ? t('common:llmProviders.editTitle') : t('common:llmProviders.createTitle')}
       onClose={onClose}
       footer={
         <>
           <button type="button" className="secondary" onClick={onClose}>
-            取消
+            {t('common:llmProviders.cancel')}
           </button>
           <button
             type="button"
             onClick={onSubmit}
             disabled={submitting || !form.name || !form.base_url}
           >
-            {submitting ? '保存中...' : '保存'}
+            {submitting ? t('common:llmProviders.saving') : t('common:llmProviders.save')}
           </button>
         </>
       }
     >
       {/* 厂商快捷预设：点击后自动填充表单字段 */}
       <div className="form-group">
-        <label>常用厂商快捷选择</label>
+        <label>{t('common:llmProviders.presetsLabel')}</label>
         <div
           className="vendor-preset-grid"
           style={{
@@ -507,21 +594,21 @@ function ProviderModal({
           className="text-muted"
           style={{ fontSize: '0.6875rem', marginTop: 'var(--space-1)' }}
         >
-          点击预设自动填充名称 / 类型 / 服务地址。如需自定义可直接修改下方字段。
+          {t('common:llmProviders.presetsHint')}
         </p>
       </div>
 
       <div className="form-group">
-        <label htmlFor="provider-name">名称</label>
+        <label htmlFor="provider-name">{t('common:llmProviders.fieldName')}</label>
         <input
           id="provider-name"
           value={form.name}
           onChange={(e) => onFormChange({ ...form, name: e.target.value })}
-          placeholder="便于识别，如「本地 Ollama」"
+          placeholder={t('common:llmProviders.fieldNamePlaceholder')}
         />
       </div>
       <div className="form-group">
-        <label htmlFor="provider-type">供应商类型</label>
+        <label htmlFor="provider-type">{t('common:llmProviders.fieldType')}</label>
         <select
           id="provider-type"
           value={form.provider_type}
@@ -529,24 +616,26 @@ function ProviderModal({
             onFormChange({ ...form, provider_type: e.target.value as ProviderType })
           }
         >
-          <option value="ollama">Ollama（本地）</option>
-          <option value="openai">OpenAI 兼容（云端）</option>
+          <option value="ollama">{t('common:llmProviders.fieldTypeOllama')}</option>
+          <option value="openai">{t('common:llmProviders.fieldTypeOpenAi')}</option>
         </select>
       </div>
       <div className="form-group">
-        <label htmlFor="provider-url">服务地址</label>
+        <label htmlFor="provider-url">{t('common:llmProviders.fieldBaseUrl')}</label>
         <input
           id="provider-url"
           value={form.base_url}
           onChange={(e) => onFormChange({ ...form, base_url: e.target.value })}
-          placeholder="http://localhost:11434 或 https://api.example.com/v1"
+          placeholder={t('common:llmProviders.fieldBaseUrlPlaceholder')}
         />
       </div>
       <div className="form-group">
         <label htmlFor="provider-key">
-          API Key
+          {t('common:llmProviders.fieldApiKey')}
           {editing && (
-            <span className="text-muted text-sm ml-2">（留空表示不修改）</span>
+            <span className="text-muted text-sm ml-2">
+              {t('common:llmProviders.apiKeyHintEdit')}
+            </span>
           )}
         </label>
         <input
@@ -554,7 +643,11 @@ function ProviderModal({
           type="password"
           value={form.api_key}
           onChange={(e) => onFormChange({ ...form, api_key: e.target.value })}
-          placeholder={form.provider_type === 'ollama' ? 'Ollama 无需 API Key' : 'sk-...'}
+          placeholder={
+            form.provider_type === 'ollama'
+              ? t('common:llmProviders.apiKeyPlaceholderOllama')
+              : t('common:llmProviders.apiKeyPlaceholderOpenAi')
+          }
         />
       </div>
       <div className="form-group">
@@ -564,7 +657,7 @@ function ProviderModal({
             checked={form.is_default}
             onChange={(e) => onFormChange({ ...form, is_default: e.target.checked })}
           />{' '}
-          设为默认供应商（全局唯一，设为默认后将自动取消其他默认）
+          {t('common:llmProviders.fieldDefault')}
         </label>
       </div>
       <div className="form-group">
@@ -574,7 +667,7 @@ function ProviderModal({
             checked={form.is_active}
             onChange={(e) => onFormChange({ ...form, is_active: e.target.checked })}
           />{' '}
-          启用
+          {t('common:llmProviders.fieldActive')}
         </label>
       </div>
     </Modal>
@@ -591,6 +684,7 @@ interface ModelsModalProps {
 }
 
 function ModelsModal({ provider, onClose }: ModelsModalProps) {
+  const { t } = useTranslation()
   const [models, setModels] = useState<LlmModel[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -610,7 +704,7 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
       )
       setModels(response.data.data?.items || [])
     } catch (err) {
-      setError(getErrorMessage(err, '加载模型列表失败'))
+      setError(getErrorMessage(err, t('common:llmProviders.loadModelsFailed')))
     } finally {
       setLoading(false)
     }
@@ -660,6 +754,7 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
             prev.map((m) => (m.id === editingModel.id ? { ...m, ...updated } : m)),
           )
         }
+        toast.success(t('common:llmProviders.modelToastUpdated'))
       } else {
         const response = await api.post<DataResponse<LlmModel>>(
           `/llm-providers/${provider.id}/models`,
@@ -669,10 +764,13 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
         if (created) {
           setModels((prev) => [...prev, created])
         }
+        toast.success(t('common:llmProviders.modelToastCreated'))
       }
       setModelFormOpen(false)
     } catch (err) {
-      setError(getErrorMessage(err, '保存模型失败'))
+      const msg = getErrorMessage(err, t('common:llmProviders.modelSaveFailed'))
+      setError(msg)
+      toast.error(t('common:llmProviders.modelSaveFailed'), msg)
     } finally {
       setSubmitting(false)
     }
@@ -684,12 +782,15 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
     try {
       await api.delete(`/llm-providers/models/${model.id}`)
       setModels((prev) => prev.filter((m) => m.id !== model.id))
-      toast.success('模型已删除', `「${model.display_name}」已删除。`)
+      toast.success(
+        t('common:llmProviders.modelToastDeleted'),
+        t('common:llmProviders.modelToastDeletedDesc', { name: model.display_name }),
+      )
       setDeleteModelTarget(null)
     } catch (err) {
-      const msg = getErrorMessage(err, '删除模型失败')
+      const msg = getErrorMessage(err, t('common:llmProviders.modelDeleteFailed'))
       setError(msg)
-      toast.error(msg)
+      toast.error(t('common:llmProviders.modelDeleteFailed'), msg)
     } finally {
       setActingId(null)
     }
@@ -697,35 +798,39 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
 
   return (
     <Modal
-      title={`模型管理 — ${provider.name}`}
+      title={t('common:llmProviders.modelsTitle', { name: provider.name })}
       onClose={onClose}
       footer={
-        <button type="button" onClick={onClose}>关闭</button>
+        <button type="button" onClick={onClose}>{t('common:llmProviders.close')}</button>
       }
     >
       {error && <div className="alert alert-error mb-3">{error}</div>}
 
       <div className="page-header" style={{ marginBottom: '1rem' }}>
-        <p className="text-muted text-sm">
-          供应商下可用模型列表。tier 对应模型路由档位，留空表示不参与档位路由。
-        </p>
-        <button type="button" onClick={openCreateModel}>添加模型</button>
+        <p className="text-muted text-sm">{t('common:llmProviders.modelsHint')}</p>
+        <button type="button" onClick={openCreateModel}>
+          {t('common:llmProviders.addModel')}
+        </button>
       </div>
 
       {loading ? (
-        <Loading text="加载模型中..." />
+        <Loading text={t('common:llmProviders.loadingModels')} />
       ) : models.length === 0 ? (
-        <EmptyState title="暂无模型" description="点击「添加模型」配置第一个可用模型。" />
+        <EmptyState
+          icon="llm"
+          title={t('common:llmProviders.modelsEmptyTitle')}
+          description={t('common:llmProviders.modelsEmptyDesc')}
+        />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>模型标识</th>
-                <th>展示名称</th>
-                <th>路由档位</th>
-                <th>状态</th>
-                <th>操作</th>
+                <th>{t('common:llmProviders.colModelName')}</th>
+                <th>{t('common:llmProviders.colDisplayName')}</th>
+                <th>{t('common:llmProviders.colTier')}</th>
+                <th>{t('common:llmProviders.colStatus')}</th>
+                <th>{t('common:llmProviders.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -742,9 +847,13 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
                   </td>
                   <td>
                     {model.is_active ? (
-                      <span className="badge success">启用</span>
+                      <span className="badge success">
+                        {t('common:llmProviders.statusActive')}
+                      </span>
                     ) : (
-                      <span className="badge rejected">停用</span>
+                      <span className="badge rejected">
+                        {t('common:llmProviders.statusInactive')}
+                      </span>
                     )}
                   </td>
                   <td>
@@ -754,7 +863,7 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
                         className="secondary"
                         onClick={() => openEditModel(model)}
                       >
-                        编辑
+                        {t('common:llmProviders.edit')}
                       </button>
                       <button
                         type="button"
@@ -762,7 +871,7 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
                         onClick={() => setDeleteModelTarget(model)}
                         disabled={actingId === model.id}
                       >
-                        删除
+                        {t('common:llmProviders.delete')}
                       </button>
                     </div>
                   </td>
@@ -775,45 +884,51 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
 
       {modelFormOpen && (
         <Modal
-          title={editingModel ? '编辑模型' : '添加模型'}
+          title={
+            editingModel
+              ? t('common:llmProviders.editModelTitle')
+              : t('common:llmProviders.addModelTitle')
+          }
           onClose={() => setModelFormOpen(false)}
           footer={
             <>
               <button type="button" className="secondary" onClick={() => setModelFormOpen(false)}>
-                取消
+                {t('common:llmProviders.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleSaveModel}
-                disabled={
-                  submitting || !modelForm.model_name || !modelForm.display_name
-                }
+                disabled={submitting || !modelForm.model_name || !modelForm.display_name}
               >
-                {submitting ? '保存中...' : '保存'}
+                {submitting ? t('common:llmProviders.saving') : t('common:llmProviders.save')}
               </button>
             </>
           }
         >
           <div className="form-group">
-            <label htmlFor="model-name">模型标识</label>
+            <label htmlFor="model-name">{t('common:llmProviders.modelFieldName')}</label>
             <input
               id="model-name"
               value={modelForm.model_name}
-              onChange={(e) => onModelFormChange(setModelForm, modelForm, 'model_name', e.target.value)}
-              placeholder="如 qwen2.5:7b、gpt-4o"
+              onChange={(e) =>
+                onModelFormChange(setModelForm, modelForm, 'model_name', e.target.value)
+              }
+              placeholder={t('common:llmProviders.modelFieldNamePlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label htmlFor="model-display">展示名称</label>
+            <label htmlFor="model-display">{t('common:llmProviders.modelFieldDisplayName')}</label>
             <input
               id="model-display"
               value={modelForm.display_name}
-              onChange={(e) => onModelFormChange(setModelForm, modelForm, 'display_name', e.target.value)}
-              placeholder="便于识别的名称"
+              onChange={(e) =>
+                onModelFormChange(setModelForm, modelForm, 'display_name', e.target.value)
+              }
+              placeholder={t('common:llmProviders.modelFieldDisplayNamePlaceholder')}
             />
           </div>
           <div className="form-group">
-            <label htmlFor="model-tier">路由档位</label>
+            <label htmlFor="model-tier">{t('common:llmProviders.modelFieldTier')}</label>
             <select
               id="model-tier"
               value={modelForm.tier}
@@ -826,10 +941,10 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
                 )
               }
             >
-              <option value="">不参与路由</option>
-              <option value="low">low（轻量任务）</option>
-              <option value="medium">medium（主力模型）</option>
-              <option value="high">high（复杂推理）</option>
+              <option value="">{t('common:llmProviders.tierNone')}</option>
+              <option value="low">{t('common:llmProviders.tierLow')}</option>
+              <option value="medium">{t('common:llmProviders.tierMedium')}</option>
+              <option value="high">{t('common:llmProviders.tierHigh')}</option>
             </select>
           </div>
           <div className="form-group">
@@ -841,7 +956,7 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
                   onModelFormChange(setModelForm, modelForm, 'is_active', e.target.checked)
                 }
               />{' '}
-              启用
+              {t('common:llmProviders.fieldActive')}
             </label>
           </div>
         </Modal>
@@ -849,15 +964,17 @@ function ModelsModal({ provider, onClose }: ModelsModalProps) {
 
       <ConfirmDialog
         open={!!deleteModelTarget}
-        title="确认删除模型"
+        title={t('common:llmProviders.confirmDeleteModelTitle')}
         message={
           deleteModelTarget ? (
             <>
-              确定要删除模型「<strong>{deleteModelTarget.display_name}</strong>」吗？
+              {t('common:llmProviders.confirmDeleteModelMsg', {
+                name: deleteModelTarget.display_name,
+              })}
             </>
           ) : null
         }
-        confirmText="确认删除"
+        confirmText={t('common:llmProviders.confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteModelTarget) {

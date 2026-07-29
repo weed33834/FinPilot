@@ -1,21 +1,20 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Modal from '../components/ui/Modal.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
+import { ICONS } from '../components/ui/Icons.tsx'
 import { useCrudResource } from '../hooks/useCrudResource.ts'
 import type { AccessPolicy, AccessPolicyForm } from '../types/accessPolicy.ts'
 import { EMPTY_POLICY_FORM } from '../types/accessPolicy.ts'
-
-const EFFECT_LABELS: Record<string, string> = {
-  allow: '允许',
-  deny: '拒绝',
-}
 
 const RESOURCE_TYPES = ['report', 'document', 'audit', 'approval', 'user', 'api_key']
 const ACTIONS = ['read', 'write', 'delete', 'export', 'approve']
 
 export default function AccessPoliciesPage() {
+  const { t } = useTranslation()
+
   const {
     items: policies,
     loading,
@@ -25,22 +24,29 @@ export default function AccessPoliciesPage() {
     update,
     remove,
     setError,
+    refresh,
   } = useCrudResource<AccessPolicy>({
     baseUrl: '/access-policies',
     pageSize: 100,
-    fetchErrorMessage: '加载访问策略失败',
-    createErrorMessage: '保存策略失败',
-    updateErrorMessage: '保存策略失败',
-    deleteErrorMessage: '删除策略失败',
-    createSuccessMessage: '策略创建成功',
-    updateSuccessMessage: '策略更新成功',
-    deleteSuccessMessage: '策略删除成功',
+    fetchErrorMessage: t('accessPolicies.fetchError'),
+    createErrorMessage: t('accessPolicies.createError'),
+    updateErrorMessage: t('accessPolicies.updateError'),
+    deleteErrorMessage: t('accessPolicies.deleteError'),
+    createSuccessMessage: t('accessPolicies.createSuccess'),
+    updateSuccessMessage: t('accessPolicies.updateSuccess'),
+    deleteSuccessMessage: t('accessPolicies.deleteSuccess'),
   })
+
+  const EFFECT_LABELS: Record<string, string> = {
+    allow: t('accessPolicies.effectAllow'),
+    deny: t('accessPolicies.effectDeny'),
+  }
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<AccessPolicy | null>(null)
   const [form, setForm] = useState<AccessPolicyForm>({ ...EMPTY_POLICY_FORM })
   const [deleteTarget, setDeleteTarget] = useState<AccessPolicy | null>(null)
+  const [keyword, setKeyword] = useState('')
 
   const conditionsJsonValid = useMemo(() => {
     if (!form.conditions.trim()) return true
@@ -51,6 +57,19 @@ export default function AccessPoliciesPage() {
       return false
     }
   }, [form.conditions])
+
+  // 客户端关键词过滤：按 name / resource_type / action / description 匹配
+  const filteredPolicies = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return policies
+    return policies.filter(
+      (p) =>
+        (p.name || '').toLowerCase().includes(kw) ||
+        (p.resource_type || '').toLowerCase().includes(kw) ||
+        (p.action || '').toLowerCase().includes(kw) ||
+        (p.description || '').toLowerCase().includes(kw),
+    )
+  }, [policies, keyword])
 
   const openCreate = () => {
     setEditing(null)
@@ -79,7 +98,7 @@ export default function AccessPoliciesPage() {
       try {
         conditions = JSON.parse(form.conditions)
       } catch {
-        setError('conditions 必须是合法的 JSON')
+        setError(t('accessPolicies.conditionsMustBeJson'))
         return
       }
     }
@@ -115,38 +134,69 @@ export default function AccessPoliciesPage() {
     <div className="container">
       <div className="page-header">
         <div>
-          <h1>访问策略</h1>
-          <p className="text-muted text-sm">基于资源类型与动作的 ABAC 策略，优先级数字越小越先匹配</p>
+          <h1>{t('accessPolicies.title')}</h1>
+          <p className="text-muted text-sm">{t('accessPolicies.subtitle')}</p>
         </div>
-        <button type="button" onClick={openCreate}>新建策略</button>
+        <button type="button" onClick={openCreate}>{t('accessPolicies.create')}</button>
       </div>
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={refresh}>
+            {t('accessPolicies.retry')}
+          </button>
+        </div>
+      )}
+
+      {policies.length > 0 && (
+        <div className="toolbar">
+          <div className="search-inline">
+            <ICONS.search size={14} />
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder={t('accessPolicies.searchPlaceholder')}
+              aria-label={t('accessPolicies.searchPlaceholder')}
+            />
+          </div>
         </div>
       )}
 
       {loading ? (
-        <Loading text="加载策略中..." />
+        <Loading text={t('accessPolicies.loading')} />
       ) : policies.length === 0 ? (
-        <EmptyState title="暂无策略" description="点击「新建策略」配置第一条访问策略。" />
+        <EmptyState
+          icon="policies"
+          title={t('accessPolicies.emptyTitle')}
+          description={t('accessPolicies.emptyDesc')}
+          action={
+            <button type="button" onClick={openCreate}>{t('accessPolicies.create')}</button>
+          }
+        />
+      ) : filteredPolicies.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title={t('accessPolicies.emptySearchTitle')}
+          description={t('accessPolicies.emptySearchDesc')}
+        />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>名称</th>
-                <th>资源</th>
-                <th>动作</th>
-                <th>效果</th>
-                <th>优先级</th>
-                <th>状态</th>
-                <th>操作</th>
+                <th>{t('accessPolicies.colName')}</th>
+                <th>{t('accessPolicies.colResource')}</th>
+                <th>{t('accessPolicies.colAction')}</th>
+                <th>{t('accessPolicies.colEffect')}</th>
+                <th>{t('accessPolicies.colPriority')}</th>
+                <th>{t('accessPolicies.colStatus')}</th>
+                <th>{t('accessPolicies.colActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {policies.map((policy) => (
+              {filteredPolicies.map((policy) => (
                 <tr key={policy.id}>
                   <td>
                     <div>{policy.name}</div>
@@ -167,18 +217,18 @@ export default function AccessPoliciesPage() {
                       type="button"
                       className={`badge ${policy.is_active ? 'approved' : 'draft'}`}
                       onClick={() => toggleActive(policy)}
-                      title="点击切换"
+                      title={t('accessPolicies.toggleStatusHint')}
                     >
-                      {policy.is_active ? '启用' : '停用'}
+                      {policy.is_active ? t('accessPolicies.statusActive') : t('accessPolicies.statusInactive')}
                     </button>
                   </td>
                   <td>
                     <div className="action-group">
                       <button type="button" className="secondary" onClick={() => openEdit(policy)}>
-                        编辑
+                        {t('accessPolicies.edit')}
                       </button>
                       <button type="button" className="danger" onClick={() => setDeleteTarget(policy)}>
-                        删除
+                        {t('accessPolicies.delete')}
                       </button>
                     </div>
                   </td>
@@ -191,48 +241,48 @@ export default function AccessPoliciesPage() {
 
       {modalOpen && (
         <Modal
-          title={editing ? '编辑策略' : '新建策略'}
+          title={editing ? t('accessPolicies.modalTitleEdit') : t('accessPolicies.modalTitleCreate')}
           onClose={() => setModalOpen(false)}
           footer={
             <>
               <button type="button" className="secondary" onClick={() => setModalOpen(false)}>
-                取消
+                {t('accessPolicies.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={!!actingId || !form.name || !conditionsJsonValid}
               >
-                {actingId ? '保存中...' : '保存'}
+                {actingId ? t('accessPolicies.saving') : t('accessPolicies.save')}
               </button>
             </>
           }
         >
           {error && <div className="alert alert-error mb-3">{error}</div>}
           <div className="form-group">
-            <label htmlFor="policy-name">名称</label>
+            <label htmlFor="policy-name">{t('accessPolicies.fieldName')}</label>
             <input
               id="policy-name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="如：finance_manager 仅可读报告"
+              placeholder={t('accessPolicies.fieldNamePlaceholder')}
             />
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="policy-resource">资源类型</label>
+              <label htmlFor="policy-resource">{t('accessPolicies.fieldResourceType')}</label>
               <select
                 id="policy-resource"
                 value={form.resource_type}
                 onChange={(e) => setForm({ ...form, resource_type: e.target.value })}
               >
-                {RESOURCE_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                {RESOURCE_TYPES.map((rt) => (
+                  <option key={rt} value={rt}>{rt}</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="policy-action">动作</label>
+              <label htmlFor="policy-action">{t('accessPolicies.fieldAction')}</label>
               <select
                 id="policy-action"
                 value={form.action}
@@ -246,7 +296,7 @@ export default function AccessPoliciesPage() {
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="policy-effect">效果</label>
+              <label htmlFor="policy-effect">{t('accessPolicies.fieldEffect')}</label>
               <select
                 id="policy-effect"
                 value={form.effect}
@@ -254,12 +304,12 @@ export default function AccessPoliciesPage() {
                   setForm({ ...form, effect: e.target.value as 'allow' | 'deny' })
                 }
               >
-                <option value="allow">允许</option>
-                <option value="deny">拒绝</option>
+                <option value="allow">{t('accessPolicies.effectAllow')}</option>
+                <option value="deny">{t('accessPolicies.effectDeny')}</option>
               </select>
             </div>
             <div className="form-group">
-              <label htmlFor="policy-priority">优先级（数字越小越先匹配）</label>
+              <label htmlFor="policy-priority">{t('accessPolicies.fieldPriority')}</label>
               <input
                 id="policy-priority"
                 type="number"
@@ -269,28 +319,28 @@ export default function AccessPoliciesPage() {
             </div>
           </div>
           <div className="form-group">
-            <label htmlFor="policy-conditions">条件（JSON，可空）</label>
+            <label htmlFor="policy-conditions">{t('accessPolicies.fieldConditions')}</label>
             <textarea
               id="policy-conditions"
               rows={4}
               value={form.conditions}
               onChange={(e) => setForm({ ...form, conditions: e.target.value })}
-              placeholder='{"role": "auditor"}'
+              placeholder={t('accessPolicies.fieldConditionsPlaceholder')}
               style={!conditionsJsonValid ? { borderColor: 'var(--color-danger)' } : undefined}
             />
             {!conditionsJsonValid && (
               <p style={{ color: 'var(--color-danger)', fontSize: '0.75rem', marginTop: 4 }}>
-                JSON 格式不正确，请检查语法
+                {t('accessPolicies.conditionsInvalid')}
               </p>
             )}
           </div>
           <div className="form-group">
-            <label htmlFor="policy-desc">描述</label>
+            <label htmlFor="policy-desc">{t('accessPolicies.fieldDescription')}</label>
             <input
               id="policy-desc"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="可选"
+              placeholder={t('accessPolicies.fieldDescriptionPlaceholder')}
             />
           </div>
           <div className="form-group">
@@ -300,7 +350,7 @@ export default function AccessPoliciesPage() {
                 checked={form.is_active}
                 onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
               />{' '}
-              启用
+              {t('accessPolicies.fieldIsActive')}
             </label>
           </div>
         </Modal>
@@ -308,9 +358,9 @@ export default function AccessPoliciesPage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="确认删除"
-        message={deleteTarget ? <>确定要删除策略「<strong>{deleteTarget.name}</strong>」吗？</> : null}
-        confirmText="确认删除"
+        title={t('accessPolicies.confirmDeleteTitle')}
+        message={deleteTarget ? <>{t('accessPolicies.confirmDeleteMsg', { name: deleteTarget.name })}</> : null}
+        confirmText={t('accessPolicies.confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteTarget) {

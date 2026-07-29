@@ -1,0 +1,73 @@
+{
+  "title": "财务指标看板",
+  "subtitle": "财务指标可视化分析，支持同比环比、趋势、对比与钻取。",
+  "actions": {
+    "refresh": {
+      "label": "刷新",
+      "ariaLabel": "刷新"
+    },
+    "retry": "重试"
+  },
+  "filters": {
+    "year": { "label": "年度" },
+    "period": { "label": "周期" },
+    "metric": { "label": "指标" }
+  },
+  "periodLabels": {
+    "Q1": "Q1（第一季度）",
+    "Q2": "Q2（第二季度）",
+    "Q3": "Q3（第三季度）",
+    "Q4": "Q4（第四季度）",
+    "H1": "上半年",
+    "H2": "下半年",
+    "annual": "全年"
+  },
+  "sections": {
+    "overview": "核心指标（{{period}}）",
+    "trend": "年度趋势",
+    "comparison": "季度对比",
+    "drill": "明细钻取"
+  },
+  "meta": {
+    "updatedAt": "更新于 {{time}}",
+    "itemCount": "{{count}} 项",
+    "drillCurrent": "当前：{{metric}}",
+    "drillHint": "点击上方指标卡查看分周期占比"
+  },
+  "drillTable": {
+    "period": "周期",
+    "value": "数值",
+    "ratio": "占比",
+    "total": "合计"
+  },
+  "empty": {
+    "overview": {
+      "title": "暂无 KPI 数据",
+      "description": "该年度与周期下没有可用的财务指标，请切换到其他时间或导入财务数据后重试"
+    },
+    "trend": { "title": "暂无数据" },
+    "comparison": { "title": "暂无数据" },
+    "drill": {
+      "noSelection": {
+        "title": "未选择指标",
+        "description": "点击上方任意 KPI 卡片即可查看该指标各周期占比"
+      },
+      "noData": {
+        "title": "该指标本年暂无数据",
+        "description": "请尝试切换指标或年度"
+      }
+    }
+  },
+  "errors": {
+    "loadOverviewFailed": "加载 KPI 概览失败",
+    "loadTrendFailed": "加载趋势失败",
+    "loadComparisonFailed": "加载对比失败",
+    "loadDrillFailed": "加载钻取失败"
+  },
+  "fallbackMetrics": {
+    "revenue": "营收"
+  },
+  "units": {
+    "yuan": "元"
+  }
+}

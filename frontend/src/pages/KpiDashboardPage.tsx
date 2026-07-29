@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ICONS } from '../components/ui/Icons.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
 import { getErrorMessage } from '../utils/errors.ts'
@@ -6,6 +7,7 @@ import { formatDateTime, formatMetricValue } from '../utils/format.ts'
 import KpiCard from '../components/charts/KpiCard.tsx'
 import KpiTrendChart from '../components/charts/KpiTrendChart.tsx'
 import MetricBarChart from '../components/charts/MetricBarChart.tsx'
+import i18n from '../i18n/config.ts'
 import {
   getDrillDown,
   getKpiOverview,
@@ -24,16 +26,6 @@ import {
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = [CURRENT_YEAR - 3, CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR]
 
-const PERIOD_LABELS: Record<string, string> = {
-  Q1: 'Q1（第一季度）',
-  Q2: 'Q2（第二季度）',
-  Q3: 'Q3（第三季度）',
-  Q4: 'Q4（第四季度）',
-  H1: '上半年',
-  H2: '下半年',
-  annual: '全年',
-}
-
 function getDefaultPeriod(): string {
   const month = new Date().getMonth() + 1
   if (month <= 3) return 'Q1'
@@ -43,11 +35,28 @@ function getDefaultPeriod(): string {
 }
 const COMPARISON_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4']
 
-const FALLBACK_METRICS: KpiCardData[] = [
-  { metric: 'revenue', label: '营收', value: null, unit: '元', yoy: null, qoq: null },
-]
+interface ErrorAlertProps {
+  message: string
+  onRetry: () => void
+  className?: string
+}
+
+/** 错误提示条 + 重试按钮，4 个数据请求各自的 error 块复用。 */
+function ErrorAlert({ message, onRetry, className = '' }: ErrorAlertProps) {
+  const { t } = useTranslation('kpi')
+  return (
+    <div className={`alert alert-error ${className}`.trim()} role="alert">
+      <span>{message}</span>
+      <button type="button" className="chat-error-retry" onClick={onRetry}>
+        {t('actions.retry')}
+      </button>
+    </div>
+  )
+}
 
 export default function KpiDashboardPage() {
+  const { t } = useTranslation('kpi')
+
   const [year, setYear] = useState(CURRENT_YEAR)
   const [period, setPeriod] = useState<string>(getDefaultPeriod())
 
@@ -70,7 +79,25 @@ export default function KpiDashboardPage() {
   const [drillLoading, setDrillLoading] = useState(false)
   const [drillError, setDrillError] = useState('')
 
-  const metricOptions = overview?.cards ?? FALLBACK_METRICS
+  // FALLBACK_METRICS：label/unit 走 i18n，仅在 overview 未就绪时兜底。
+  const fallbackMetrics = useMemo<KpiCardData[]>(
+    () => [
+      {
+        metric: 'revenue',
+        label: t('fallbackMetrics.revenue'),
+        value: null,
+        unit: t('units.yuan'),
+        yoy: null,
+        qoq: null,
+      },
+    ],
+    [t],
+  )
+
+  const metricOptions = overview?.cards ?? fallbackMetrics
+
+  // PERIOD_LABELS：值通过 t() 解析，缺失时回退到原始 period 标识。
+  const periodLabel = useCallback((p: string) => t(`periodLabels.${p}`, p), [t])
 
   const fetchOverview = useCallback(async () => {
     setOverviewLoading(true)
@@ -79,7 +106,7 @@ export default function KpiDashboardPage() {
       const data = await getKpiOverview(year, period)
       setOverview(data)
     } catch (err) {
-      setOverviewError(getErrorMessage(err, '加载 KPI 概览失败'))
+      setOverviewError(getErrorMessage(err, i18n.t('kpi:errors.loadOverviewFailed')))
     } finally {
       setOverviewLoading(false)
     }
@@ -93,7 +120,7 @@ export default function KpiDashboardPage() {
       const data = await getMetricTrend(trendMetric, years)
       setTrend(data)
     } catch (err) {
-      setTrendError(getErrorMessage(err, '加载趋势失败'))
+      setTrendError(getErrorMessage(err, i18n.t('kpi:errors.loadTrendFailed')))
     } finally {
       setTrendLoading(false)
     }
@@ -106,7 +133,7 @@ export default function KpiDashboardPage() {
       const data = await getMetricComparison(year, COMPARISON_PERIODS)
       setComparison(data)
     } catch (err) {
-      setComparisonError(getErrorMessage(err, '加载对比失败'))
+      setComparisonError(getErrorMessage(err, i18n.t('kpi:errors.loadComparisonFailed')))
     } finally {
       setComparisonLoading(false)
     }
@@ -123,7 +150,7 @@ export default function KpiDashboardPage() {
       const data = await getDrillDown(drillMetric, year)
       setDrill(data)
     } catch (err) {
-      setDrillError(getErrorMessage(err, '加载钻取失败'))
+      setDrillError(getErrorMessage(err, i18n.t('kpi:errors.loadDrillFailed')))
     } finally {
       setDrillLoading(false)
     }
@@ -176,24 +203,29 @@ export default function KpiDashboardPage() {
     return map
   }, [comparison])
 
+  const drillUnit = useMemo(
+    () => metricOptions.find((m) => m.metric === drillMetric)?.unit ?? t('units.yuan'),
+    [metricOptions, drillMetric, t],
+  )
+
   return (
     <div className="container">
       <div className="page-header">
         <div>
-          <h1>财务指标看板</h1>
-          <p className="text-muted text-sm">财务指标可视化分析，支持同比环比、趋势、对比与钻取。</p>
+          <h1>{t('title')}</h1>
+          <p className="text-muted text-sm">{t('subtitle')}</p>
         </div>
         <div className="kpi-header-actions">
-          <button type="button" className="secondary" onClick={handleRefresh} aria-label="刷新" data-testid="kpi-refresh">
+          <button type="button" className="secondary" onClick={handleRefresh} aria-label={t('actions.refresh.ariaLabel')} data-testid="kpi-refresh">
             <ICONS.refresh size={16} />
-            刷新
+            {t('actions.refresh.label')}
           </button>
         </div>
       </div>
 
       <div className="kpi-toolbar">
         <div className="form-group">
-          <label htmlFor="kpi-year">年度</label>
+          <label htmlFor="kpi-year">{t('filters.year.label')}</label>
           <select id="kpi-year" value={year} onChange={(e) => setYear(Number(e.target.value))} data-testid="kpi-year-select">
             {YEAR_OPTIONS.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -201,29 +233,29 @@ export default function KpiDashboardPage() {
           </select>
         </div>
         <div className="form-group">
-          <label htmlFor="kpi-period">周期</label>
+          <label htmlFor="kpi-period">{t('filters.period.label')}</label>
           <select id="kpi-period" value={period} onChange={(e) => setPeriod(e.target.value)} data-testid="kpi-period-select">
             {PERIOD_OPTIONS.map((p) => (
-              <option key={p} value={p}>{PERIOD_LABELS[p] || p}</option>
+              <option key={p} value={p}>{periodLabel(p)}</option>
             ))}
           </select>
         </div>
         {overview?.generated_at && (
           <div className="kpi-toolbar-meta">
             <span className="kpi-toolbar-meta-dot" />
-            <span>更新于 {formatDateTime(overview.generated_at)}</span>
+            <span>{t('meta.updatedAt', { time: formatDateTime(overview.generated_at) })}</span>
           </div>
         )}
       </div>
 
       {overviewError && (
-        <div className="alert alert-error mb-4" role="alert">{overviewError}</div>
+        <ErrorAlert message={overviewError} onRetry={fetchOverview} className="mb-4" />
       )}
 
       <section className="kpi-section">
         <div className="dashboard-card-head">
-          <h3 className="card-title">核心指标（{PERIOD_LABELS[period] || period}）</h3>
-          <span className="card-meta">{overview?.cards?.length ?? 0} 项</span>
+          <h3 className="card-title">{t('sections.overview', { period: periodLabel(period) })}</h3>
+          <span className="card-meta">{t('meta.itemCount', { count: overview?.cards?.length ?? 0 })}</span>
         </div>
         {overviewLoading && !overview ? (
           <div className="skeleton-stat-grid">
@@ -249,8 +281,8 @@ export default function KpiDashboardPage() {
           </div>
         ) : (
           <EmptyState
-            title="暂无 KPI 数据"
-            description="该年度与周期下没有可用的财务指标，请切换到其他时间或导入财务数据后重试"
+            title={t('empty.overview.title')}
+            description={t('empty.overview.description')}
             icon="trend"
             size="md"
           />
@@ -260,9 +292,9 @@ export default function KpiDashboardPage() {
       <div className="dashboard-grid">
         <div className="card card-wide kpi-section">
           <div className="dashboard-card-head">
-            <h3 className="card-title">年度趋势</h3>
+            <h3 className="card-title">{t('sections.trend')}</h3>
             <div className="form-group kpi-toolbar">
-              <label htmlFor="kpi-trend-metric">指标</label>
+              <label htmlFor="kpi-trend-metric">{t('filters.metric.label')}</label>
               <select
                 id="kpi-trend-metric"
                 value={trendMetric}
@@ -276,21 +308,21 @@ export default function KpiDashboardPage() {
             </div>
           </div>
           {trendError ? (
-            <div className="alert alert-error">{trendError}</div>
+            <ErrorAlert message={trendError} onRetry={fetchTrend} />
           ) : trendLoading && !trend ? (
             <div className="skeleton skeleton-block" style={{ height: '300px' }} />
           ) : trend ? (
-            <KpiTrendChart data={trend.series ?? []} label={trend.label ?? ''} unit={trend.unit ?? '元'} />
+            <KpiTrendChart data={trend.series ?? []} label={trend.label ?? ''} unit={trend.unit ?? t('units.yuan')} />
           ) : (
-            <EmptyState title="暂无数据" icon="trend" size="sm" />
+            <EmptyState title={t('empty.trend.title')} icon="trend" size="sm" />
           )}
         </div>
 
         <div className="card card-wide kpi-section">
           <div className="dashboard-card-head">
-            <h3 className="card-title">季度对比</h3>
+            <h3 className="card-title">{t('sections.comparison')}</h3>
             <div className="form-group kpi-toolbar">
-              <label htmlFor="kpi-comparison-metric">指标</label>
+              <label htmlFor="kpi-comparison-metric">{t('filters.metric.label')}</label>
               <select
                 id="kpi-comparison-metric"
                 value={comparisonMetric}
@@ -304,7 +336,7 @@ export default function KpiDashboardPage() {
             </div>
           </div>
           {comparisonError ? (
-            <div className="alert alert-error">{comparisonError}</div>
+            <ErrorAlert message={comparisonError} onRetry={fetchComparison} />
           ) : comparisonLoading && !comparison ? (
             <div className="skeleton skeleton-block" style={{ height: '300px' }} />
           ) : comparisonItem ? (
@@ -314,26 +346,26 @@ export default function KpiDashboardPage() {
               unit={comparisonItem.unit}
             />
           ) : (
-            <EmptyState title="暂无数据" icon="reports" size="sm" />
+            <EmptyState title={t('empty.comparison.title')} icon="reports" size="sm" />
           )}
         </div>
       </div>
 
       <section className="card kpi-section">
         <div className="dashboard-card-head">
-          <h3 className="card-title">明细钻取</h3>
+          <h3 className="card-title">{t('sections.drill')}</h3>
           <span className="card-meta">
             {drillMetric
-              ? `当前：${metricOptions.find((m) => m.metric === drillMetric)?.label ?? drillMetric}`
-              : '点击上方指标卡查看分周期占比'}
+              ? t('meta.drillCurrent', { metric: metricOptions.find((m) => m.metric === drillMetric)?.label ?? drillMetric })
+              : t('meta.drillHint')}
           </span>
         </div>
         {drillError ? (
-          <div className="alert alert-error">{drillError}</div>
+          <ErrorAlert message={drillError} onRetry={fetchDrill} />
         ) : !drillMetric ? (
           <EmptyState
-            title="未选择指标"
-            description="点击上方任意 KPI 卡片即可查看该指标各周期占比"
+            title={t('empty.drill.noSelection.title')}
+            description={t('empty.drill.noSelection.description')}
             icon="queries"
             size="sm"
           />
@@ -343,16 +375,16 @@ export default function KpiDashboardPage() {
           <table className="kpi-drill-table" data-testid="kpi-drill-table">
             <thead>
               <tr>
-                <th>周期</th>
-                <th>数值</th>
-                <th>占比</th>
+                <th>{t('drillTable.period')}</th>
+                <th>{t('drillTable.value')}</th>
+                <th>{t('drillTable.ratio')}</th>
               </tr>
             </thead>
             <tbody>
               {(drill.items ?? []).map((item) => (
                 <tr key={item.period}>
                   <td>{item.period}</td>
-                  <td>{formatMetricValue(item.value, metricOptions.find((m) => m.metric === drillMetric)?.unit ?? '元')}</td>
+                  <td>{formatMetricValue(item.value, drillUnit)}</td>
                   <td>
                     {item.ratio === null ? '—' : `${(item.ratio * 100).toFixed(2)}%`}
                     {item.ratio !== null && (
@@ -368,16 +400,16 @@ export default function KpiDashboardPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td>合计</td>
-                <td>{formatMetricValue(drill.total, metricOptions.find((m) => m.metric === drillMetric)?.unit ?? '元')}</td>
+                <td>{t('drillTable.total')}</td>
+                <td>{formatMetricValue(drill.total, drillUnit)}</td>
                 <td>100.00%</td>
               </tr>
             </tfoot>
           </table>
         ) : (
           <EmptyState
-            title="该指标本年暂无数据"
-            description="请尝试切换指标或年度"
+            title={t('empty.drill.noData.title')}
+            description={t('empty.drill.noData.description')}
             icon="documents"
             size="sm"
           />

@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Loading from '../components/ui/Loading.tsx'
 import EmptyState from '../components/ui/EmptyState.tsx'
 import ConfirmDialog from '../components/ui/ConfirmDialog.tsx'
+import { ICONS } from '../components/ui/Icons.tsx'
 import { api } from '../api/client.ts'
 import { getErrorMessage } from '../utils/errors.ts'
 import { formatDateTime } from '../utils/format.ts'
@@ -26,6 +28,7 @@ import {
 import SubscriptionFormModal from './report-subscriptions/SubscriptionFormModal.tsx'
 
 export default function ReportSubscriptionsPage() {
+  const { t } = useTranslation()
   const {
     items: subs,
     loading,
@@ -39,13 +42,13 @@ export default function ReportSubscriptionsPage() {
     setError,
   } = useCrudResource<ReportSubscription>({
     baseUrl: '/report-subscriptions',
-    fetchErrorMessage: '加载订阅列表失败',
-    createErrorMessage: '创建订阅失败',
-    updateErrorMessage: '更新订阅失败',
-    deleteErrorMessage: '删除订阅失败',
-    createSuccessMessage: '订阅创建成功',
-    updateSuccessMessage: '订阅更新成功',
-    deleteSuccessMessage: '订阅删除成功',
+    fetchErrorMessage: t('reportSubscriptions.loadFailed'),
+    createErrorMessage: t('reportSubscriptions.createFailed'),
+    updateErrorMessage: t('reportSubscriptions.updateFailed'),
+    deleteErrorMessage: t('reportSubscriptions.deleteFailed'),
+    createSuccessMessage: t('reportSubscriptions.createSuccess'),
+    updateSuccessMessage: t('reportSubscriptions.updateSuccess'),
+    deleteSuccessMessage: t('reportSubscriptions.deleteSuccess'),
   })
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -53,6 +56,23 @@ export default function ReportSubscriptionsPage() {
   const [form, setForm] = useState<FormState>(emptyForm)
   const [deleteTarget, setDeleteTarget] = useState<ReportSubscription | null>(null)
   const [runTarget, setRunTarget] = useState<ReportSubscription | null>(null)
+  const [keyword, setKeyword] = useState('')
+
+  // 客户端关键词过滤（按订阅名称匹配）
+  const filteredSubs = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return subs
+    return subs.filter((s) => (s.name || '').toLowerCase().includes(kw))
+  }, [subs, keyword])
+
+  // 将常量列表的 labelKey 经 t() 解析为展示文案，找不到则回退原始值
+  const labelFor = (
+    list: { value: string; labelKey: string }[],
+    value: string,
+  ): string => {
+    const item = list.find((x) => x.value === value)
+    return item ? t(item.labelKey) : value
+  }
 
   const openCreate = () => {
     setForm(emptyForm)
@@ -135,12 +155,16 @@ export default function ReportSubscriptionsPage() {
       const response = await api.post(`/report-subscriptions/${sub.id}/run`)
       const result = response.data.data
       if (result?.status === 'failed') {
-        setError(`执行失败：${result.error || '未知错误'}`)
+        setError(
+          t('reportSubscriptions.runFailed', {
+            error: result.error || t('reportSubscriptions.unknownError'),
+          }),
+        )
       } else {
         await refresh()
       }
     } catch (err) {
-      setError(getErrorMessage(err, '触发执行失败'))
+      setError(getErrorMessage(err, t('reportSubscriptions.triggerFailed')))
     } finally {
       setActingId(null)
     }
@@ -162,52 +186,83 @@ export default function ReportSubscriptionsPage() {
   return (
     <div className="container">
       <div className="page-header">
-        <h1>报告订阅</h1>
-        <button type="button" onClick={openCreate}>新建订阅</button>
+        <h1>{t('reportSubscriptions.title')}</h1>
+        <button type="button" onClick={openCreate}>{t('reportSubscriptions.create')}</button>
       </div>
 
       {error && (
         <div className="alert alert-error mb-4" role="alert">
-          {error}
+          <span>{error}</span>
+          <button type="button" className="chat-error-retry" onClick={refresh}>
+            {t('reportSubscriptions.retry')}
+          </button>
+        </div>
+      )}
+
+      {subs.length > 0 && (
+        <div className="toolbar">
+          <div className="search-inline">
+            <ICONS.search size={14} />
+            <input
+              type="search"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder={t('reportSubscriptions.searchPlaceholder')}
+              aria-label={t('reportSubscriptions.searchPlaceholder')}
+            />
+          </div>
         </div>
       )}
 
       {loading ? (
-        <Loading text="加载订阅中..." />
+        <Loading text={t('reportSubscriptions.loading')} />
       ) : subs.length === 0 ? (
-        <EmptyState title="暂无报告订阅" description="点击「新建订阅」配置定时报告自动生成与推送。" />
+        <EmptyState
+          icon="reports"
+          title={t('reportSubscriptions.emptyTitle')}
+          description={t('reportSubscriptions.emptyDesc')}
+          action={
+            <button type="button" onClick={openCreate}>{t('reportSubscriptions.create')}</button>
+          }
+        />
+      ) : filteredSubs.length === 0 ? (
+        <EmptyState
+          icon="search"
+          title={t('reportSubscriptions.emptySearchTitle')}
+          description={t('reportSubscriptions.emptySearchDesc')}
+        />
       ) : (
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>名称</th>
-                <th>报告类型</th>
-                <th>调度</th>
-                <th>导出</th>
-                <th>通知渠道</th>
-                <th>状态</th>
-                <th>下次执行</th>
-                <th>操作</th>
+                <th>{t('reportSubscriptions.colName')}</th>
+                <th>{t('reportSubscriptions.colReportType')}</th>
+                <th>{t('reportSubscriptions.colSchedule')}</th>
+                <th>{t('reportSubscriptions.colExport')}</th>
+                <th>{t('reportSubscriptions.colChannels')}</th>
+                <th>{t('reportSubscriptions.colStatus')}</th>
+                <th>{t('reportSubscriptions.colNextRun')}</th>
+                <th>{t('reportSubscriptions.colActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {subs.map((sub) => (
+              {filteredSubs.map((sub) => (
                 <tr key={sub.id}>
                   <td>{sub.name}</td>
-                  <td>{REPORT_TYPES.find((t) => t.value === sub.report_type)?.label || sub.report_type}</td>
-                  <td>{formatFrequency(sub)}</td>
-                  <td>{EXPORT_FORMATS.find((f) => f.value === sub.export_format)?.label || sub.export_format}</td>
+                  <td>{labelFor(REPORT_TYPES, sub.report_type)}</td>
+                  <td>{formatFrequency(sub, t)}</td>
+                  <td>{labelFor(EXPORT_FORMATS, sub.export_format)}</td>
                   <td>
                     {sub.channels.length > 0
-                      ? sub.channels.map((c) => CHANNELS.find((ch) => ch.value === c)?.label || c).join(', ')
+                      ? sub.channels.map((c) => labelFor(CHANNELS, c)).join(', ')
                       : <span className="text-muted">—</span>}
                   </td>
                   <td>
                     {sub.is_active === 'Y' ? (
-                      <span className="badge success">启用</span>
+                      <span className="badge success">{t('reportSubscriptions.statusActive')}</span>
                     ) : (
-                      <span className="badge rejected">已停用</span>
+                      <span className="badge rejected">{t('reportSubscriptions.statusInactive')}</span>
                     )}
                   </td>
                   <td>
@@ -223,7 +278,7 @@ export default function ReportSubscriptionsPage() {
                         onClick={() => setRunTarget(sub)}
                         disabled={actingId === sub.id}
                       >
-                        执行
+                        {t('reportSubscriptions.run')}
                       </button>
                       <button
                         type="button"
@@ -231,7 +286,7 @@ export default function ReportSubscriptionsPage() {
                         onClick={() => openEdit(sub)}
                         disabled={actingId === sub.id}
                       >
-                        编辑
+                        {t('reportSubscriptions.edit')}
                       </button>
                       <button
                         type="button"
@@ -239,7 +294,7 @@ export default function ReportSubscriptionsPage() {
                         onClick={() => handleToggle(sub)}
                         disabled={actingId === sub.id}
                       >
-                        {sub.is_active === 'Y' ? '停用' : '启用'}
+                        {sub.is_active === 'Y' ? t('reportSubscriptions.disable') : t('reportSubscriptions.enable')}
                       </button>
                       <button
                         type="button"
@@ -247,7 +302,7 @@ export default function ReportSubscriptionsPage() {
                         onClick={() => setDeleteTarget(sub)}
                         disabled={actingId === sub.id}
                       >
-                        删除
+                        {t('reportSubscriptions.delete')}
                       </button>
                     </div>
                   </td>
@@ -272,9 +327,9 @@ export default function ReportSubscriptionsPage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title="确认删除"
-        message={deleteTarget ? <>确定要删除订阅「<strong>{deleteTarget.name}</strong>」吗？此操作不可恢复。</> : null}
-        confirmText="确认删除"
+        title={t('reportSubscriptions.confirmDeleteTitle')}
+        message={deleteTarget ? <>{t('reportSubscriptions.confirmDeleteMsg', { name: deleteTarget.name })}</> : null}
+        confirmText={t('reportSubscriptions.confirmDelete')}
         variant="danger"
         onConfirm={async () => {
           if (deleteTarget) {
@@ -287,9 +342,9 @@ export default function ReportSubscriptionsPage() {
 
       <ConfirmDialog
         open={!!runTarget}
-        title="确认手动触发"
-        message={runTarget ? <>确定要手动触发订阅「<strong>{runTarget.name}</strong>」吗？将立即生成报告并推送通知。</> : null}
-        confirmText="确认触发"
+        title={t('reportSubscriptions.confirmRunTitle')}
+        message={runTarget ? <>{t('reportSubscriptions.confirmRunMsg', { name: runTarget.name })}</> : null}
+        confirmText={t('reportSubscriptions.confirmRun')}
         variant="warning"
         onConfirm={async () => {
           if (runTarget) {
