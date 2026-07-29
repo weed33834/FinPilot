@@ -20,10 +20,50 @@ from typing import Iterator
 
 import openai
 from openai import OpenAI
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from .config import LLMConfig
 
 logger = logging.getLogger(__name__)
+
+# ── LLM 调用韧性配置（环境变量可调）──────────────────────────────────
+# 单次请求超时（秒）：SDK 默认 600s 过长，单次卡死会拖死整条 ReAct 链。
+_LLM_CALL_TIMEOUT = float(os.getenv("FINPILOT_LLM_CALL_TIMEOUT", "60"))
+# 最大重试次数（含首次）：仅对瞬态错误（超时/连接/限流/5xx）重试，
+# 认证/参数错误等不重试。指数退避 1s→2s→4s… 上限 10s。
+_LLM_MAX_RETRIES = int(os.getenv("FINPILOT_LLM_MAX_RETRIES", "3"))
+
+# 瞬态错误：值得重试的 OpenAI SDK 异常（均属 openai.OpenAIError 子类）
+_RETRYABLE_ERRORS = (
+    openai.APITimeoutError,
+    openai.APIConnectionError,
+    openai.RateLimitError,
+    openai.InternalServerError,
+)
+
+
+def _llm_retry(func):
+    """tenacity 重试装饰器：仅对瞬态 LLM 错误指数退避重试，其余立即抛出。
+
+    - stop: 最多 _LLM_MAX_RETRIES 次（含首次）
+    - wait: 指数退避 min=1s max=10s multiplier=1
+    - retry: 仅 _RETRYABLE_ERRORS 触发重试
+    - reraise: 重试耗尽后抛原始异常（而非 RetryError），便于上层按
+      openai.OpenAIError 统一捕获并走 demo fallback / LLMUnavailableError
+    """
+    return retry(
+        stop=stop_after_attempt(_LLM_MAX_RETRIES),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type(_RETRYABLE_ERRORS),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )(func)
 
 
 def _demo_fallback_enabled() -> bool:
@@ -100,12 +140,25 @@ class LLMClient:
             return OpenAI(
                 base_url=config.base_url or "http://localhost:11434/v1",
                 api_key="ollama",
+                timeout=_LLM_CALL_TIMEOUT,
+                max_retries=0,  # 重试交由 tenacity 统一控制，避免与 SDK 双重重试
             )
         # openai / anthropic / other compatible vendors: use config base_url + api_key.
         return OpenAI(
             base_url=config.base_url,
             api_key=config.api_key or "not-required",
+            timeout=_LLM_CALL_TIMEOUT,
+            max_retries=0,  # 重试交由 tenacity 统一控制，避免与 SDK 双重重试
         )
+
+    @_llm_retry
+    def _chat_completion(self, **kwargs):
+        """实际 chat.completions.create 调用，经 tenacity 对瞬态错误重试。
+
+        重试耗尽后抛原始 openai.OpenAIError 子类，由调用方 ``chat`` /
+        ``verify_connection`` / ``analyze_image`` 统一捕获并降级。
+        """
+        return self.client.chat.completions.create(**kwargs)
 
     def chat(
         self,
@@ -140,7 +193,7 @@ class LLMClient:
         usage = None
         try:
             try:
-                resp = self.client.chat.completions.create(
+                resp = self._chat_completion(
                     model=self.config.model_name,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -227,7 +280,7 @@ class LLMClient:
             tenant_id=tenant_id, user_id=user_id, model_name=self.config.model_name,
         )
         try:
-            stream = self.client.chat.completions.create(
+            stream = self._chat_completion(
                 model=self.config.model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -274,7 +327,7 @@ class LLMClient:
         """
         start = time.time()
         try:
-            resp = self.client.chat.completions.create(
+            resp = self._chat_completion(
                 model=self.config.model_name,
                 messages=[
                     {"role": "system", "content": "你是连通性测试助手。"},
@@ -298,7 +351,7 @@ class LLMClient:
         """Multimodal image analysis: sends a base64 image plus a prompt to a vision model."""
         start = time.time()
         try:
-            resp = self.client.chat.completions.create(
+            resp = self._chat_completion(
                 model=self.config.model_name,
                 messages=[
                     {

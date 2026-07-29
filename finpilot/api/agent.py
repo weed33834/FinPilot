@@ -514,6 +514,10 @@ def chat_stream(
     # 把上传文件解析后注入问题上下文（best-effort，失败则用原问题）
     effective_question = _inject_file_context(req.question, req.files or [], tenant_id)
 
+    # 从会话加载绑定的 AgentConfig（与 /chat 一致），让管理员后台配置
+    # （system_prompt / model_id）在流式端点也生效，此前 stream 端点完全忽略
+    agent_config = _load_agent_config(db, conversation_id, user_id=current_user["user_id"])
+
     def event_generator():
         started_at = time.time()
         # 1. start 事件（携带 conversation_id 与原始问题）
@@ -553,7 +557,9 @@ def chat_stream(
                 "tenant_id": tenant_id,
             }
 
-            agent = build_agent(tenant_id=tenant_id, user_id=user_id, db=db)
+            agent = build_agent(
+                tenant_id=tenant_id, user_id=user_id, db=db, agent_config=agent_config,
+            )
             thread_id = make_thread_id(tenant_id, conversation_id)
             config = {"configurable": {"thread_id": thread_id}}
 
@@ -628,9 +634,20 @@ def chat_stream(
                 yield _sse("answer_token", {"content": answer[i:i + chunk_size]})
                 time.sleep(0.015)  # 轻微延迟，前端能看到流式效果
 
-            # 4. 持久化助手回复
+            # 4. 持久化助手回复（携带 LLM 运行时元数据，与 /chat 行为一致）
             try:
-                crud.add_message(db, int(conversation_id), "assistant", answer)
+                assistant_meta = _build_assistant_message_meta(run_result, started_at)
+                crud.add_message(
+                    db,
+                    int(conversation_id),
+                    "assistant",
+                    answer,
+                    model_name=assistant_meta["model_name"],
+                    tokens_in=assistant_meta["tokens_in"],
+                    tokens_out=assistant_meta["tokens_out"],
+                    latency_ms=assistant_meta["latency_ms"],
+                    tool_calls=assistant_meta["tool_calls"],
+                )
             except Exception:
                 pass
 
