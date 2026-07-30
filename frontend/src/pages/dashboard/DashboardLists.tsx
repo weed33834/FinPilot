@@ -11,13 +11,14 @@ interface RecentReportsListProps {
 
 export function RecentReportsList({ items }: RecentReportsListProps) {
   const { t } = useTranslation(['common', 'dashboard'])
+  const list = items || []
   return (
     <div className="card">
       <div className="dashboard-card-head">
         <h3 className="card-title">{t('dashboard:sections.recentReports')}</h3>
         <Link to="/reports" className="card-link">{t('common:actions.viewAll') || '查看全部'}</Link>
       </div>
-      {items.length === 0 ? (
+      {list.length === 0 ? (
         <div className="empty-state empty-state-sm">
           <ICONS.reports size={32} className="empty-state-icon" />
           <p className="empty-state-title">{t('dashboard:empty.recentReports')}</p>
@@ -26,7 +27,7 @@ export function RecentReportsList({ items }: RecentReportsListProps) {
         </div>
       ) : (
         <ul className="activity-list">
-          {items.slice(0, 6).map((report) => (
+          {list.slice(0, 6).map((report) => (
             <li key={report.id}>
               <div className="activity-main">
                 <Link to={`/reports/${report.id}`} className="link">
@@ -49,13 +50,14 @@ interface RecentDocumentsListProps {
 
 export function RecentDocumentsList({ items }: RecentDocumentsListProps) {
   const { t } = useTranslation(['common', 'dashboard'])
+  const list = items || []
   return (
     <div className="card">
       <div className="dashboard-card-head">
         <h3 className="card-title">{t('dashboard:sections.recentDocuments')}</h3>
         <Link to="/documents" className="card-link">{t('common:actions.viewAll') || '查看全部'}</Link>
       </div>
-      {items.length === 0 ? (
+      {list.length === 0 ? (
         <div className="empty-state empty-state-sm">
           <ICONS.documents size={32} className="empty-state-icon" />
           <p className="empty-state-title">{t('dashboard:empty.recentDocuments')}</p>
@@ -105,13 +107,14 @@ function formatResourceLabel(resource: string): string {
 
 export function RecentActivitiesList({ items }: RecentActivitiesListProps) {
   const { t } = useTranslation(['common', 'dashboard'])
+  const list = items || []
   return (
     <div className="card">
       <div className="dashboard-card-head">
         <h3 className="card-title">{t('dashboard:sections.recentActivities')}</h3>
         <span className="card-meta">{t('dashboard:meta.recent7d') || '近 7 天'}</span>
       </div>
-      {items.length === 0 ? (
+      {list.length === 0 ? (
         <div className="empty-state empty-state-sm">
           <ICONS.audit size={32} className="empty-state-icon" />
           <p className="empty-state-title">{t('dashboard:empty.recentActivities')}</p>
@@ -119,7 +122,7 @@ export function RecentActivitiesList({ items }: RecentActivitiesListProps) {
         </div>
       ) : (
         <ul className="activity-list">
-          {items.slice(0, 8).map((activity) => {
+          {list.slice(0, 8).map((activity) => {
             const actionKey = ACTION_LABELS[activity.action]
             const resourceLabel = formatResourceLabel(activity.resource)
             return (

@@ -111,13 +111,14 @@ interface StatusDistributionChartProps {
 
 export function StatusDistributionChart({ title, data, cellKeyPrefix }: StatusDistributionChartProps) {
   const { t } = useTranslation('common')
+  const safe = data || []
   return (
     <div className="card">
       <div className="dashboard-card-head">
         <h3 className="card-title">{title}</h3>
-        <span className="card-meta">{data.reduce((s, d) => s + d.value, 0)} {t('common:units.total') || '条'}</span>
+        <span className="card-meta">{safe.reduce((s, d) => s + d.value, 0)} {t('common:units.total') || '条'}</span>
       </div>
-      {data.length === 0 ? (
+      {safe.length === 0 ? (
         <div className="empty-state empty-state-sm">
           <ICONS.trend size={32} className="empty-state-icon" />
           <p className="empty-state-title">{t('status.empty')}</p>
@@ -128,7 +129,7 @@ export function StatusDistributionChart({ title, data, cellKeyPrefix }: StatusDi
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={safe}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
@@ -137,7 +138,7 @@ export function StatusDistributionChart({ title, data, cellKeyPrefix }: StatusDi
                   outerRadius={78}
                   paddingAngle={2}
                 >
-                  {data.map((entry, index) => (
+                  {safe.map((entry, index) => (
                     <Cell key={`${cellKeyPrefix}-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -146,7 +147,7 @@ export function StatusDistributionChart({ title, data, cellKeyPrefix }: StatusDi
             </ResponsiveContainer>
           </div>
           <div className="legend">
-            {data.map((item) => (
+            {safe.map((item) => (
               <div key={item.name} className="legend-item">
                 <span className="legend-dot" style={{ background: item.color }} />
                 <span>
