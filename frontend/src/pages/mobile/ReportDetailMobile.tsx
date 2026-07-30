@@ -185,11 +185,6 @@ export default function ReportDetailMobile({ id }: { id: string }) {
           ) : (
             <div className="mdetail__hint">{t('common:reports.statusReviewing')} / {t('common:reports.statusApproved')} 后可导出</div>
           )}
-
-          <button type="button" className="mdetail__back" onClick={() => navigate('/reports')}>
-            <ICONS.close size={16} />
-            {t('mobile:back')}
-          </button>
         </div>
       ) : null}
     </div>

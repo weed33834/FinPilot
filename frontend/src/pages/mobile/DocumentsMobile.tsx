@@ -81,7 +81,7 @@ export default function DocumentsMobile() {
       ) : documents.length === 0 ? (
         <div className="mdocs__empty">
           <ICONS.documents size={28} />
-          <p>{t('common:documents.empty')}</p>
+          <p>{t('common:documents.emptyTitle')}</p>
         </div>
       ) : (
         <div className="mdocs__list">

@@ -75,7 +75,7 @@ export default function ReportsMobile() {
       ) : reports.length === 0 ? (
         <div className="mreports__empty">
           <ICONS.reports size={28} />
-          <p>{t('common:reports.empty')}</p>
+          <p>{t('common:reports.emptyTitle')}</p>
         </div>
       ) : (
         <div className="mreports__list">

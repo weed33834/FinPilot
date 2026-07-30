@@ -6,6 +6,7 @@ import { getErrorMessage } from '../../utils/errors'
 import type { DataResponse } from '../../types/report'
 import type { BackupCodesResponse, TwoFASetup, TwoFAStatus } from '../../types/twoFactor'
 import { toast } from '../../components/ui/Toaster'
+import MobilePageHeader from '../../components/mobile/MobilePageHeader'
 import '../../i18n/mobile'
 
 /**
@@ -183,6 +184,8 @@ export default function SecurityMobile() {
 
   return (
     <div className="msecurity">
+      <MobilePageHeader title={t('security:title')} />
+
       {error && (
         <div className="msecurity__alert msecurity__alert--error" role="alert">
           {error}

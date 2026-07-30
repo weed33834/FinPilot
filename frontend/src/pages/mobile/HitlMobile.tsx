@@ -205,7 +205,12 @@ export default function HitlMobile() {
                 </div>
                 <div className="mhitl__type">{req.action_type}</div>
                 <p className="mhitl__desc">{req.description || '—'}</p>
-                {paramsJson && <pre className="mhitl__params">{paramsJson}</pre>}
+                {paramsJson && (
+                  <details className="mhitl__params-details">
+                    <summary>{t('hitl.colParams')}</summary>
+                    <pre className="mhitl__params">{paramsJson}</pre>
+                  </details>
+                )}
                 {canAct && (
                   <input
                     className="mhitl__comment"
@@ -298,7 +303,10 @@ export default function HitlMobile() {
             )}
             <div className="mhitl__detail-row">
               <span className="mhitl__detail-label">{t('hitl.colParams')}</span>
-              <pre className="mhitl__params">{toJsonString(detail.action_params) || '—'}</pre>
+              <details className="mhitl__params-details" open>
+                <summary>展开 / 收起</summary>
+                <pre className="mhitl__params">{toJsonString(detail.action_params) || '—'}</pre>
+              </details>
             </div>
             {detail.context && (
               <div className="mhitl__detail-row">

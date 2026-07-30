@@ -5,7 +5,6 @@ import { api } from '../../api/client'
 import { getErrorMessage } from '../../utils/errors'
 import type { Document } from '../../types/document'
 import type { DataResponse } from '../../types/report'
-import { ICONS } from '../../components/ui/Icons'
 import Badge from '../../components/ui/Badge'
 import MobilePageHeader from '../../components/mobile/MobilePageHeader'
 import '../../i18n/mobile'
@@ -97,10 +96,6 @@ export default function DocumentDetailMobile({ id }: { id: string }) {
             </div>
           )}
 
-          <button type="button" className="mdetail__back" onClick={() => navigate('/documents')}>
-            <ICONS.close size={16} />
-            {t('mobile:back')}
-          </button>
         </div>
       ) : null}
     </div>

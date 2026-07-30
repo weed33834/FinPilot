@@ -34,7 +34,8 @@ interface ReportTrendChartProps {
 
 export function ReportTrendChart({ trend }: ReportTrendChartProps) {
   const { t } = useTranslation(['common', 'dashboard'])
-  const total = trend.reduce((sum, item) => sum + (item.count || 0), 0)
+  const safe = trend || []
+  const total = safe.reduce((sum, item) => sum + (item.count || 0), 0)
   return (
     <div className="card card-wide">
       <div className="dashboard-card-head">
@@ -47,7 +48,7 @@ export function ReportTrendChart({ trend }: ReportTrendChartProps) {
           <span className="card-stat-label">{t('dashboard:meta.total') || '总数'}</span>
         </div>
       </div>
-      {trend.length === 0 || total === 0 ? (
+      {safe.length === 0 || total === 0 ? (
         <div className="empty-state">
           <ICONS.trend size={40} className="empty-state-icon" />
           <p className="empty-state-title">{t('dashboard:empty.reportTrend')}</p>
@@ -56,7 +57,7 @@ export function ReportTrendChart({ trend }: ReportTrendChartProps) {
       ) : (
         <div className="chart-container chart-container-lg">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={trend} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
+            <BarChart data={safe} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
               <CartesianGrid {...CHART_GRID_PROPS} />
               <XAxis dataKey="date" tick={CHART_AXIS_TICK} {...CHART_AXIS_PROPS} />
               <YAxis allowDecimals={false} tick={CHART_AXIS_TICK} {...CHART_AXIS_PROPS} />

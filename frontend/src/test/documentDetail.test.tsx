@@ -17,7 +17,7 @@ beforeEach(() => {
 })
 
 describe('DocumentDetailMobile', () => {
-  it('加载后渲染文档字段与返回按钮', async () => {
+  it('加载后渲染文档字段', async () => {
     const doc = {
       id: '1',
       filename: 'statement.pdf',
@@ -33,7 +33,7 @@ describe('DocumentDetailMobile', () => {
 
     expect(await screen.findByText('statement.pdf')).toBeInTheDocument()
     expect(await screen.findByText('95%')).toBeInTheDocument()
-    expect(screen.getByText(/返回|Back/)).toBeInTheDocument()
+    // 返回按钮已移除（页头 MobilePageHeader 的返回箭头负责导航）
   })
 
   it('加载失败时展示错误信息', async () => {
