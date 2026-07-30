@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Added
+- **Mobile-first responsive adaptation**: dedicated `*Mobile.tsx` pages plus a `MobileShell` (bottom tab + more-sheet); 15+ desktop-only admin pages now degrade gracefully to an "open on desktop" prompt on small screens.
+- **Frontend full i18n (en / zh-CN)** via i18next across core flows, with language switching.
+- **Documentation overhaul**: English-primary `README.md` with switchable `README.zh-CN.md` / `README.ja.md`; `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/DEPLOYMENT.md` rewritten in English with Mermaid diagrams.
+- **Package metadata**: `frontend/package.json` and `setup.py` now carry description / repository / license / long-description.
+
+### Fixed
+- **Dashboard crash hardening**: `DashboardLists` and `DashboardCharts` now guard against undefined `items` / `data`, eliminating white-screen renders when the payload is empty or missing.
+
 ## [2.0.0] — 2026-07-27
 
 ### 🚀 重大版本：企业财务智能体平台

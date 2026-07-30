@@ -19,7 +19,15 @@ setup(
     packages=find_packages(),
     install_requires=REQUIRES,
     description="FinPilot AI: An Open-Source AI Agent Platform for Financial Applications using LLMs",
-    long_description="""FinPilot AI""",
+    long_description=(
+        "FinPilot AI is an open-source AI agent platform for enterprise finance. "
+        "It pairs a LangGraph-orchestrated ReAct agent with deterministic financial "
+        "computation (DCF, DDM, LBO, WACC, comparable companies, backtesting) and a "
+        "React 19 + Vite frontend featuring SSE-streaming chat, a slash-command "
+        "control center, RAG over multi-format documents, ABAC/TOTP security, and a "
+        "mobile-first responsive shell. See README.md for details."
+    ),
+    long_description_content_type="text/markdown",
     classifiers=[
         # Trove classifiers
         # Full list: https://pypi.python.org/pypi?%3Aaction=list_classifiers

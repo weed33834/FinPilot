@@ -4,6 +4,16 @@
   "version": "1.0.0",
   "license": "MIT",
   "type": "module",
+  "description": "FinPilot AI — React 19 + Vite + TypeScript frontend for the open-source enterprise-finance AI agent platform (SSE streaming chat, slash-command control, reports, audits, mobile-first).",
+  "author": "badhope",
+  "repository": {
+    "type": "git",
+    "url": "https://gitcode.com/badhope/FinPilot.git"
+  },
+  "bugs": {
+    "url": "https://gitcode.com/badhope/FinPilot/issues"
+  },
+  "homepage": "https://gitcode.com/badhope/FinPilot",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

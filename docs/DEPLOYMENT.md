@@ -1,29 +1,29 @@
-# FinPilot AI 部署指南
+# FinPilot AI — Deployment Guide
 
-本文档覆盖 FinPilot AI 的本地开发、Docker 容器化、生产部署三种场景。
+This document covers three scenarios for FinPilot AI: local development, Docker containerization, and production deployment.
 
-## 前置要求
+## Prerequisites
 
-| 组件 | 版本 | 说明 |
+| Component | Version | Notes |
 | :--- | :--- | :--- |
-| Python | 3.10 – 3.13 | 推荐 3.11 或 3.12；低于 3.10 或等于 3.14 不支持 |
-| Node.js | 18+ | 前端构建；推荐 20 LTS |
-| npm | 9+ | 随 Node 安装 |
-| Docker（可选） | 24+ | 容器化部署 |
-| Git | 2.30+ | 克隆仓库 |
+| Python | 3.10 – 3.13 | 3.11 or 3.12 recommended; below 3.10 or equal to 3.14 is unsupported |
+| Node.js | 18+ | for the frontend build; 20 LTS recommended |
+| npm | 9+ | ships with Node |
+| Docker (optional) | 24+ | for containerized deployment |
+| Git | 2.30+ | to clone the repo |
 
-## 一、本地开发部署
+## 1. Local Development
 
-### 1. 克隆仓库
+### 1. Clone the repository
 
 ```bash
 git clone https://gitcode.com/badhope/FinPilot.git
 cd FinPilot
 ```
 
-### 2. 准备 Python 环境
+### 2. Prepare the Python environment
 
-推荐使用 venv 或 pyenv 隔离环境：
+A venv or pyenv is recommended:
 
 ```bash
 python3 -m venv venv
@@ -31,21 +31,21 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -e .
 ```
 
-> 若系统默认 Python 不是 3.10–3.13，可用 [pyenv](https://github.com/pyenv/pyenv) 切换：
+> If the system default Python is not 3.10–3.13, switch with [pyenv](https://github.com/pyenv/pyenv):
 > ```bash
 > pyenv install 3.11.15
 > pyenv local 3.11.15
 > python -m venv venv
 > ```
 
-### 3. 配置环境变量
+### 3. Configure environment variables
 
 ```bash
 cp .env.example .env
-# 按需编辑 .env，至少配置一个 LLM 供应商
+# edit .env as needed; configure at least one LLM provider
 ```
 
-最小配置示例：
+Minimal config example:
 
 ```bash
 # .env
@@ -54,26 +54,26 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-完整环境变量清单见 [`.env.example`](../.env.example)。
+The full variable list is in [`.env.example`](../.env.example).
 
-### 4. 启动后端
+### 4. Start the backend
 
 ```bash
 uvicorn finpilot_equity.web_app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-首次启动会：
-- 在工作目录创建 `finpilot.db`（SQLite）
-- 初始化数据库 schema
-- 创建默认管理员 `admin@finpilot.ai` / `admin123`
+On first start it will:
+- create `finpilot.db` (SQLite) in the working directory
+- initialize the database schema
+- create the default admin **only if** `FINPILOT_ADMIN_EMAIL` + `FINPILOT_ADMIN_PASSWORD` are set (otherwise no default admin is created — register manually)
 
-验证启动成功：
+Verify it is up:
 ```bash
 curl http://localhost:8001/api/v1/auth/me
-# 应返回 401（未登录），说明服务已起来
+# should return 401 (not logged in) — service is running
 ```
 
-### 5. 启动前端
+### 5. Start the frontend
 
 ```bash
 cd frontend
@@ -81,91 +81,98 @@ npm install
 npm run dev
 ```
 
-浏览器访问 `http://localhost:5173`，使用默认管理员账号登录。
+Open `http://localhost:5173` and log in with the default admin account.
 
-> Vite dev server 会自动代理 `/api/v1` 到 `http://localhost:8001`（见 `vite.config.ts`）。
+> The Vite dev server auto-proxies `/api/v1` to `http://localhost:8001` (see `vite.config.ts`).
 
-### 6. 配置 LLM 供应商（推荐）
+### 6. Configure an LLM provider (recommended)
 
-登录后进入「管理后台 → LLM 供应商」页面，创建供应商。推荐使用 MoonWeaver（OpenAI 兼容协议）：
+After logging in, go to **Admin → LLM Providers** and create a provider. MoonWeaver (OpenAI-compatible) is recommended:
 
-| 字段 | 值 |
+| Field | Value |
 | :--- | :--- |
 | name | MoonWeaver |
 | provider_type | openai |
 | base_url | https://api.587.lol/v1 |
 | api_key | any |
 | is_default | ✓ |
-| models | moonweaver-4.8（API 当前仅有此一个模型，可同时挂到 high/low tier） |
+| models | moonweaver-4.8 (the API currently offers only this model; mount to both `high`/`low` tiers) |
 
-也可通过 API 创建：
+Or create it via API:
 ```bash
 curl -b cookies.txt -X POST http://localhost:8001/api/v1/llm-providers \
   -H "Content-Type: application/json" \
   -d '{"name":"MoonWeaver","provider_type":"openai","base_url":"https://api.587.lol/v1","api_key":"any","is_default":true,"models":[{"model_name":"moonweaver-4.8","tier":"high"}]}'
 ```
 
-## 二、Docker 容器化部署
+## 2. Docker Containerization
 
-### 1. 构建镜像
+The repository ships a `docker-compose.yml` that orchestrates Redis + PostgreSQL + backend + frontend in one command — this is the **recommended** path.
+
+### One-command stack (recommended)
 
 ```bash
-docker build -t finpilot-ai:1.0.0 .
+cp .env.example .env          # set SECRET_KEY and FINPILOT_ADMIN_PASSWORD
+docker compose up -d
+docker compose logs -f backend
 ```
 
-镜像基于 `python:3.13-slim`，安装完整 `requirements.txt` + `pip install -e .`，暴露端口 8001。
+Service ports:
 
-### 2. 运行容器
+| Service | Port | Notes |
+| :--- | :--- | :--- |
+| Frontend | `http://localhost:8080` | Nginx-served static build |
+| Backend | `http://localhost:8010` | API + `/health` + `/metrics` |
+| Redis | `6379` | session / rate-limit / lock |
+| PostgreSQL | `5432` | primary database |
+
+The backend `/health/ready` endpoint is used by Compose / K8s `depends_on` for readiness.
+
+### Manual image build & run (alternative)
 
 ```bash
+docker build -t finpilot-ai:2.0.0 .
 docker run -d \
   --name finpilot \
   -p 8001:8001 \
   --env-file .env \
   -v finpilot-data:/app/data \
-  finpilot-ai:1.0.0
+  finpilot-ai:2.0.0
 ```
 
-| 参数 | 说明 |
+| Flag | Description |
 | :--- | :--- |
-| `-p 8001:8001` | 映射后端端口 |
-| `--env-file .env` | 注入环境变量 |
-| `-v finpilot-data:/app/data` | 持久化 SQLite 数据库与上传文件（可选） |
+| `-p 8001:8001` | map the backend port |
+| `--env-file .env` | inject environment variables |
+| `-v finpilot-data:/app/data` | persist SQLite DB and uploads (optional) |
 
-### 3. 验证容器
+### Frontend standalone build
 
-```bash
-docker logs -f finpilot
-curl http://localhost:8001/api/v1/auth/me   # 应返回 401
-```
-
-### 4. 前端单独部署
-
-前端可单独构建为静态资源，由 Nginx 或 CDN 托管：
+The frontend can be built to static assets and served by Nginx or a CDN:
 
 ```bash
 cd frontend
-npm run build        # 产物在 frontend/dist/
+npm run build        # output in frontend/dist/
 ```
 
-将 `dist/` 部署到任意静态服务器，配置反向代理将 `/api/v1` 转发到后端容器。
+Deploy `dist/` to any static server and configure a reverse proxy to forward `/api/v1` to the backend container.
 
-## 三、生产部署建议
+## 3. Production Recommendations
 
-### 反向代理（Nginx 示例）
+### Reverse proxy (Nginx example)
 
 ```nginx
 server {
     listen 80;
     server_name finpilot.example.com;
 
-    # 前端静态资源
+    # Frontend static assets
     location / {
         root /var/www/finpilot-frontend;
         try_files $uri /index.html;
     }
 
-    # 后端 API 反向代理
+    # Backend API reverse proxy
     location /api/v1/ {
         proxy_pass http://127.0.0.1:8001;
         proxy_set_header Host $host;
@@ -173,7 +180,7 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # SSE 流式响应需要
+        # Required for SSE streaming
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 300s;
@@ -181,17 +188,16 @@ server {
 }
 ```
 
-### 数据库持久化
+### Database persistence
 
-默认 SQLite（`finpilot.db`），适合开发与小规模部署。生产环境建议切换 PostgreSQL：
+Default is SQLite (`finpilot.db`), fine for development and small deployments. For production, switch to PostgreSQL:
 
-1. 修改 `finpilot/database/session.py` 中的连接字符串
-2. 在 `.env` 中设置 `DATABASE_URL=postgresql+psycopg://user:pass@host:5432/finpilot`
-3. 重启服务，schema 会自动创建
+1. Set `FINPILOT_DATABASE_URL=postgresql+pg8000://user:pass@host:5432/finpilot` in `.env` (the compose stack does this automatically).
+2. Restart the service; the schema is created automatically.
 
-### 进程管理
+### Process management
 
-推荐用 systemd 或 supervisor 管理 uvicorn 进程：
+Manage the uvicorn process with systemd or supervisor:
 
 ```ini
 # /etc/systemd/system/finpilot.service
@@ -216,46 +222,46 @@ sudo systemctl enable finpilot
 sudo systemctl start finpilot
 ```
 
-### 安全清单
+### Security checklist
 
-- [ ] 修改默认管理员密码（`admin123` → 强密码）
-- [ ] 启用 HTTPS（Let's Encrypt 或商业证书）
-- [ ] 配置 `FINPILOT_ADMIN_EMAILS` 限制管理员白名单
-- [ ] 启用 TOTP 双因子认证（用户中心 → 安全设置）
-- [ ] 定期备份 `finpilot.db` 或 PostgreSQL
-- [ ] 审查审计日志（管理后台 → 审计日志）
-- [ ] 限制服务器出站访问（仅允许 LLM API 域名）
+- [ ] Change the default admin password (use a strong one via `FINPILOT_ADMIN_PASSWORD`)
+- [ ] Enable HTTPS (Let's Encrypt or a commercial cert)
+- [ ] Restrict the admin whitelist with `FINPILOT_ADMIN_EMAILS`
+- [ ] Enable TOTP 2FA (User Center → Security Settings)
+- [ ] Back up `finpilot.db` or PostgreSQL regularly
+- [ ] Review audit logs (Admin → Audit Logs)
+- [ ] Limit the server's outbound access (only allow LLM API domains)
 
-## 四、故障排查
+## 4. Troubleshooting
 
-### 后端启动失败
+### Backend fails to start
 
-| 错误 | 原因 | 解决 |
+| Error | Cause | Fix |
 | :--- | :--- | :--- |
-| `ModuleNotFoundError: No module named 'fastapi'` | 依赖未安装 | `pip install -e .` |
-| `ImportError: cannot import name 'create_router'` | 未安装本包 | `pip install -e .` |
-| `PermissionError: finpilot.db` | 工作目录不可写 | 改用有写权限的目录 |
-| `psycopg.OperationalError` | PostgreSQL 连接失败 | 检查 `DATABASE_URL` 与网络 |
+| `ModuleNotFoundError: No module named 'fastapi'` | deps not installed | `pip install -e .` |
+| `ImportError: cannot import name 'create_router'` | package not installed | `pip install -e .` |
+| `PermissionError: finpilot.db` | working dir not writable | use a writable directory |
+| `psycopg.OperationalError` | PostgreSQL connection failed | check `FINPILOT_DATABASE_URL` and network |
 
-### 前端构建失败
+### Frontend build fails
 
-| 错误 | 原因 | 解决 |
+| Error | Cause | Fix |
 | :--- | :--- | :--- |
-| `Cannot find module 'react'` | node_modules 未安装 | `npm install` |
-| TypeScript 报错 | 类型错误 | `npx tsc --noEmit` 查看详情 |
-| Vite 代理 404 | 后端未启动 | 先启动后端 `:8001` |
+| `Cannot find module 'react'` | node_modules missing | `npm install` |
+| TypeScript error | type error | `npx tsc --noEmit` for details |
+| Vite proxy 404 | backend not started | start backend on `:8001` first |
 
-### SSE 流式响应卡住
+### SSE streaming stalls
 
-- 检查 Nginx 是否关闭了 `proxy_buffering`
-- 检查 `proxy_read_timeout` 是否足够长（建议 ≥300s）
-- 后端日志查看是否在 `agent.stream()` 循环中
-- LLM 调用慢（MoonWeaver 单次 25-40s）属正常，前端会看到心跳 `…`
+- Check that Nginx has `proxy_buffering off`.
+- Check `proxy_read_timeout` is long enough (≥300s recommended).
+- Inspect backend logs to see if it is stuck in the `agent.stream()` loop.
+- Slow LLM calls (MoonWeaver can take 25–40s per call) are normal; the frontend shows the `…` heartbeat.
 
-### LLM 调用失败
+### LLM call fails
 
-- 在管理后台 → LLM 供应商页面点击「测试」按钮
-- 检查 `api_key` 是否正确
-- 检查 `base_url` 是否可达（`curl https://api.587.lol/v1/models`）
-- 查看后端日志的 `LLMUnavailableError` 详情
-- 启用 `FINPILOT_LLM_DEMO_FALLBACK=1` 可在 LLM 不可用时降级为占位文本（仅开发环境）
+- Click "Test" on the LLM Providers page in Admin.
+- Verify `api_key` is correct.
+- Verify `base_url` is reachable (`curl https://api.587.lol/v1/models`).
+- Check backend logs for `LLMUnavailableError` details.
+- Set `FINPILOT_LLM_DEMO_FALLBACK=1` to degrade to placeholder text when the LLM is unavailable (development only).

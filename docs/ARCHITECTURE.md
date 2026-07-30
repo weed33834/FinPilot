@@ -1,305 +1,309 @@
-# FinPilot AI 架构文档
+# FinPilot AI — Architecture
 
-本文档描述 FinPilot AI 的整体架构、核心子系统、数据流与设计决策。
+This document describes FinPilot AI's overall architecture, core subsystems, data flow, and key design decisions.
 
-## 三层架构
+> A high-level visual is available at [`architecture.svg`](architecture.svg). The diagrams below are kept as text (Mermaid) so they are version-controlled and diffable.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     接入层 (Frontend)                     │
-│  React 19 + Vite SPA                                    │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐    │
-│  │ AgentChatPage│ │ Admin Pages  │ │ Reports Page │    │
-│  │  + Slash     │ │  + LLM Mgmt  │ │  + Approvals │    │
-│  │  + Error Bar │ │  + Audit Log │ │              │    │
-│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘    │
-│         │  SSE / REST    │  REST          │  REST       │
-└─────────┼────────────────┼────────────────┼────────────┘
-          ▼                ▼                ▼
-┌─────────────────────────────────────────────────────────┐
-│                     服务层 (Backend)                     │
-│  FastAPI + LangGraph                                     │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐    │
-│  │ Agent Router │ │ Auth Router  │ │ Admin Router │    │
-│  │  - SSE stream│ │  - Session   │ │  - Users     │    │
-│  │  - ReAct     │ │  - 2FA TOTP  │ │  - Audit Log │    │
-│  └──────┬───────┘ └──────────────┘ └──────────────┘    │
-│         │                                                │
-│  ┌──────▼──────────────────────────────────────────┐   │
-│  │        LangGraph ReAct 智能体运行时              │   │
-│  │  agent → [should_continue] → tools → agent...    │   │
-│  │                    └─ finalize → END             │   │
-│  └──────┬──────────────────────────────────────────┘   │
-│         │                                                │
-│  ┌──────▼──────┐ ┌──────────────┐ ┌──────────────┐    │
-│  │ LLM Client  │ │ Parser       │ │ RAG Engine   │    │
-│  │ (多供应商)  │ │ (PDF/DOCX/...)│ │ (BM25+Vector)│    │
-│  └─────────────┘ └──────────────┘ └──────────────┘    │
-└─────────┬───────────────────────────────────────────────┘
-          ▼
-┌─────────────────────────────────────────────────────────┐
-│                     数据层 (Data)                        │
-│  SQLite / PostgreSQL │ 向量库 │ BM25 倒排 │ 文件存储    │
-└─────────────────────────────────────────────────────────┘
+## Three-Layer Architecture
+
+```mermaid
+flowchart TB
+  subgraph Presentation["Presentation Layer (Frontend)"]
+    direction TB
+    AC[AgentChatPage<br/>+ Slash Palette + Error Bar]
+    AD[Admin Pages<br/>+ LLM Mgmt + Audit Log]
+    RP[Reports Page<br/>+ Approvals]
+  end
+  subgraph Service["Service Layer (Backend — FastAPI + LangGraph)"]
+    direction TB
+    AR[Agent Router<br/>SSE stream · ReAct]
+    AUR[Auth Router<br/>Session · 2FA TOTP]
+    ADR[Admin Router<br/>Users · Audit Log]
+    RG[LangGraph ReAct Runtime<br/>agent → should_continue → tools → agent]
+    LC[LLM Client<br/>multi-provider]
+    PA[Parser<br/>PDF/DOCX/Excel/CSV]
+    RA[RAG Engine<br/>BM25 + Vector + RRF]
+  end
+  subgraph Data["Data Layer"]
+    DB[(SQLite / PostgreSQL)]
+    VS[(Vector Store)]
+    BM[(BM25 Inverted Index)]
+    FS[(File Storage)]
+  end
+  AC -. SSE / REST .-> AR
+  AD --> AUR
+  RP --> ADR
+  AR --> RG
+  RG --> LC & PA & RA
+  PA --> RA
+  RA --> VS & BM & DB
+  Service --> DB & FS
 ```
 
-## 核心子系统
+- **Presentation** — React 19 + Vite SPA. `AgentChatPage` integrates the slash palette, error bar, and streaming reasoning. Admin pages cover LLM provider management and audit logs; the Reports page covers generation and approvals.
+- **Service** — FastAPI + LangGraph. Routing, auth, agent orchestration, parsing, retrieval, and tracing.
+- **Data** — SQLite (default) / PostgreSQL (production), vector store, BM25 inverted index, and file storage.
 
-### 1. 智能体运行时（LangGraph ReAct）
+## Core Subsystems
 
-**位置**：`finpilot/agent/`
+### 1. Agent Runtime (LangGraph ReAct)
 
-ReAct（Reasoning + Acting）循环是 FinPilot 的核心推理引擎：
+**Location**: `finpilot/agent/`
 
+The ReAct (Reasoning + Acting) loop is FinPilot's core inference engine:
+
+```mermaid
+stateDiagram-v2
+  [*] --> Agent
+  Agent --> ShouldContinue: emit Action
+  ShouldContinue --> Tools: has action
+  ShouldContinue --> Finalize: no action
+  Tools --> Agent: observation
+  Finalize --> [*]
 ```
-START → agent → [should_continue] ─ tools → agent (循环)
-                       └─ end → finalize → END
-```
 
-**关键文件**：
+**Key files**:
 
-| 文件 | 职责 |
+| File | Responsibility |
 | :--- | :--- |
-| `graph.py` | 图构建 + `run_agent` 入口 + `make_thread_id` |
-| `react_nodes.py` | agent/tools/finalize/should_continue 节点 + ReAct 输出解析器 |
-| `checkpoint.py` | 检查点后端（memory / sqlite） |
-| `tools/` | 内置工具（nl2sql / document_qa / parse_document） |
-| `state.py` | AgentState TypedDict 定义 |
+| `graph.py` | graph build + `run_agent` entry + `make_thread_id` |
+| `react_nodes.py` | agent/tools/finalize/should_continue nodes + ReAct output parser |
+| `checkpoint.py` | checkpoint backends (`memory` / `sqlite`) |
+| `tools/` | built-in tools (`nl2sql` / `document_qa` / `parse_document`) |
+| `state.py` | `AgentState` TypedDict definition |
 
-**ReAct 输出解析器**（`parse_react_output`）支持三种 LLM 输出格式：
+The **ReAct output parser** (`parse_react_output`) supports three LLM output formats:
 
-1. **标准 ReAct 三段式**：
+1. **Standard ReAct three-part**:
    ```
-   Thought: 我需要查询数据
+   Thought: I need to query the data
    Action: nl2sql
-   Action Input: {"question": "本月营业收入"}
+   Action Input: {"question": "this month's revenue"}
    ```
-2. **`<tool_call>` XML 风格**（Qwen / Mistral 系）：
+2. **`<tool_call>` XML style** (Qwen / Mistral families):
    ```
    <tool_call>
    <function=nl2sql>
-   <parameter=question>查询本月营业收入</parameter>
+   <parameter=question>query this month's revenue</parameter>
    </function>
    </tool_call>
    ```
-3. **`<answer>` 标签**（部分模型直接给答案）：
+3. **`<answer>` tag** (some models answer directly):
    ```
-   <answer>本月营业收入 100 万</answer>
+   <answer>this month's revenue is 1M</answer>
    ```
 
-**降级路径**：LLM 不可用（无配置 / 调用失败 / 演示模式）时，`_degrade_to_rule` 按 intent 直接调用对应工具给出答案，不阻断主流程。
+**Degradation path**: when the LLM is unavailable (no config / call fails / demo mode), `_degrade_to_rule` invokes the corresponding tool directly by intent, without blocking the main flow.
 
-**最大轮数**：5 轮工具调用（`MAX_REACT_STEPS = 5`），超出后强制 finalize。
+**Max rounds**: 5 tool-call rounds (`MAX_REACT_STEPS = 5`); beyond that, force `finalize`.
 
-### 2. SSE 流式聊天
+### 2. SSE Streaming Chat
 
-**位置**：`finpilot/api/agent.py`
+**Location**: `finpilot/api/agent.py`
 
-`/api/v1/agent/chat/stream` 端点用 `agent.stream(stream_mode="updates")` 替代 `agent.invoke()`，实现实时推送：
+`/api/v1/agent/chat/stream` uses `agent.stream(stream_mode="updates")` instead of `agent.invoke()` for real-time push:
 
 ```python
 for chunk in agent.stream(initial_state, config=config, stream_mode="updates"):
     for node_name, state_update in chunk.items():
         if node_name == "agent":
             yield _sse("thinking_token", {"content": f"💭 {thought}\n"})
-            yield _sse("thinking_token", {"content": f"🔧 调用工具：{action}\n"})
+            yield _sse("thinking_token", {"content": f"🔧 Calling tool: {action}\n"})
         elif node_name == "tools":
-            yield _sse("thinking_token", {"content": f"📋 结果：{observation[:200]}\n"})
+            yield _sse("thinking_token", {"content": f"📋 Result: {observation[:200]}\n"})
         elif node_name == "finalize":
             final_state = {**final_state, **state_update}
 ```
 
-**心跳保护**：15s 无事件时推送 `…\n`，防止前端误判超时。
+**Heartbeat protection**: if no event for 15s, push `…\n` to prevent the frontend from misjudging a timeout.
 
-**事件类型**：
-- `start` — 携带 conversation_id
-- `thinking_token` — ReAct 思考步骤增量
-- `answer_token` — 最终答案分块（12 字/帧）
-- `done` — 完成，携带 react_steps 与 confidence
-- `error` — 服务端错误
+**Event types**:
+- `start` — carries `conversation_id`
+- `thinking_token` — ReAct reasoning-step increment
+- `answer_token` — final-answer chunk (~12 chars/frame)
+- `done` — completion, carries `react_steps` and `confidence`
+- `error` — server-side error
 
-### 3. 斜杠命令系统
+### 3. Slash Command System
 
-**位置**：`frontend/src/utils/slashCommands.ts` + `frontend/src/components/SlashCommandPalette.tsx`
+**Location**: `frontend/src/utils/slashCommands.ts` + `frontend/src/components/SlashCommandPalette.tsx`
 
-对话界面作为控制中枢，19 条命令按角色过滤：
+The chat UI is the control center; 19 commands are role-filtered:
 
-| 分类 | 命令数 | 角色 |
+| Category | Count | Role |
 | :--- | :--- | :--- |
-| help | 1 | 所有用户 |
+| help | 1 | all users |
 | data | 4 | user |
 | report | 3 | user |
 | analysis | 2 | user |
 | system | 4 | admin |
 | admin | 5 | admin |
 
-**权限模型**：
-- 前端 `getCommandsForRole(role)` 按角色过滤可见命令
-- 后端 `require_admin` 依赖对所有 admin 命令的端点二次校验
-- 前端过滤仅作 UX 优化，不构成安全边界
+**Permission model**:
+- Frontend `getCommandsForRole(role)` filters visible commands by role.
+- Backend `require_admin` dependency re-validates every admin command's endpoint.
+- Frontend filtering is UX-only and does **not** constitute a security boundary.
 
-**命令解析**：`parseSlashCommand(raw, role)` 支持多词命令名（如 `/reports generate`），最后一个参数吃掉剩余值支持带空格的值（如 `/reports generate 600519 贵州茅台`）。
+**Command parsing**: `parseSlashCommand(raw, role)` supports multi-word command names (e.g. `/reports generate`); the last argument consumes the remaining value to support space-containing values (e.g. `/reports generate 600519 贵州茅台`).
 
-### 4. 错误系统
+### 4. Error System
 
-**位置**：`frontend/src/utils/errors.ts`
+**Location**: `frontend/src/utils/errors.ts`
 
-**FetchError 类**：携带 `status`/`url`/`method`/`bodyText`/`code`，让 fetch（非 axios）调用的 SSE 端点也能复用统一错误系统。
+**`FetchError` class**: carries `status` / `url` / `method` / `bodyText` / `code`, so SSE endpoints called via `fetch` (not axios) can also reuse the unified error system.
 
-**错误级别**（`getErrorLevel`）：
-- `network` — 无 HTTP 响应（超时、DNS、CORS、连接拒绝）
+**Error levels** (`getErrorLevel`):
+- `network` — no HTTP response (timeout, DNS, CORS, connection refused)
 - `auth` — 401/403
-- `client` — 4xx（除 401/403）
+- `client` — 4xx (except 401/403)
 - `server` — 5xx
-- `unknown` — 兜底
+- `unknown` — catch-all
 
-**错误格式**（`getErrorMessage`）：
+**Error format** (`getErrorMessage`):
 ```
-[METHOD /url] STATUS 标签 — 后端 detail
-[network] 请求超时（30s）— 后端未在规定时间内响应
-```
-
-**UI 呈现**（`index.css` `.chat-error-bar`）：
-- 5 个 level 配色（server=红、auth=黄、client=橙、network=灰、unknown=红）
-- 脉冲动画 + 光晕 + 渐变背景 + 左侧色条
-- 入场动画（slide-in + pulse 2 次后停止）
-
-### 5. LLM 多供应商配置
-
-**位置**：`finpilot/llm/`
-
-**配置优先级**：
-1. 数据库（`llm_providers` + `llm_models` 表，管理后台维护）
-2. 环境变量（`OPENAI_*` / `ANTHROPIC_*`）
-3. 代码内默认值
-
-**缓存**：60 秒 TTL 模块级缓存（`_cache` dict），供应商变更时通过 `invalidate_cache()` 主动清空。
-
-**ModelRouter**：按问题复杂度路由模型档位（low/medium/high），简单问题用低成本模型，复杂问题用高性能模型。
-
-**已测试供应商**：
-- OpenAI（gpt-4o-mini）
-- Anthropic（claude-3-5-sonnet）
-- MoonWeaver（api.587.lol，OpenAI 兼容协议，moonweaver-4.8）
-- Ollama（本地部署）
-
-### 6. 文档解析与 RAG
-
-**位置**：`finpilot/parser/` + `finpilot/rag/`
-
-**多格式解析器**：
-- PDF：pdfplumber + pypdfium2
-- DOCX：python-docx
-- Excel：openpyxl + pandas
-- CSV：pandas
-
-**RAG 检索**：
-- BM25 倒排（rank-bm25）
-- 向量检索
-- RRF（Reciprocal Rank Fusion）融合两路结果
-
-### 7. 安全合规
-
-**位置**：`finpilot/security/`
-
-- ABAC（Attribute-Based Access Control）访问控制
-- TOTP 双因子认证（pyotp）
-- PII 脱敏
-- SQL 注入防护
-- 审计日志（所有敏感操作留痕）
-
-## 数据流
-
-### 用户提问 → 答案（SSE 流式）
-
-```
-用户在 AgentChatPage 输入问题
-  ↓
-前端 fetch POST /api/v1/agent/chat/stream
-  ↓
-后端 event_generator()
-  ├─ yield start (conversation_id)
-  ├─ classify_intent + extract_parameters
-  ├─ build_agent(tenant_id, user_id, db)
-  ├─ for chunk in agent.stream(initial_state, stream_mode="updates"):
-  │    ├─ agent 节点 → yield thinking_token (💭 thought + 🔧 action)
-  │    ├─ tools 节点 → yield thinking_token (📋 observation)
-  │    └─ finalize 节点 → 收集 final_state
-  ├─ for chunk in answer: yield answer_token (12 字/帧)
-  ├─ crud.add_message(assistant, answer)
-  └─ yield done (react_steps, confidence)
-  ↓
-前端累积 thinking + answer，显示流式光标
-  ↓
-done 事件 → 关闭流式光标，显示推理链与置信度
+[METHOD /url] STATUS label — backend detail
+[network] Request timed out (30s) — backend did not respond in time
 ```
 
-### 斜杠命令执行
+**UI rendering** (`index.css` `.chat-error-bar`):
+- 5 level colors (server=red, auth=yellow, client=orange, network=gray, unknown=red)
+- pulse animation + glow + gradient background + left color bar
+- entrance animation (slide-in + 2 pulses then stop)
+
+### 5. Multi-Provider LLM Configuration
+
+**Location**: `finpilot/llm/`
+
+**Configuration priority**:
+1. Database (`llm_providers` + `llm_models` tables, maintained in the admin panel)
+2. Environment variables (`OPENAI_*` / `ANTHROPIC_*`)
+3. In-code defaults
+
+**Cache**: 60s TTL module-level cache (`_cache` dict); `invalidate_cache()` actively clears it on provider changes.
+
+**`ModelRouter`**: routes model tier (low/medium/high) by question complexity — cheap models for simple questions, high-performance models for complex ones.
+
+**Tested providers**:
+- OpenAI (`gpt-4o-mini`)
+- Anthropic (`claude-3-5-sonnet`)
+- MoonWeaver (`api.587.lol`, OpenAI-compatible, `moonweaver-4.8`)
+- Ollama (local deployment)
+
+### 6. Document Parsing & RAG
+
+**Location**: `finpilot/parser/` + `finpilot/rag/`
+
+**Multi-format parsers**:
+- PDF: pdfplumber + pypdfium2
+- DOCX: python-docx
+- Excel: openpyxl + pandas
+- CSV: pandas
+
+**RAG retrieval**:
+- BM25 inverted index (`rank-bm25`)
+- Vector search
+- RRF (Reciprocal Rank Fusion) to fuse the two result streams
+
+### 7. Security & Compliance
+
+**Location**: `finpilot/security/`
+
+- ABAC (Attribute-Based Access Control)
+- TOTP 2FA (`pyotp`)
+- PII masking
+- SQL injection protection
+- Audit log (every sensitive action is traced)
+
+## Data Flow
+
+### User question → answer (SSE streaming)
+
+```mermaid
+flowchart TD
+  A[User types question in AgentChatPage] --> B[fetch POST /api/v1/agent/chat/stream]
+  B --> C[Backend event_generator]
+  C --> D[yield start (conversation_id)]
+  D --> E[classify_intent + extract_parameters]
+  E --> F[build_agent(tenant_id, user_id, db)]
+  F --> G{for chunk in agent.stream<br/>stream_mode=updates}
+  G --> H[agent node → yield thinking_token (💭 thought + 🔧 action)]
+  G --> I[tools node → yield thinking_token (📋 observation)]
+  G --> J[finalize node → collect final_state]
+  H --> K[for chunk in answer: yield answer_token (~12 chars/frame)]
+  I --> K
+  J --> K
+  K --> L[crud.add_message(assistant, answer)]
+  L --> M[yield done (react_steps, confidence)]
+  M --> N[Frontend accumulates thinking + answer, shows streaming cursor]
+  N --> O[done event → close cursor, show reasoning chain + confidence]
+```
+
+### Slash command execution
 
 ```
-用户输入 /reports generate 600519 贵州茅台
+User inputs /reports generate 600519 贵州茅台
   ↓
-handleSubmit 检测到 / 开头 → 调用 executeSlashCommand
+handleSubmit detects leading / → calls executeSlashCommand
   ↓
 parseSlashCommand(raw, role)
-  ├─ 匹配命令名 "reports generate"
-  ├─ 提取参数 ["600519", "贵州茅台"]
-  └─ 返回 {command, args}
+  ├─ match command name "reports generate"
+  ├─ extract args ["600519", "贵州茅台"]
+  └─ return {command, args}
   ↓
-command.handler(args) → 调用 api.post('/reports/generate', {...)
+command.handler(args) → api.post('/reports/generate', {...})
   ↓
-后端创建异步任务，返回 task_id
+Backend creates async task, returns task_id
   ↓
-前端把结果渲染为 Markdown 表格插入对话流
+Frontend renders result as a Markdown table inserted into the chat stream
 ```
 
-## 设计决策
+## Design Decisions
 
-### 为什么用 LangGraph 而非直接调 LLM？
+### Why LangGraph instead of calling the LLM directly?
 
-- **可观测性**：每个节点（agent/tools/finalize）的状态可流式推送，用户看到 ReAct 思考步骤
-- **可恢复**：MemorySaver / SQLite 检查点支持会话持久化，中断后可续
-- **可编排**：图结构清晰表达 "agent → tools → agent" 循环，便于扩展多智能体
-- **降级路径**：LLM 不可用时按 intent 直接调工具，不阻断主流程
+- **Observability**: each node's (agent/tools/finalize) state can be streamed, so users see ReAct reasoning steps.
+- **Resumable**: `MemorySaver` / SQLite checkpoints support session persistence and resumption after interruption.
+- **Orchestratable**: the graph clearly expresses the "agent → tools → agent" loop, easing multi-agent extension.
+- **Degradation path**: when the LLM is unavailable, tools are called directly by intent without blocking the main flow.
 
-### 为什么用 SSE 而非 WebSocket？
+### Why SSE instead of WebSocket?
 
-- **单向流**：只需服务端推送，无需客户端双向消息
-- **HTTP 兼容**：标准 HTTP，无需协议升级，Nginx/CDN 友好
-- **自动重连**：浏览器原生支持 EventSource 重连
-- **简化部署**：无需 WebSocket 负载均衡配置
+- **One-way stream**: only server push is needed, no client bidirectional messages.
+- **HTTP-compatible**: standard HTTP, no protocol upgrade, Nginx/CDN friendly.
+- **Auto-reconnect**: browsers natively support `EventSource` reconnection.
+- **Simpler deployment**: no WebSocket load-balancer config required.
 
-### 为什么前端用自实现 MarkdownRenderer 而非 react-markdown？
+### Why a hand-rolled MarkdownRenderer instead of react-markdown?
 
-- **无新增依赖**：项目未安装 react-markdown / remark / rehype，避免 React 19 peer 风险
-- **XSS 防护**：HTML 转义 + DOMPurify 二次清洗
-- **代码高亮**：内置轻量语法高亮（python / sql / json / js / bash）
-- **表格支持**：GFM 管道表格，含对齐
-- **代码块复制**：事件委托，无需每块单独绑定
+- **No new dependency**: the project does not install `react-markdown` / `remark` / `rehype`, avoiding React 19 peer-dependency risk.
+- **XSS protection**: HTML escaping + DOMPurify secondary sanitization.
+- **Code highlighting**: built-in lightweight syntax highlighting (python / sql / json / js / bash).
+- **Table support**: GFM pipe tables with alignment.
+- **Code-block copy**: event delegation, no per-block binding.
 
-### 为什么错误系统用 FetchError 而非 axios？
+### Why FetchError instead of axios for the error system?
 
-- **SSE 端点用 fetch**：流式响应需要 ReadableStream，axios 不支持
-- **统一错误处理**：FetchError 模拟 AxiosError 的字段（status/url/method），让 `getErrorMessage` 统一处理两类错误
-- **级别化高亮**：`getErrorLevel` 自动从 FetchError / AxiosError / DOMException / TypeError 推断级别
+- **SSE endpoints use `fetch`**: streaming responses need `ReadableStream`, which axios does not support.
+- **Unified error handling**: `FetchError` mimics `AxiosError`'s fields (`status`/`url`/`method`), so `getErrorMessage` handles both error types uniformly.
+- **Leveled highlighting**: `getErrorLevel` infers the level automatically from `FetchError` / `AxiosError` / `DOMException` / `TypeError`.
 
-## 扩展点
+## Extension Points
 
-### 添加新工具
+### Add a new tool
 
-1. 在 `finpilot/agent/tools/` 创建工具函数，用 `@tool_registry.register` 注册
-2. 工具签名：`def my_tool(ctx: ToolContext, **params) -> dict`
-3. 工具会自动出现在 ReAct 系统提示词的可用工具列表中
+1. Create a tool function in `finpilot/agent/tools/`, register it with `@tool_registry.register`.
+2. Tool signature: `def my_tool(ctx: ToolContext, **params) -> dict`.
+3. The tool automatically appears in the ReAct system prompt's available-tools list.
 
-### 添加新斜杠命令
+### Add a new slash command
 
-1. 在 `frontend/src/utils/slashCommands.ts` 的 `COMMANDS` 数组添加命令定义
-2. 指定 `role: 'admin' | 'user'`、`category`、`name`、`usage`、`description`、`handler`
-3. handler 调用 `api` 或 `adminApi`，用 `unwrap()` 提取 data，用 `renderTable()` 渲染 Markdown 表格
-4. 命令自动出现在 `/help` 列表与 SlashCommandPalette 面板
+1. Add a command definition to the `COMMANDS` array in `frontend/src/utils/slashCommands.ts`.
+2. Specify `role: 'admin' | 'user'`, `category`, `name`, `usage`, `description`, `handler`.
+3. The handler calls `api` or `adminApi`, uses `unwrap()` to extract `data`, and `renderTable()` to render a Markdown table.
+4. The command automatically appears in the `/help` list and the `SlashCommandPalette` panel.
 
-### 添加新 LLM 供应商
+### Add a new LLM provider
 
-1. 在管理后台 → LLM 供应商页面创建（provider_type 选 openai/anthropic/ollama）
-2. 或通过 API `POST /api/v1/llm-providers` 创建
-3. 自定义协议需在 `finpilot/llm/client.py` 的 `LLMClient.chat()` 中添加分支
+1. Create it in Admin → LLM Providers (set `provider_type` to `openai`/`anthropic`/`ollama`).
+2. Or create via API `POST /api/v1/llm-providers`.
+3. Custom protocols require adding a branch in `finpilot/llm/client.py`'s `LLMClient.chat()`.
