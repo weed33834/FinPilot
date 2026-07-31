@@ -462,6 +462,18 @@ Report security vulnerabilities per [SECURITY.md](SECURITY.md); **do not disclos
 
 ---
 
+## Mirrors / 镜像
+
+This repository is primarily hosted on **GitHub** and mirrored to GitCode and Gitee for accessibility.
+
+| Platform | URL |
+|----------|-----|
+| **GitHub** (primary) | https://github.com/weed33834/FinPilot |
+| GitCode (mirror) | https://gitcode.com/badhope/FinPilot |
+| Gitee (mirror) | https://gitee.com/badhope/FinPilot |
+
+> Content is synchronized manually across platforms. GitHub is the canonical source.
+
 ## License
 
 This project is open-sourced under the [MIT License](LICENSE). Copyright belongs to the FinPilot AI project team; it has no affiliation with any external project.
