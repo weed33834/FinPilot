@@ -18,10 +18,10 @@ jobs:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -44,7 +44,7 @@ jobs:
           cases = [
               ('Thought: t\nAction: nl2sql\nAction Input: {"question":"x"}\n', 'nl2sql', True),
               ('<tool_call><function=nl2sql><parameter=question>x</parameter></function></tool_call>', 'nl2sql', True),
-              ('<answer>最终答案</answer>', '', True),
+              ('<answer>最终答�?/answer>', '', True),
           ]
           for text, exp_action, exp_ok in cases:
               r = parse_react_output(text)
@@ -58,10 +58,10 @@ jobs:
     name: Frontend (TypeScript)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
