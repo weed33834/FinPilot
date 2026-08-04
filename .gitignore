@@ -111,3 +111,13 @@ frontend/e2e_debug*.mjs
 .comate/
 .windsurfrules
 .windsurfrules.d/
+
+# ---- 课程录屏/截图/报告(本地教材,不进仓库) ----
+course_media/
+prov.json
+chat_resp.json
+.cookie.jar
+# 录制脚本含管理员口令明文，仅本地教学用，不入库
+frontend/e2e/course_demo.mjs
+.backend.log
+.frontend.log
