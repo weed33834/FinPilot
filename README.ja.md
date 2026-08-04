@@ -446,9 +446,29 @@ Issue と Pull Request を歓迎します。開発規約とコミットルール
 
 ### コントリビューター
 
-<a href="https://gitcode.com/badhope/FinPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=badhope/FinPilot" alt="contributors" />
+<a href="https://github.com/weed33834/FinPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=weed33834/FinPilot" alt="contributors" />
 </a>
+
+---
+
+## ミラーリポジトリ
+
+FinPilot は 3 つのプラットフォームで同時に公開されており、すべて同一のコミットに同期されています。最も速いものをお選びください。
+
+| プラットフォーム | URL | 備考 |
+|------------------|-----|------|
+| **GitHub** | https://github.com/weed33834/FinPilot | 正式リポジトリ、Issue / PR の窓口 |
+| **GitCode** | https://gitcode.com/badhope/FinPilot | 中国本土推奨 |
+| **Gitee** | https://gitee.com/badhope/FinPilot | 中国本土推奨 |
+
+```bash
+# 最速のミラーからクローン
+git clone https://gitcode.com/badhope/FinPilot.git
+```
+
+> メンテナは複数の push URL を持つ単一の `origin` で 3 つ同時に push しています。
+> Issue / Pull Request は議論を集約するため **GitHub** にお願いします。
 
 ---
 

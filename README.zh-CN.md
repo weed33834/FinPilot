@@ -456,9 +456,29 @@ FinPilot AI
 
 ### 贡献者
 
-<a href="https://gitcode.com/badhope/FinPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=badhope/FinPilot" alt="contributors" />
+<a href="https://github.com/weed33834/FinPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=weed33834/FinPilot" alt="contributors" />
 </a>
+
+---
+
+## 镜像仓库
+
+FinPilot 同时发布在三个平台，内容保持同一 commit，可任选访问速度最快的一个。
+
+| 平台 | 地址 | 说明 |
+|------|------|------|
+| **GitHub** | https://github.com/weed33834/FinPilot | 主仓库，Issue 与 PR 入口 |
+| **GitCode** | https://gitcode.com/badhope/FinPilot | 国内推荐 |
+| **Gitee** | https://gitee.com/badhope/FinPilot | 国内推荐 |
+
+```bash
+# 从速度最快的镜像克隆
+git clone https://gitcode.com/badhope/FinPilot.git
+```
+
+> 维护者通过一个配置了多个 push 地址的 `origin` 一次性推送三平台。
+> 提交 Issue / Pull Request 请统一到 **GitHub**，便于集中讨论。
 
 ---
 

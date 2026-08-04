@@ -456,23 +456,31 @@ Report security vulnerabilities per [SECURITY.md](SECURITY.md); **do not disclos
 
 ### Contributors
 
-<a href="https://gitcode.com/badhope/FinPilot/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=badhope/FinPilot" alt="contributors" />
+<a href="https://github.com/weed33834/FinPilot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=weed33834/FinPilot" alt="contributors" />
 </a>
 
 ---
 
-## Mirrors / 镜像
+## Mirrors
 
-This repository is primarily hosted on **GitHub** and mirrored to GitCode and Gitee for accessibility.
+FinPilot is published simultaneously on three platforms. All of them are kept at the same commit — pick whichever is fastest for you.
 
-| Platform | URL |
-|----------|-----|
-| **GitHub** (primary) | https://github.com/weed33834/FinPilot |
-| GitCode (mirror) | https://gitcode.com/badhope/FinPilot |
-| Gitee (mirror) | https://gitee.com/badhope/FinPilot |
+| Platform | URL | Notes |
+|----------|-----|-------|
+| **GitHub** | https://github.com/weed33834/FinPilot | Canonical source, Issues & PRs |
+| **GitCode** | https://gitcode.com/badhope/FinPilot | Recommended in mainland China |
+| **Gitee** | https://gitee.com/badhope/FinPilot | Recommended in mainland China |
 
-> Content is synchronized manually across platforms. GitHub is the canonical source.
+```bash
+# Clone from the fastest mirror
+git clone https://gitcode.com/badhope/FinPilot.git
+```
+
+> Maintainers push to all three at once via a single `origin` with multiple push URLs.
+> Please open Issues / Pull Requests on **GitHub** so discussions stay in one place.
+
+---
 
 ## License
 
