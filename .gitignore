@@ -105,3 +105,9 @@ docker-data/
 frontend/.vitest-deps/
 frontend/screenshots/
 frontend/e2e_debug*.mjs
+
+# ---- IDE / 智能体私有规则(本地保留,不进仓库) ----
+.lingma/
+.comate/
+.windsurfrules
+.windsurfrules.d/
