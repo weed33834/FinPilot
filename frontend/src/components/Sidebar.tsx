@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext.tsx'
@@ -22,8 +22,10 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
   const { role, username, logout } = useAuth()
   const location = useLocation()
 
-  // 角色过滤后的导航数据
-  const sections = filterNavByRole(NAV_SECTIONS, role)
+  // 角色过滤后的导航数据。必须 memo：否则每次渲染都生成新数组引用，
+  // 作为下方 useEffect 的依赖会导致 effect 每次渲染都重跑 -> setExpanded 永远返回新 Set
+  // -> 无限重渲染（Maximum update depth exceeded），进而冻结页面内容、导航只换 URL。
+  const sections = useMemo(() => filterNavByRole(NAV_SECTIONS, role), [role])
 
   // 已展开的分组路径集合（仅对带 children 的项生效）
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -39,17 +41,21 @@ export default function Sidebar({ open, onToggle, onClose }: SidebarProps) {
   // 路由切换后：自动展开包含当前路径的分组 + 关闭移动端抽屉
   useEffect(() => {
     setExpanded((prev) => {
-      const next = new Set(prev)
+      // 仅收集「当前路由命中、但尚未展开」的分组路径
+      const mustAdd = []
       for (const section of sections) {
         for (const item of section.items) {
-          if (item.children) {
-            const hit = item.children.some(
-              (child) => child.path === location.pathname || location.pathname.startsWith(child.path + '/')
-            )
-            if (hit) next.add(item.path)
-          }
+          if (!item.children) continue
+          const hit = item.children.some(
+            (child) => child.path === location.pathname || location.pathname.startsWith(child.path + '/')
+          )
+          if (hit && !prev.has(item.path)) mustAdd.push(item.path)
         }
       }
+      // 无新增则原样返回同一引用，避免无谓重渲染（这也杜绝了循环）
+      if (mustAdd.length === 0) return prev
+      const next = new Set(prev)
+      mustAdd.forEach((p) => next.add(p))
       return next
     })
   }, [location.pathname, sections])

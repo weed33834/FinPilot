@@ -11,7 +11,9 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 5174,
+    // 钉死端口：占用即报错，禁止 Vite 静默顺延到 5175 等，避免地址漂移让用户困惑
+    strictPort: true,
     proxy: {
       '/api/': {
         target: 'http://localhost:8001',

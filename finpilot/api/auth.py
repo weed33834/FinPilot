@@ -221,9 +221,14 @@ async def login(
     if not user or not user.password_hash:
         await _record_login_failure(email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误")
-    if not verify_password(req.password, user.password_hash)[0]:
+    ok, new_hash = verify_password(req.password, user.password_hash)
+    if not ok:
         await _record_login_failure(email)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="邮箱或密码错误")
+    # 哈希参数升级：密码正确但哈希参数是旧版本的，透明升级后持久化
+    if new_hash:
+        user.password_hash = new_hash
+        db.commit()
 
     # 登录成功，清除失败记录
     await _clear_login_failures(email)
@@ -488,9 +493,12 @@ async def two_fa_enable(
         )
 
     # 密码二次确认
-    ok, _ = verify_password(req.password, user.password_hash or "")
+    ok, new_hash = verify_password(req.password, user.password_hash or "")
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码错误")
+    if new_hash:
+        user.password_hash = new_hash
+        db.commit()
 
     secret = await r.get(f"2fa_setup:{user.id}")
     if not secret:
@@ -542,9 +550,12 @@ async def two_fa_disable(
     # 二选一验证：密码 或 TOTP 码
     if password:
         # verify_password 返回 (ok, new_hash) 元组，不可直接当布尔用
-        ok, _ = verify_password(password, user.password_hash or "")
+        ok, new_hash = verify_password(password, user.password_hash or "")
         if not ok:
             raise HTTPException(status_code=400, detail="密码错误")
+        if new_hash:
+            user.password_hash = new_hash
+            db.commit()
     elif totp_code:
         totp = pyotp.TOTP(crypto_decrypt(user.totp_secret))
         if not totp.verify(totp_code):
@@ -578,9 +589,12 @@ async def two_fa_backup_codes(
     if not user.totp_enabled:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA 未启用")
 
-    ok, _ = verify_password(req.password, user.password_hash or "")
+    ok, new_hash = verify_password(req.password, user.password_hash or "")
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码错误")
+    if new_hash:
+        user.password_hash = new_hash
+        db.commit()
 
     r = await _get_redis_or_none()
     if r is None:
@@ -608,9 +622,17 @@ async def change_password(
     new_password = payload.get("new_password") or payload.get("newPassword")
     if not current_password or not new_password:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="参数缺失")
+    # 密码强度校验：最少 8 位，至少包含字母和数字
+    if len(new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码长度不能少于8位")
+    import re
+    if not re.search(r'[A-Za-z]', new_password) or not re.search(r'[0-9]', new_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码必须包含字母和数字")
     user = crud.get_user_by_email(db, current_user.get("email", ""))
-    if not user or not verify_password(current_password, user.password_hash or "")[0]:
+    ok, _ = verify_password(current_password, user.password_hash or "")
+    if not user or not ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="当前密码错误")
+    # 直接写入新密码哈希（新 argon2 参数自动生效，无需单独升级旧哈希）
     user.password_hash = hash_password(new_password)
     db.commit()
     return _ok(None, "密码已修改")

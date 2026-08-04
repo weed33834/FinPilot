@@ -139,6 +139,28 @@ def dashboard_stats(
     except Exception:
         db_ok = False
 
+    # Token 用量统计（从 messages 表聚合）
+    token_usage = {"today_in": 0, "today_out": 0, "total_in": 0, "total_out": 0}
+    try:
+        from finpilot.database.models import Message
+        today_msgs = db.query(
+            func.coalesce(func.sum(Message.tokens_in), 0),
+            func.coalesce(func.sum(Message.tokens_out), 0),
+        ).filter(
+            Message.created_at >= today_start,
+            Message.role == "assistant",
+        ).first()
+        total_msgs = db.query(
+            func.coalesce(func.sum(Message.tokens_in), 0),
+            func.coalesce(func.sum(Message.tokens_out), 0),
+        ).filter(Message.role == "assistant").first()
+        if today_msgs:
+            token_usage["today_in"], token_usage["today_out"] = int(today_msgs[0]), int(today_msgs[1])
+        if total_msgs:
+            token_usage["total_in"], token_usage["total_out"] = int(total_msgs[0]), int(total_msgs[1])
+    except Exception:
+        pass
+
     return {
         "code": 0,
         "message": "ok",
@@ -150,6 +172,7 @@ def dashboard_stats(
             "agents": {"total": agent_total, "active": agent_active},
             "search_engines": {"total": se_total, "active": se_active, "default": ""},
             "conversations": {"total": conv_total, "today": conv_today},
+            "token_usage": token_usage,
             "system_health": {"status": "healthy" if db_ok else "degraded", "uptime_hours": 0},
             "recent_conversations": [],
         },

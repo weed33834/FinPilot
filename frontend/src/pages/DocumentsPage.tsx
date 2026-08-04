@@ -86,6 +86,25 @@ export default function DocumentsPage() {
     toast.success(t('common:documents.statSuccess'), doc.filename)
   }
 
+  const handleDelete = async (doc: Document) => {
+    const { confirm } = await import('../components/ui/ConfirmDialog')
+    const ok = await confirm({
+      title: '删除文档',
+      message: `确定删除「${doc.filename}」吗？此操作无法撤销。`,
+      confirmText: t('common:actions.delete'),
+      cancelText: t('common:actions.cancel'),
+      variant: 'danger',
+    })
+    if (!ok) return
+    try {
+      await api.delete(`/documents/${doc.id}`)
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id))
+      toast.success('已删除', doc.filename)
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除失败'))
+    }
+  }
+
   const stats = useMemo(() => {
     const total = documents.length
     const success = documents.filter((d) => d.status === 'success').length
@@ -240,7 +259,7 @@ export default function DocumentsPage() {
           description={t('common:documents.emptySearchDesc')}
         />
       ) : (
-        <DocumentList documents={filteredDocuments} onSelect={setSelected} />
+        <DocumentList documents={filteredDocuments} onSelect={setSelected} onDelete={handleDelete} />
       )}
 
       {selected && <DocumentDetail document={selected} onClose={() => setSelected(null)} />}

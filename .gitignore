@@ -100,3 +100,8 @@ data/processed/
 
 # ---- Docker 运行卷 ----
 docker-data/
+
+# ---- 测试/调试产物 ----
+frontend/.vitest-deps/
+frontend/screenshots/
+frontend/e2e_debug*.mjs

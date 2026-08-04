@@ -128,9 +128,16 @@ def _extract_message_content(message) -> str:
 class LLMClient:
     """Unified LLM client; builds the underlying openai SDK client by provider_type."""
 
+    # 最近一次调用累计的 prompt_tokens / completion_tokens（由 chat() 方法写入，
+    # chat handler 的 _build_assistant_message_meta() 与仪表盘 Token 统计消费）。
+    _cumulative_prompt_tokens: int = 0
+    _cumulative_completion_tokens: int = 0
+    _model_name_used: str | None = None
+
     def __init__(self, config: LLMConfig) -> None:
         self.config = config
         self.client = self._create_client(config)
+        self.last_usage = None  # 最近一次调用的 token 用量（供上层提取）
 
     @staticmethod
     def _create_client(config: LLMConfig) -> OpenAI:
@@ -219,6 +226,12 @@ class LLMClient:
 
             content = _extract_message_content(resp.choices[0].message)
             usage = resp.usage
+            self.last_usage = usage  # 供上层（run_agent/chat handler）提取 token 用量
+            # 累计到类变量供仪表盘 Token 统计
+            if usage:
+                LLMClient._cumulative_prompt_tokens += usage.prompt_tokens or 0
+                LLMClient._cumulative_completion_tokens += usage.completion_tokens or 0
+                LLMClient._model_name_used = self.config.model_name
             logger.info(
                 "LLM call done model=%s latency=%.2fs prompt_tokens=%s completion_tokens=%s",
                 self.config.model_name,

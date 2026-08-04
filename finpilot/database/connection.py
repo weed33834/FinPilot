@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -38,9 +38,15 @@ if _is_sqlite:
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
         echo=False,
     )
+    # 启用 WAL 模式 + busy_timeout，提升并发读写能力，避免 "database is locked"
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 else:
     # pool_pre_ping：连接被数据库侧超时断开后自动重连，避免 "server has gone away"
     # pool_recycle：定期回收连接，防止长连接被云数据库代理踢掉

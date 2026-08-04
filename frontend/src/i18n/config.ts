@@ -16,6 +16,7 @@ import zhCNAdminWorkflowEditor from './locales/zh-CN/admin-workflow-editor.json'
 import zhCNAdminSandbox from './locales/zh-CN/admin-sandbox.json'
 import zhCNAdminPrompt from './locales/zh-CN/admin-prompt.json'
 import zhCNAdminPromptDeep from './locales/zh-CN/admin-prompt-deep.json'
+import zhCNUsers from './locales/zh-CN/users.json'
 import enCommon from './locales/en/common.json'
 import enMenu from './locales/en/menu.json'
 import enAuth from './locales/en/auth.json'
@@ -31,6 +32,7 @@ import enAdminWorkflowEditor from './locales/en/admin-workflow-editor.json'
 import enAdminSandbox from './locales/en/admin-sandbox.json'
 import enAdminPrompt from './locales/en/admin-prompt.json'
 import enAdminPromptDeep from './locales/en/admin-prompt-deep.json'
+import enUsers from './locales/en/users.json'
 
 // brand / footer 文案内联在 auth.json 中（登录页专用），通过命名空间映射复用，
 // 避免为少量登录页文案单独建立文件。
@@ -78,6 +80,7 @@ i18n
         adminSandbox: zhCNAdminSandbox,
         adminPrompt: zhCNAdminPrompt,
         adminPromptDeep: zhCNAdminPromptDeep,
+        users: zhCNUsers,
         brand: zhCNBrand,
         footer: zhCNFooter,
       },
@@ -97,6 +100,7 @@ i18n
         adminSandbox: enAdminSandbox,
         adminPrompt: enAdminPrompt,
         adminPromptDeep: enAdminPromptDeep,
+        users: enUsers,
         brand: enBrand,
         footer: enFooter,
       },
@@ -104,7 +108,7 @@ i18n
     lng: getInitialLanguage(),
     fallbackLng: 'zh-CN',
     supportedLngs: ['zh-CN', 'en'],
-    ns: ['common', 'menu', 'auth', 'dashboard', 'security', 'kpi', 'admin', 'adminSettings', 'adminRuntimeLogs', 'adminFactorMining', 'adminBacktesting', 'adminWorkflowEditor', 'adminSandbox', 'adminPrompt', 'adminPromptDeep', 'brand', 'footer'],
+    ns: ['common', 'menu', 'auth', 'dashboard', 'security', 'kpi', 'admin', 'adminSettings', 'adminRuntimeLogs', 'adminFactorMining', 'adminBacktesting', 'adminWorkflowEditor', 'adminSandbox', 'adminPrompt', 'adminPromptDeep', 'users', 'brand', 'footer'],
     defaultNS: 'common',
     interpolation: {
       escapeValue: false,

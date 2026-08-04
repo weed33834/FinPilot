@@ -34,6 +34,7 @@ from .approvals import router as approvals_router
 from .audit import router as audit_router
 from .auth import router as auth_router
 from .budgets import router as budgets_router
+from .workflows import router as workflows_router
 from .charts import router as charts_router
 from .conversations import router as conversations_router
 from .documents import router as documents_router
@@ -137,6 +138,7 @@ def create_router() -> APIRouter:
     api.include_router(audit_router)
     api.include_router(approvals_router)
     api.include_router(budgets_router)
+    api.include_router(workflows_router)
     api.include_router(charts_router)
     # 加载扩展路由（失败不影响核心功能）
     _load_extension_routers(api)

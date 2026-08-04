@@ -36,7 +36,8 @@ class User(Base):
     # 角色：支持 5 种角色 — admin / finance_manager / analyst / auditor / viewer，默认 analyst
     role: Mapped[str] = mapped_column(String(50), default="analyst")
     # 2FA TOTP 支持
-    totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Fernet 加密后长约 120-200+ 字符，64 不足会导致 SQLite 静默截断、解密失败
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

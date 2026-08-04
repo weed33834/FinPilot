@@ -165,6 +165,7 @@ class CodeSandbox:
 
             cfg = CodeSandboxConfig()
 
+        self._tenant_id = tenant_id
         self._docker_bin = shutil.which("docker")
         self.allowed_modules: frozenset[str] = cfg.allowed_modules
         self.blocked_modules: frozenset[str] = cfg.blocked_modules
@@ -203,17 +204,39 @@ class CodeSandbox:
         return self._execute_lightweight(code, timeout)
 
     def health_check(self) -> bool:
-        """检查沙箱是否可用。
-
-        Returns:
-            True 如果沙箱可以正常执行代码。
-        """
+        """检查沙箱是否可用。"""
         try:
             result = self.execute("print('ok')", timeout=10)
             return result.exit_code == 0 and "ok" in result.stdout
         except Exception:
             logger.exception("sandbox_health_check_failed")
             return False
+
+    def reload_config(self, db: Session) -> None:
+        """热加载配置：从 DB 刷新租户沙箱设置，无需重建实例。
+
+        sandbox_configs API 更新配置后，调用此方法使正在运行的 CodeSandbox
+        实例感知最新配置，实现零停机配置变更。
+        """
+        if self._tenant_id is None:
+            return
+        from finpilot.services.sandbox_config_loader import (
+            invalidate_config_cache,
+            get_code_sandbox_config,
+        )
+        invalidate_config_cache(self._tenant_id)
+        cfg = get_code_sandbox_config(self._tenant_id, db)
+        self.allowed_modules = cfg.allowed_modules
+        self.blocked_modules = cfg.blocked_modules
+        self.timeout_seconds = cfg.timeout_seconds
+        self.memory_mb = cfg.memory_mb
+        self.cpu_limit = cfg.cpu_limit
+        self.max_output_length = cfg.max_output_length
+        self.network_disabled = cfg.network_disabled
+        env_mode = os.environ.get("SANDBOX_MODE", "").strip()
+        self.mode = env_mode if env_mode in ("lightweight", "docker") else cfg.mode
+        self.docker_image = cfg.docker_image
+        logger.info("sandbox reloaded config for tenant=%s mode=%s", self._tenant_id, self.mode)
 
     # -----------------------------------------------------------------------
     # Lightweight mode

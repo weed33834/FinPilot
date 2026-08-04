@@ -24,8 +24,10 @@ tenacity>=8.3.0
 tqdm>=4.66.1
 
 # ── RAG & search ──
+# 注意：原约束为 numpy<2.0.0，但 numpy<2 在 Python 3.13 无预编译 wheel，
+# 源码构建在本机 VS/Meson 环境下失败。放宽到 2.x（3.13 有官方 wheel，且与 pandas/matplotlib 兼容）。
 rank-bm25>=0.2.2
-numpy>=1.24.0,<2.0.0
+numpy>=1.24.0
 
 # ── Document parsing ──
 pandas>=2.0.0,<3.0.0

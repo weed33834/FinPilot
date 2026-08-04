@@ -28,6 +28,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
             token = request.state.user.get("tenant_id")
         if token:
             current_tenant_id.set(token)
-        response = await call_next(request)
-        current_tenant_id.set(None)
-        return response
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            # finally 确保异常时也清理 ContextVar，防止 ASGI 任务复用导致跨租户数据泄漏
+            current_tenant_id.set(None)

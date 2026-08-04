@@ -83,7 +83,14 @@ class _SQLiteSessionStore:
         row = self._db.execute(
             "SELECT user_data FROM sessions WHERE session_id = ?", (session_id,)
         ).fetchone()
-        return json.loads(row[0]) if row else None
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except (json.JSONDecodeError, IndexError):
+                # 数据损坏或截断视为会话失效，返回 None 触发 401
+                logger.warning("session data 损坏 session_id=%s", session_id)
+                return None
+        return None
 
     async def delete(self, session_id: str) -> None:
         self._db.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))

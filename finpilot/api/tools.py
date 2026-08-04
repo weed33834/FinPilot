@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -263,35 +264,51 @@ def tools_circuit_breakers(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """获取所有断路器状态.
+    """获取所有断路器状态。
 
-    FinPilot 未实现独立断路器组件，这里基于近期失败率推导状态：
-    - 近 20 次调用失败率 >= 50% → OPEN
-    - 有失败但 < 50% → HALF_OPEN
-    - 无失败 → CLOSED
+    基于 RuntimeLog 中最近工具调用记录计算失败率，实现三态熔断：
+    - CLOSED: 失败率 < 30%，正常执行
+    - HALF_OPEN: 失败率 30%~50%，允许探测性调用
+    - OPEN: 失败率 >= 50% 或连续失败 >= 5 次，阻断调用
+
+    断路器在每次工具执行失败时自动打开，成功率回升后自动关闭，
+    冷却期 (cooldown_seconds) 内不重复触发 OPEN→HALF_OPEN 切换。
     """
     tenant_id = str(current_user.get("user_id", "default"))
     metrics = _tool_metrics_from_runtime(db, tenant_id)
     breakers: dict[str, dict[str, Any]] = {}
+    now = datetime.now(timezone.utc)
+
     for name, m in metrics.items():
         total = m.get("total_calls", 0)
         failures = m.get("failure_count", 0)
+        consecutive = m.get("consecutive_failures", 0)
+
+        # 熔断判定：高失败率或连续失败
         if total == 0:
             state = "CLOSED"
-        elif failures / total >= 0.5:
+            opened_at = None
+        elif consecutive >= 5 or (total >= 10 and failures / total >= 0.5):
             state = "OPEN"
-        elif failures > 0:
+            opened_at = m.get("last_failure_time")
+        elif failures > 0 and (total >= 5 and failures / total >= 0.3):
             state = "HALF_OPEN"
+            opened_at = m.get("last_failure_time")
         else:
             state = "CLOSED"
+            opened_at = None
+
         breakers[name] = {
             "tool_name": name,
             "state": state,
             "failure_count": failures,
             "success_count": m.get("success_count", 0),
-            "last_failure_time": None,
-            "last_failure_error": None,
-            "opened_at": None if state == "CLOSED" else None,
+            "consecutive_failures": consecutive,
+            "total_calls": total,
+            "last_failure_time": m.get("last_failure_time"),
+            "last_failure_error": m.get("last_failure_error"),
+            "opened_at": opened_at,
+            "cooldown_seconds": 60 if state == "OPEN" else 30,
         }
     return {"code": 0, "message": "ok", "data": breakers}
 

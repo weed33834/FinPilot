@@ -7,9 +7,10 @@ import { formatDateTime } from '../utils/format.ts'
 interface DocumentListProps {
   documents: Document[]
   onSelect: (doc: Document) => void
+  onDelete?: (doc: Document) => void
 }
 
-export default function DocumentList({ documents, onSelect }: DocumentListProps) {
+export default function DocumentList({ documents, onSelect, onDelete }: DocumentListProps) {
   const { t } = useTranslation()
   if (documents.length === 0) {
     return (
@@ -47,9 +48,21 @@ export default function DocumentList({ documents, onSelect }: DocumentListProps)
               </td>
               <td>{formatDateTime(doc.created_at)}</td>
               <td>
-                <button type="button" className="secondary" onClick={() => onSelect(doc)}>
-                  {t('common:documents.view')}
-                </button>
+                <div className="action-group">
+                  <button type="button" className="secondary" onClick={() => onSelect(doc)}>
+                    {t('common:actions.view')}
+                  </button>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      style={{ color: 'var(--color-danger, #dc2626)' }}
+                      onClick={() => onDelete(doc)}
+                    >
+                      {t('common:actions.delete')}
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}

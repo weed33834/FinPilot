@@ -79,7 +79,10 @@ async def get_current_user(request: Request) -> dict:
         from finpilot.middleware.tenant import current_tenant_id
         current_tenant_id.set(tenant_of(user_data))
     except Exception:  # noqa: BLE001
-        pass
+        import logging
+        logging.getLogger(__name__).error(
+            "current_tenant_id 设置失败，租户隔离可能失效", exc_info=True
+        )
     return user_data
 
 
@@ -105,12 +108,10 @@ def get_db_session():
 
 
 def require_scope(required_scope: str):
-    """API Key + Scope 认证依赖工厂。
+    """认证依赖工厂：优先 Cookie 会话 → 其次 API Key。
 
-    认证方式：从 X-API-Key header 或 api_key query param 读取 API Key，
-    查 api_keys 表校验密钥有效性，验证 scope 匹配后返回用户 dict。
-
-    Returns dict: {user_id, email, role, name, tenant_id, api_key_id, api_key_name}
+    前端管理页面通过 Cookie 访问 admin 端点时，不需要额外提供 API Key；
+    API 客户端通过 X-API-Key 头访问时，走 scope 校验。
     """
     from datetime import datetime, timezone
 
@@ -124,6 +125,22 @@ def require_scope(required_scope: str):
         db: Session = Depends(get_db_session),
         api_key_param: str | None = Query(default=None, alias="api_key"),
     ) -> dict:
+        # 优先尝试 Cookie 会话认证（前端管理页面走此路径）
+        try:
+            cookie_user = await get_current_user(request)
+            if cookie_user and cookie_user.get("role") == "admin":
+                # 同时设置 request.state.user 以保持 TenantMiddleware 兼容
+                request.state.user = cookie_user
+                try:
+                    from finpilot.middleware.tenant import current_tenant_id
+                    current_tenant_id.set(tenant_of(cookie_user))
+                except Exception:  # noqa: BLE001
+                    pass
+                return cookie_user
+        except HTTPException:
+            pass  # Cookie 无效，继续尝试 API Key
+
+        # Cookie 不可用或非 admin，走 API Key 认证
         api_key_value = request.headers.get("X-API-Key")
         if not api_key_value and api_key_param:
             api_key_value = api_key_param
@@ -131,7 +148,7 @@ def require_scope(required_scope: str):
         if not api_key_value:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="缺少 API Key（请通过 X-API-Key header 或 ?api_key= 参数传入）",
+                detail="缺少认证凭据（请登录或通过 X-API-Key header / ?api_key= 参数传入 API Key）",
             )
 
         import hashlib
@@ -166,7 +183,12 @@ def require_scope(required_scope: str):
         # 递增调用计数：此前只更新 last_used_at，usage_count 永远为 0，
         # 导致按 API Key 的用量统计与配额管理形同虚设。
         api_key.usage_count = (api_key.usage_count or 0) + 1
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            import logging
+            logging.getLogger(__name__).warning("api_key usage 更新失败", exc_info=True)
 
         return {
             "user_id": user.id,

@@ -131,6 +131,11 @@ def run_agent(
     }
 
     # 3. 编译并执行图；thread_id 驱动 MemorySaver 会话持久化
+    from finpilot.llm.client import LLMClient as _LLMClient
+    _LLMClient._cumulative_prompt_tokens = 0
+    _LLMClient._cumulative_completion_tokens = 0
+    _LLMClient._model_name_used = None
+
     agent = build_agent(
         tenant_id=tenant_id, user_id=user_id, db=db, agent_config=agent_config
     )
@@ -145,4 +150,7 @@ def run_agent(
         "confidence": float(final_state.get("confidence", 0.0) or 0.0),
         "steps": final_state.get("react_steps", []),
         "tool_result": final_state.get("tool_result", {}),
+        "tokens_in": _LLMClient._cumulative_prompt_tokens or None,
+        "tokens_out": _LLMClient._cumulative_completion_tokens or None,
+        "model_name": _LLMClient._model_name_used,
     }

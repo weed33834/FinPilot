@@ -31,7 +31,7 @@ const userSchemaShape = z.object({
 })
 
 export default function UsersPage() {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation(['common', 'users'])
   const roleLabel = (role: string) => t(`role.${role}`, { defaultValue: role })
   const { userId, username: currentUsername } = useAuth()
 

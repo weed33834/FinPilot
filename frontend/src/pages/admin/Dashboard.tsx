@@ -30,6 +30,7 @@ interface DashboardStats {
   agents: { total: number; active: number }
   search_engines: { total: number; active: number; default: string }
   conversations: { total: number; today: number }
+  token_usage?: { today_in: number; today_out: number; total_in: number; total_out: number }
   system_health: { status: string; uptime_hours: number }
   recent_conversations: Array<{ id: string; title: string; created_at: string | null }>
 }
@@ -42,6 +43,14 @@ function StatusIndicator({ status }: { status: string | undefined }) {
         ? '#f59e0b'
         : '#ef4444'
   return <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', backgroundColor: color, marginRight: 8 }} />
+}
+
+/** 大数字友好展示：1,234 / 1.2K / 1.2M */
+function formatTokens(n: number | undefined): string {
+  if (n === undefined || n === null) return '—'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return n.toLocaleString()
 }
 
 interface StatCardProps {
@@ -104,6 +113,8 @@ export default function Dashboard() {
   const stats = data?.stats
   const health = data?.health
 
+  const tu = stats?.token_usage
+
   const statCards = [
     {
       icon: <ICONS.llm size={20} />,
@@ -130,8 +141,22 @@ export default function Dashboard() {
       }),
     },
     {
+      icon: <ICONS.queries size={20} />,
+      iconVariant: 'reports',
+      label: t('statCards.tokensToday.label', '今日 Token'),
+      value: formatTokens((tu?.today_in ?? 0) + (tu?.today_out ?? 0)),
+      hint: t('statCards.tokensToday.sub', { in: formatTokens(tu?.today_in), out: formatTokens(tu?.today_out) }),
+    },
+    {
       icon: <ICONS.audit size={20} />,
       iconVariant: 'approvals',
+      label: t('statCards.tokensTotal.label', '累计 Token'),
+      value: formatTokens((tu?.total_in ?? 0) + (tu?.total_out ?? 0)),
+      hint: t('statCards.tokensTotal.sub', { in: formatTokens(tu?.total_in), out: formatTokens(tu?.total_out) }),
+    },
+    {
+      icon: <ICONS.dashboard size={20} />,
+      iconVariant: 'documents',
       label: t('statCards.system.label'),
       value:
         stats?.system_health.status === 'healthy' ? t('status.healthy') : t('status.degraded'),
