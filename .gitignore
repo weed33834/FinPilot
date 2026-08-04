@@ -119,5 +119,6 @@ chat_resp.json
 .cookie.jar
 # 录制脚本含管理员口令明文，仅本地教学用，不入库
 frontend/e2e/course_demo.mjs
+frontend/e2e/feature_test.mjs
 .backend.log
 .frontend.log

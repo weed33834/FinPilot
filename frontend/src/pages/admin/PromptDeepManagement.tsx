@@ -942,7 +942,7 @@ export default function PromptDeepManagement() {
   const [prompts, setPrompts] = useState<PromptTemplateItem[]>([])
 
   useEffect(() => {
-    listPrompts({ page: 1, page_size: 200 })
+    listPrompts({ page: 1, page_size: 100 })
       .then((res) => setPrompts(res.data.data.items ?? []))
       .catch(() => setPrompts([]))
   }, [])

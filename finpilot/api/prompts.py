@@ -70,7 +70,7 @@ def _model_to_response(tpl: PromptTemplate) -> PromptTemplateResponse:
 @router.get("")
 def list_prompts(
     page: int = Query(default=1, ge=1, description="页码，从 1 开始"),
-    page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
+    page_size: int = Query(default=20, ge=1, description="每页条数"),
     current_user: dict = Depends(require_scope("prompts:admin")),
     db: Session = Depends(get_db_session),
     template_type: str = Query(default="", description="按类型筛选"),
@@ -78,6 +78,8 @@ def list_prompts(
     is_active: str = Query(default="", description="按状态筛选: active/inactive/all"),
 ) -> dict[str, Any]:
     """获取提示词模板列表（分页/搜索/筛选）."""
+    # 容忍过大的 page_size：直接截断到上限，而非返回 422，保证前端健壮性
+    page_size = min(page_size, 100)
     tenant_id = str(current_user.get("user_id", "default"))
     query = db.query(PromptTemplate).filter(
         PromptTemplate.tenant_id == tenant_id,
