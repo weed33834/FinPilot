@@ -13,6 +13,23 @@
 ### Fixed
 - **Dashboard crash hardening**: `DashboardLists` and `DashboardCharts` now guard against undefined `items` / `data`, eliminating white-screen renders when the payload is empty or missing.
 
+## [2.1.0] — 2026-08-05
+
+### 文档与发布
+- **三语 README 商业化重写**（EN / 中文 / 日本語）：正式产品化结构（产品概述 / 核心能力 / 产品展示 / 核心优势 / 快速开始 / 技术栈 / 路线图 / 贡献 / 镜像 / 许可），移除口语化表达，保留全部真实功能事实
+- **演示视频入库**：`docs/media/finpilot_demo.mp4`（5:21 实机录屏，H.264）内嵌于三语 README
+- **三平台 Release v2.1.0 发布**：GitHub（EN）/ GitCode / Gitee（中文）Release notes 同步
+- **docs/DEVELOPMENT.md 新增**：本地验证命令、Python 版本兼容规范、CI 编写规范、三平台发布流程与 API 细节
+
+### 修复
+- **Python 3.10 兼容**：10 个文件移除 3.11+ 专属 `datetime.UTC`，改用 `timezone.utc` 回退（此前 3.10 下 import 崩溃）
+- **CI 红叉修复**：ReAct parser 单测乱码 / 闭合标签损坏导致 CI 连续 11 次失败；单测移入 `tests/test_react_parser.py`（pytest，6 用例），CI 不再内嵌 Python 代码
+- UI/API 稳定性修复（侧边栏导航滚动、弹层遮罩等）
+
+### 质量保障
+- `scripts/sync_all.sh`：三平台独立推送 + ls-remote 实证（防 GitHub 反代僵死卡链、防推送提示语误导）
+- CI 后端四版本矩阵（3.10–3.13）+ 前端 tsc/build 全部通过
+
 ## [2.0.0] — 2026-07-27
 
 ### 🚀 重大版本：企业财务智能体平台
