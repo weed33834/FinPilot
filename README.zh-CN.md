@@ -51,6 +51,12 @@
 
 ## 实拍截图
 
+**实机演示（5:21，无旁白）：** 视频里的每一帧都来自真实运行——真实登录、真实大模型调用、真实 SQL 查真实数据库。
+
+<video controls src="docs/media/finpilot_demo.mp4" width="100%"></video>
+
+<sub>[⬇ 下载 mp4](docs/media/finpilot_demo.mp4)（若页面不支持内嵌播放）</sub>
+
 | 登录 | 数据看板 |
 |:---:|:---:|
 | ![登录](docs/screenshots/00-login-filled.png) | ![看板](docs/screenshots/dashboard.png) |

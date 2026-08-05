@@ -51,6 +51,12 @@ FinPilotが解決したいのは、AI財務分析のありがちな問題——*
 
 ## スクリーンショット
 
+**実機デモ（5:21、ナレーションなし）：** 動画の全フレームは実機の実行ログ——実際のログイン、実際のLLM呼び出し、実際のDBへの実クエリ。
+
+<video controls src="docs/media/finpilot_demo.mp4" width="100%"></video>
+
+<sub>[⬇ mp4をダウンロード](docs/media/finpilot_demo.mp4)（インライン再生できない場合）</sub>
+
 | ログイン | ダッシュボード |
 |:---:|:---:|
 | ![login](docs/screenshots/00-login-filled.png) | ![dashboard](docs/screenshots/dashboard.png) |

@@ -46,6 +46,12 @@ Yes. And we're a little tired of demos that aren't. Everything you see below cam
 
 ## Screenshots
 
+**Live demo (5:21, silent):** every frame below was recorded on a real run — real login, real LLM calls, real SQL against a real database.
+
+<video controls src="docs/media/finpilot_demo.mp4" width="100%"></video>
+
+<sub>[⬇ download mp4](docs/media/finpilot_demo.mp4) if your viewer can't play it inline</sub>
+
 | Login | Dashboard |
 |:---:|:---:|
 | ![login](docs/screenshots/00-login-filled.png) | ![dashboard](docs/screenshots/dashboard.png) |
