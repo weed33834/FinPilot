@@ -12,7 +12,12 @@
 from __future__ import annotations
 
 import urllib.parse
-from datetime import UTC, datetime
+from datetime import datetime
+try:
+    from datetime import UTC
+except ImportError:  # Python 3.10 lacks datetime.UTC; use timezone.utc
+    from datetime import timezone
+    UTC = timezone.utc
 from typing import Any
 
 from sqlalchemy.orm import Session

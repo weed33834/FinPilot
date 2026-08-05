@@ -6,7 +6,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
+try:
+    from datetime import UTC
+except ImportError:  # Python 3.10 lacks datetime.UTC; use timezone.utc
+    from datetime import timezone
+    UTC = timezone.utc, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session

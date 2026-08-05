@@ -1,7 +1,12 @@
 """报告订阅管理路由."""
 
 import contextlib
-from datetime import UTC, datetime
+from datetime import datetime
+try:
+    from datetime import UTC
+except ImportError:  # Python 3.10 lacks datetime.UTC; use timezone.utc
+    from datetime import timezone
+    UTC = timezone.utc
 
 from finpilot.core.logging import get_logger
 from typing import Any
