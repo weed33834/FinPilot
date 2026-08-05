@@ -4,9 +4,9 @@
 
 <div align="center">
 
-# FinPilot · 会算数的财务 AI 助手
+# FinPilot · 企业级 AI 财务分析平台
 
-**不是嘴上说说，是真去查、真去算、真出报告。**
+**面向企业的开源 AI 财务分析平台**
 
 [![License](https://img.shields.io/badge/license-MIT-1E5BFF.svg?style=flat-square)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%20–%203.13-3776AB.svg?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
@@ -15,7 +15,9 @@
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.x-1C3C3C.svg?style=flat-square)](https://github.com/langchain-ai/langgraph)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-1E5BFF.svg?style=flat-square)](CONTRIBUTING.md)
 
-[快速开始](#快速开始) · [实拍截图](#实拍截图) · [看家本领](#看家本领) · [技术栈](#技术栈) · [路线图](#路线图) · [一起搞](#一起搞)
+**用自然语言查询财务数据，得到可计算、可追溯、可审计的结果。**
+
+[快速开始](#快速开始) · [核心能力](#核心能力) · [产品展示](#产品展示) · [核心优势](#核心优势) · [技术栈](#技术栈) · [路线图](#路线图) · [贡献指南](#贡献指南)
 
 </div>
 
@@ -23,35 +25,39 @@
 
 ---
 
-## 先说实话：下面这些不是摆拍
+## 产品概述
 
-见过太多"演示五分钟，背后全是假数据"的项目，所以我们把话放这儿：
+FinPilot 是一个开源、面向企业级的 AI 财务分析平台。平台通过结构化智能体（Agent）流水线，将大语言模型与您的财务数据连接，帮助财务团队实现：
 
-- 查询截图里那条 SQL，是**真实模型生成**的，并且**真的在数据库里跑了一遍**；
-- 报告里的分析文字，是**真实模型写的**，不是手打上去的；
-- 图表里每一个数字，都是**代码算出来的**，模型只负责把话说圆。
+- **自然语言数据查询** — 将自然语言问题翻译为 SQL，并在数据库中真实执行；
+- **报告自动生成** — 基于模板生成分析报告，支持订阅推送与审批流程；
+- **文档智能问答** — 基于 RAG 的 Excel / PDF / CSV / DOCX 文档问答；
+- **财务建模** — DCF、DDM、LBO、WACC、可比公司、蒙特卡洛模拟，全部基于确定性代码计算。
 
-> **数字是代码算的，话是模型写的，每一步都能查得到出处。**
-
----
-
-## 这东西是干嘛的？
-
-一句话：**你开口问，它真去算。**
-
-上传一份财报，然后用大白话问它：
-
-> "净利润最高的月份是哪个月？"
-
-它会把你的话翻译成 SQL，真的去数据库里查，把结果表甩给你看，再让模型给你解读两句。想要报告？一句话的事——生成、订阅、审批一条龙。
-
-说白了，FinPilot 想解决的是 AI 财务分析里最常见的尴尬：**模型说得头头是道，但数字全是一本正经地编**。我们让数字回归代码，让模型专心讲人话。
+所有输出**由代码计算、由模型解读**，并保留完整运行日志，支持全程追溯与审计。
 
 ---
 
-## 实拍截图
+## 核心能力
 
-**实机演示（5:21，无旁白）：** 视频里的每一帧都来自真实运行——真实登录、真实大模型调用、真实 SQL 查真实数据库。
+| 模块 | 能力说明 |
+| :--- | :--- |
+| 🤖 对话式问答 | 聊天中直接上传 Excel/PDF/CSV/DOCX，SSE 流式输出，实时展示推理步骤 |
+| 📊 财务建模 | DCF · DDM · LBO · WACC · 可比公司 · 蒙特卡洛——确定性纯 Python 计算器 |
+| 📑 报告中心 | 模板化报告、订阅推送、审批流程 |
+| 🔍 RAG 文档问答 | BM25 + 向量 + RRF 融合检索，多格式文档解析 |
+| 🛡 安全与合规 | ABAC 访问控制、TOTP 两步验证、PII 脱敏、注入防护、审计日志、角色分级 |
+| 📡 运行日志 | 实时监控：日志 / 问答回放 / 模块状态 / 统计 |
+| 🧰 可扩展性 | 工具 · 技能 · MCP 服务器 · 代码沙箱 · 提示词管理 |
+| 💬 对话即控制台 | 斜杠指令、按角色过滤，可在对话中管理整个系统 |
+| 📱 移动端优先 | 响应式移动端界面，桌面页面优雅降级 |
+| 🚨 精准错误处理 | 分层错误系统（网络/认证/客户端/服务端），提供可操作的诊断信息 |
+
+---
+
+## 产品展示
+
+**产品演示（5:21，无旁白）：** 视频内容来自真实运行环境——真实登录、真实大模型调用、真实 SQL 查询真实数据库。
 
 <video controls src="docs/media/finpilot_demo.mp4" width="100%"></video>
 
@@ -61,7 +67,7 @@
 |:---:|:---:|
 | ![登录](docs/screenshots/00-login-filled.png) | ![看板](docs/screenshots/dashboard.png) |
 
-| 智能对话（真实 AI 回答） | NL2SQL 真实查询结果 |
+| 对话问答 | NL2SQL 查询结果 |
 |:---:|:---:|
 | ![对话](docs/screenshots/agent-answer.png) | ![查询](docs/screenshots/queries-result.png) |
 
@@ -73,19 +79,19 @@
 |:---:|:---:|
 | ![安全](docs/screenshots/security-2fa-setup.png) | ![设置](docs/screenshots/admin_settings.png) |
 
-| 模型供应商（阿里云百炼等） | MCP 服务器 |
+| 模型供应商（如阿里云百炼） | MCP 服务器 |
 |:---:|:---:|
 | ![模型](docs/screenshots/llm-providers.png) | ![MCP](docs/screenshots/admin_mcp-servers.png) |
 
 ---
 
-## 看家本领
+## 核心优势
 
-1. **数字是真的。** DCF、WACC、回测、比率……全部走确定性代码。模型只负责解释，不负责编数。
-2. **全程可追溯。** 每一次 API 调用、每一轮问答、每个开关操作都进运行日志，agent 干了啥、为什么，都能回放。
-3. **聊天框就是控制台。** 输入 `/` 弹出指令面板，按角色过滤——管理员在对话框里就能驱动整个系统，普通用户只能看到自己权限内的东西。
+1. **计算而非生成。** DCF、WACC、回测、财务比率等计算全部基于确定性代码；模型负责解读结果，而非编造数字。
+2. **全程可追溯。** 每一次 API 调用、每一轮问答、每个模块操作均记录于运行日志，支持逐步回放与审计。
+3. **对话即控制台。** 输入 `/` 调出按角色过滤的指令面板，管理员可在对话中管理整个系统；普通用户仅能访问权限范围内的功能。
 
-再加上这些"标配但做扎实"的：RAG 文档问答（BM25 + 向量 + RRF 融合）、Excel/PDF/DOCX 解析、ABAC 访问控制、TOTP 两步验证、移动端壳子，以及一个会明确告诉你**是哪一层炸了**的错误系统——而不是干巴巴一句"操作失败"。
+其他企业级特性：RAG 文档问答（BM25 + 向量 + RRF 融合）、Excel/PDF/DOCX 解析、ABAC 访问控制、TOTP 两步验证、移动端适配，以及可精准定位故障层级的分层错误系统。
 
 ---
 
@@ -98,18 +104,18 @@ cd FinPilot
 # 后端
 python3 -m venv venv && source venv/bin/activate
 pip install -e .
-cp .env.example .env        # 填上你的 LLM API Key
+cp .env.example .env        # 配置 LLM API Key
 uvicorn finpilot.api.router:app --host 0.0.0.0 --port 8001
 
 # 前端
 cd frontend && npm install && npm run dev
 ```
 
-打开 `http://localhost:5173`，用 `.env` 里的 `FINPILOT_ADMIN_EMAIL` / `FINPILOT_ADMIN_PASSWORD` 登录，就能开问。
+打开 `http://localhost:5173`，使用 `.env` 中自动创建的 `FINPILOT_ADMIN_EMAIL` / `FINPILOT_ADMIN_PASSWORD` 登录，即可开始查询。
 
-> 模型供应商在 **管理 → 模型供应商** 里配（存数据库，环境变量兜底）。任何 OpenAI 兼容接口都能接——阿里云百炼、DeepSeek、智谱都行。
+> 模型供应商在 **管理 → 模型供应商** 中配置（存储于数据库，环境变量兜底）。支持任意 OpenAI 兼容接口——阿里云百炼、DeepSeek、智谱等。
 
-想上 Docker：`docker compose up -d`（Redis + PostgreSQL + 后端 + 前端）。详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+Docker 部署：`docker compose up -d`（Redis + PostgreSQL + 后端 + 前端）。详见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
 ---
 
@@ -128,15 +134,15 @@ Python 3.10–3.13 · FastAPI · LangGraph · SQLAlchemy · Pydantic · React 19
 
 ---
 
-## 一起搞
+## 贡献指南
 
-欢迎提 Issue 和 PR——先看 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题走 [SECURITY.md](SECURITY.md)，别在公开 Issue 里报。
+欢迎提交 Issue 与 Pull Request——请先参阅 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请通过 [SECURITY.md](SECURITY.md) 报告，请勿在公开 Issue 中披露。
 
 ---
 
 ## 三平台镜像
 
-同一份代码，三个平台同步推送，哪个快用哪个。
+同一代码库在三平台同步维护，可按需选择访问。
 
 | 平台 | 地址 |
 |------|------|
@@ -148,6 +154,6 @@ Python 3.10–3.13 · FastAPI · LangGraph · SQLAlchemy · Pydantic · React 19
 
 ## License
 
-MIT 协议开源，见 [LICENSE](LICENSE)。
+基于 MIT 协议开源，见 [LICENSE](LICENSE)。
 
-> **免责声明：** 本项目仅供学习与研究，不构成任何投资建议。
+> **免责声明：** 本项目仅供学习与研究用途，不构成任何投资建议。
