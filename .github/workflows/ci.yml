@@ -37,22 +37,10 @@ jobs:
         run: |
           python -c "import finpilot.api.router; import finpilot.agent.graph; import finpilot_equity.web_app.main; print('imports ok')"
 
-      - name: ReAct parser unit test
+      - name: Parser unit tests (pytest)
         run: |
-          python - <<'PY'
-          from finpilot.agent.react_nodes import parse_react_output
-          cases = [
-              ('Thought: t\nAction: nl2sql\nAction Input: {"question":"x"}\n', 'nl2sql', True),
-              ('<tool_call><function=nl2sql><parameter=question>x</parameter></function></tool_call>', 'nl2sql', True),
-              ('<answer>×îÖÕ´ð°¸</answer>', '', True),
-          ]
-          for text, exp_action, exp_ok in cases:
-              r = parse_react_output(text)
-              assert r.get('parse_ok') == exp_ok, f"parse_ok mismatch: {r}"
-              if exp_action:
-                  assert r.get('action') == exp_action, f"action mismatch: {r}"
-          print('react parser: 3/3 passed')
-          PY
+          pip install pytest
+          python -m pytest tests/test_react_parser.py -q
 
   frontend:
     name: Frontend (TypeScript)
