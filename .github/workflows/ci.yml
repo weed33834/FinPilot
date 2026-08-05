@@ -44,7 +44,7 @@ jobs:
           cases = [
               ('Thought: t\nAction: nl2sql\nAction Input: {"question":"x"}\n', 'nl2sql', True),
               ('<tool_call><function=nl2sql><parameter=question>x</parameter></function></tool_call>', 'nl2sql', True),
-              ('<answer>æœ€ç»ˆç­”æ¡?/answer>', '', True),
+              ('<answer>×îÖÕ´ð°¸</answer>', '', True),
           ]
           for text, exp_action, exp_ok in cases:
               r = parse_react_output(text)
