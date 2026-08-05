@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { ICONS } from './Icons'
 
 interface ModalProps {
@@ -82,7 +83,10 @@ export default function Modal({ title, children, footer, onClose }: ModalProps) 
     }
   }, [])
 
-  return (
+  // createPortal 渲染到 body：脱离页面容器可能创建的 stacking context
+  // （如 UsersPage 的 .container 带 transform），保证 backdrop 的 z-index 1000
+  // 直接作用于根层，覆盖 sidebar(z-50) 与页面内容。
+  return createPortal(
     <div
       className={`modal-backdrop${closing ? ' closing' : ''}`}
       onClick={handleClose}
@@ -110,6 +114,7 @@ export default function Modal({ title, children, footer, onClose }: ModalProps) 
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
